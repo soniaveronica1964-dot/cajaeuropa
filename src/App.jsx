@@ -287,26 +287,52 @@ function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(nul
 function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
 
 function LiveSettings({ data, setToast }) {
-  const holders = [...new Map(data.accounts.map(account => [account.cuentas?.titulares?.id || account.cuenta_id, account.cuentas?.titulares || { id: account.cuenta_id, nombre: 'Sin titular' }])).values()]
-  const wallets = [...new Map(data.accounts.map(account => [account.cuentas?.billeteras?.id || account.cuenta_id, account.cuentas?.billeteras || { id: account.cuenta_id, nombre: 'Sin billetera' }])).values()]
+  const buildUniqueItems = (items, getItem) => {
+    const unique = new Map()
+    items.forEach((entry) => {
+      const item = getItem(entry)
+      const label = item?.nombre || 'Sin dato'
+      const key = String(label).trim().toLowerCase() || 'sin-dato'
+      if (!unique.has(key)) {
+        unique.set(key, { ...item, id: item?.id ?? key, nombre: label })
+      }
+    })
+    return [...unique.values()]
+  }
 
-  const initialAvailability = () => {
+  const holdersFromData = useMemo(() => buildUniqueItems(data.accounts, (account) => account.cuentas?.titulares || { id: account.cuenta_id, nombre: 'Sin titular' }), [data.accounts])
+  const walletsFromData = useMemo(() => buildUniqueItems(data.accounts, (account) => account.cuentas?.billeteras || { id: account.cuenta_id, nombre: 'Sin billetera' }), [data.accounts])
+
+  const [holders, setHolders] = useState([])
+  const [wallets, setWallets] = useState([])
+
+  useEffect(() => {
+    setHolders(holdersFromData)
+  }, [holdersFromData])
+
+  useEffect(() => {
+    setWallets(walletsFromData)
+  }, [walletsFromData])
+
+  const buildAvailability = () => {
     const next = {}
     holders.forEach((holder) => {
-      next[holder.nombre || 'Sin titular'] = {}
+      const holderName = holder.nombre || 'Sin titular'
+      next[holderName] = {}
       wallets.forEach((wallet) => {
-        next[holder.nombre || 'Sin titular'][wallet.nombre || 'Sin billetera'] = true
+        const walletName = wallet.nombre || 'Sin billetera'
+        next[holderName][walletName] = true
       })
     })
     return next
   }
 
-  const [availability, setAvailability] = useState(initialAvailability)
+  const [availability, setAvailability] = useState({})
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    setAvailability(initialAvailability())
-  }, [data.accounts])
+    setAvailability(buildAvailability())
+  }, [holders, wallets])
 
   const walletModes = useMemo(() => {
     const map = {}
@@ -330,6 +356,39 @@ function LiveSettings({ data, setToast }) {
     }))
   }
 
+  const removeHolder = (holder) => {
+    const holderName = holder?.nombre || 'Sin titular'
+    setHolders((current) => current.filter((item) => (item.nombre || 'Sin titular') !== holderName))
+    setAvailability((current) => {
+      const next = { ...current }
+      delete next[holderName]
+      Object.keys(next).forEach((name) => {
+        if (next[name]?.[holderName] !== undefined) {
+          const { [holderName]: _removed, ...rest } = next[name]
+          next[name] = rest
+        }
+      })
+      return next
+    })
+    setSelected((current) => (current && current.holder === holderName ? null : current))
+  }
+
+  const removeWallet = (wallet) => {
+    const walletName = wallet?.nombre || 'Sin billetera'
+    setWallets((current) => current.filter((item) => (item.nombre || 'Sin billetera') !== walletName))
+    setAvailability((current) => {
+      const next = { ...current }
+      Object.keys(next).forEach((holderName) => {
+        if (next[holderName]?.[walletName] !== undefined) {
+          const { [walletName]: _removed, ...rest } = next[holderName]
+          next[holderName] = rest
+        }
+      })
+      return next
+    })
+    setSelected((current) => (current && current.wallet === walletName ? null : current))
+  }
+
   return <>
     <GoalStrip open={false} onToggle={() => {}} />
     <div className="settings-page">
@@ -351,7 +410,7 @@ function LiveSettings({ data, setToast }) {
             <div className="config-list-row sortable" key={holder.id || holder.nombre}>
               <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
               <input value={holder.nombre || 'Sin titular'} readOnly />
-              <button type="button" className="delete-button" title="Eliminar titular" onClick={() => setToast('Se elimina desde la configuración de caja cuando se conecte el editor real')}><X size={14} /></button>
+              <button type="button" className="delete-button" title="Eliminar titular" onClick={() => removeHolder(holder)}><X size={14} /></button>
             </div>
           ))}
           <button type="button" className="config-add" onClick={() => setToast('Se agregará un titular desde la configuración completa')}><Plus size={15} /> Agregar titular</button>
@@ -368,7 +427,7 @@ function LiveSettings({ data, setToast }) {
                 <option>Solo Cobros</option>
                 <option>Solo Depósito</option>
               </select>
-              <button type="button" className="delete-button" title="Eliminar billetera" onClick={() => setToast('Se elimina desde la configuración de caja cuando se conecte el editor real')}><X size={14} /></button>
+              <button type="button" className="delete-button" title="Eliminar billetera" onClick={() => removeWallet(wallet)}><X size={14} /></button>
             </div>
           ))}
           <button type="button" className="config-add" onClick={() => setToast('Se agregará una billetera desde la configuración completa')}><Plus size={15} /> Agregar billetera</button>
