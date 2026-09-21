@@ -260,7 +260,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workspace {
   display: flex;
   min-height: calc(100vh - 72px);
-  background: linear-gradient(90deg, rgba(12, 20, 22, 0.9) 0, rgba(12, 20, 22, 0.9) 75px, rgba(10, 18, 18, 0.75) 75px, rgba(10, 18, 18, 0.75) 100%), radial-gradient(circle at 20% 120%, rgba(62, 155, 125, 0.3) 0, transparent 30%);
+  background: linear-gradient(90deg, rgba(10, 15, 18, 0.96) 0, rgba(10, 15, 18, 0.96) 74px, rgba(10, 16, 18, 0.78) 74px, rgba(10, 16, 18, 0.78) 100%);
 }
 .sidebar {
   width: 74px;
@@ -268,7 +268,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   min-height: calc(100vh - 72px);
   padding: 18px 10px;
   border-right: 1px solid var(--line);
-  background: rgba(9, 15, 17, 0.52);
+  background: rgba(8, 13, 16, 0.96);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -343,7 +343,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .main-content {
   flex: 1;
   min-width: 0;
-  padding: 26px 34px 50px;
+  padding: 22px 34px 50px;
 }
 .page-heading {
   display: flex;
@@ -362,10 +362,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .page-heading h1 {
   margin: 0;
-  font-size: clamp(2.4rem, 2.5vw, 3.2rem);
-  line-height: 1.05;
+  font-size: clamp(2.6rem, 3vw, 4.25rem);
+  line-height: 0.96;
   letter-spacing: -0.07em;
   color: var(--text);
+  font-weight: 800;
 }
 .page-heading p {
   margin: 8px 0 0;
@@ -380,17 +381,56 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: rgba(20, 28, 30, 0.7);
   padding: 10px 14px;
   margin-bottom: 18px;
+  overflow: hidden;
 }
-.goal-strip-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.goal-strip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+}
 .goal-strip-head > strong {
   color: var(--muted);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
+.goal-summary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  gap: 14px;
+  min-height: 16px;
+  color: var(--muted);
+}
+.goal-summary span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  color: var(--muted);
+}
+.goal-summary b, .goal-summary small { font: 9px 'DM Mono'; }
+.goal-summary i {
+  display: inline-block;
+  width: 80px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(140, 160, 168, 0.2);
+  overflow: hidden;
+  vertical-align: middle;
+}
+.goal-summary em {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(122, 215, 199, 0.9), rgba(125, 164, 255, 0.7));
+}
 .summary-bar {
   display: grid;
-  grid-template-columns: 1.15fr repeat(4, minmax(0, 1fr)) 1fr;
+  grid-template-columns: 1.4fr repeat(5, minmax(0, 1fr));
   gap: 0;
   border-radius: 10px;
   overflow: hidden;
@@ -399,7 +439,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .summary-status, .metric, .rounding {
   padding: 12px 16px;
-  min-height: 82px;
+  min-height: 74px;
 }
 .summary-status {
   display: flex;
@@ -428,13 +468,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   justify-content: center;
   gap: 4px;
   border-left: 1px solid var(--line);
+  background: rgba(17, 23, 24, 0.7);
 }
 .metric small {
   font: 10px 'DM Mono';
   color: var(--muted);
   text-transform: uppercase;
 }
-.metric strong { font-size: 15px; font-weight: 800; }
+.metric strong {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
 .metric strong.positive { color: var(--green); }
 .metric strong.negative { color: var(--red); }
 .rounding {
@@ -442,6 +487,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex-direction: column;
   justify-content: center;
   border-left: 1px solid var(--line);
+  background: rgba(17, 23, 24, 0.72);
 }
 .rounding small {
   font: 10px 'DM Mono';
@@ -457,12 +503,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: rgba(23, 31, 32, 0.8);
   padding: 7px 8px;
   max-width: 150px;
+  color: var(--green);
 }
 .rounding input {
   width: 100%;
   border: 0;
   background: transparent;
   outline: none;
+  color: var(--green);
 }
 
 .empty-state { padding: 34px; text-align: center; }
@@ -510,7 +558,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .top-panels {
   display: grid;
   grid-template-columns: minmax(0, 2.15fr) minmax(220px, 0.9fr) minmax(220px, 0.9fr);
-  gap: 10px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -749,7 +797,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .matrix-row {
   display: grid;
-  grid-template-columns: minmax(120px, 1.1fr) repeat(var(--wallet-count, 3), minmax(86px, 1fr)) minmax(80px, 0.8fr);
+  grid-template-columns: minmax(120px, 1.3fr) repeat(var(--wallet-count, 4), minmax(90px, 1fr)) minmax(82px, 0.8fr);
   gap: 8px;
   align-items: center;
   min-height: 38px;
@@ -815,7 +863,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .matrix-total {
   display: grid;
-  grid-template-columns: minmax(120px, 1.1fr) repeat(var(--wallet-count, 3), minmax(86px, 1fr)) minmax(80px, 0.8fr);
+  grid-template-columns: minmax(120px, 1.3fr) repeat(var(--wallet-count, 4), minmax(90px, 1fr)) minmax(82px, 0.8fr);
   gap: 8px;
   align-items: center;
   padding-top: 10px;
@@ -958,6 +1006,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   margin: 0;
   font-size: 13px;
   letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 .panel-title small {
   color: var(--muted);
