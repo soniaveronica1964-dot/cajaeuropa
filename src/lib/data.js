@@ -57,7 +57,7 @@ export async function loadCurrentShiftData(boxId = null) {
 }
 
 export async function loadConfigurationData() {
-  const [boxes, holders, wallets, walletTypes, accountTypes, expenses, platforms, bonusConditions, states] = await Promise.all([
+  const [boxes, holders, wallets, walletTypes, accountTypes, expenses, platforms, bonusConditions, states, shiftTypes, shiftDays, appConfig] = await Promise.all([
     query('cajas', 'id, nombre, imagen, imagen_mini, color_id, es_publicidad'),
     query('titulares', 'id, nombre, orden_num'),
     query('billeteras', 'id, nombre, orden_num, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)'),
@@ -67,8 +67,11 @@ export async function loadConfigurationData() {
     query('plataformas', 'id, nombre, caja_id, color_id'),
     query('condiciones_bono', 'id, nombre, plataforma'),
     query('estados', 'id, nombre, imagen_mini, tipo_estado_id, tipos_estado(nombre, cantidad_porcentaje)'),
+    query('tipos_turno', 'id, caja_id, nombre, color_id'),
+    query('dias_turno', 'id, nombre, dia_semana, hora_inicio, hora_fin, cruza_medianoche, tipo_turno_id'),
+    query('app_config', 'id, nombre, icono, imagen, imagen_mini, tema, ver_notas, singleton'),
   ])
-  return { boxes, holders, wallets, walletTypes, accountTypes, expenses, platforms, bonusConditions, states }
+  return { boxes, holders, wallets, walletTypes, accountTypes, expenses, platforms, bonusConditions, states, shiftTypes, shiftDays, appConfig }
 }
 
 export async function loadBonusCatalog() {
@@ -287,6 +290,120 @@ export async function deleteBonusCondition(id) {
   requireSupabase()
   const { error } = await supabase.from('condiciones_bono').delete().eq('id', id)
   if (error) throw error
+}
+
+export async function createShiftType({ boxId, name, color = 'teal' }) {
+  requireSupabase()
+  const colorId = await ensureColor(name || 'Tipo de turno', color)
+  const { data, error } = await supabase.from('tipos_turno').insert({ caja_id: boxId, nombre: name.trim(), color_id: colorId }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateShiftType(id, { name, color = 'teal' }) {
+  requireSupabase()
+  const colorId = await ensureColor(name || 'Tipo de turno', color)
+  const { data, error } = await supabase.from('tipos_turno').update({ nombre: name.trim(), color_id: colorId }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteShiftType(id) {
+  requireSupabase()
+  const { error } = await supabase.from('tipos_turno').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createDayShift({ typeId, name, weekday, start, end, crossesMidnight = false }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('dias_turno').insert({
+    tipo_turno_id: typeId,
+    nombre: name.trim(),
+    dia_semana: Number(weekday) || 1,
+    hora_inicio: start,
+    hora_fin: end,
+    cruza_medianoche: Boolean(crossesMidnight),
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateDayShift(id, { name, weekday, start, end, crossesMidnight = false }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('dias_turno').update({
+    nombre: name.trim(),
+    dia_semana: Number(weekday) || 1,
+    hora_inicio: start,
+    hora_fin: end,
+    cruza_medianoche: Boolean(crossesMidnight),
+  }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteDayShift(id) {
+  requireSupabase()
+  const { error } = await supabase.from('dias_turno').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createAccountType({ name, shared = false, advertising = false, saving = false, canCollect = false, canWithdraw = false }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('tipos_cuenta').insert({
+    nombre: name.trim(),
+    es_compartido: Boolean(shared),
+    es_publicidad: Boolean(advertising),
+    ahorro: Boolean(saving),
+    cobros: Boolean(canCollect),
+    retiros: Boolean(canWithdraw),
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateAccountType(id, { name, shared = false, advertising = false, saving = false, canCollect = false, canWithdraw = false }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('tipos_cuenta').update({
+    nombre: name.trim(),
+    es_compartido: Boolean(shared),
+    es_publicidad: Boolean(advertising),
+    ahorro: Boolean(saving),
+    cobros: Boolean(canCollect),
+    retiros: Boolean(canWithdraw),
+  }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteAccountType(id) {
+  requireSupabase()
+  const { error } = await supabase.from('tipos_cuenta').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function saveAppConfig({ name, icon, theme = false, showNotes = true, singleton = true }) {
+  requireSupabase()
+  const { data: existing, error: loadError } = await supabase.from('app_config').select('id').limit(1).maybeSingle()
+  if (loadError) throw loadError
+
+  const payload = {
+    nombre: name?.trim() || 'Caja Europa',
+    icono: icon || 'banknote',
+    tema: Boolean(theme),
+    ver_notas: Boolean(showNotes),
+    singleton: Boolean(singleton),
+  }
+
+  let promise
+  if (existing) {
+    promise = supabase.from('app_config').update(payload).eq('id', existing.id).select().single()
+  } else {
+    promise = supabase.from('app_config').insert(payload).select().single()
+  }
+
+  const { data, error } = await promise
+  if (error) throw error
+  return data
 }
 
 async function findOrCreate(table, match, values) {

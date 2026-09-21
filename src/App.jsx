@@ -30,30 +30,40 @@ import {
   X,
 } from 'lucide-react'
 import {
+  createAccountType,
   createBonusCondition,
   createBox,
+  createDayShift,
   createExpense,
   createExpenseType,
   createHolder,
   createInitialSetup,
   createPlatform,
+  createShiftType,
   createTip,
   createWallet,
+  deleteAccountType,
   deleteBonusCondition,
   deleteBox,
+  deleteDayShift,
   deleteExpenseType,
   deleteHolder,
   deletePlatform,
+  deleteShiftType,
   deleteWallet,
   loadCurrentShiftData,
+  saveAppConfig,
+  updateAccountType,
   updateAccountValue,
   updateAdvertisingLine,
   updateBonusCondition,
   updateBox,
+  updateDayShift,
   updateExpenseType,
   updateHolder,
   updatePlatform,
   updateShiftRounding,
+  updateShiftType,
   updateWallet,
 } from './lib/data'
 
@@ -432,18 +442,21 @@ function LiveSettings({ data, setToast, onSaved }) {
     <div className="settings-page">
       <div className="settings-tabs">
         {renderTabButton('boxes', 'Cajas', Banknote)}
+        {renderTabButton('turns', 'Turnos', Clock3)}
         {renderTabButton('accounts', 'Matriz de cuentas', WalletCards)}
         {renderTabButton('expenses', 'Gastos', FileText)}
         {renderTabButton('platforms', 'Control de fichas', Boxes)}
         {renderTabButton('users', 'Usuarios', Users)}
         {renderTabButton('bonuses', 'Bonos', Gift)}
+        {renderTabButton('account-types', 'Tipos de cuenta', CircleDollarSign)}
         {renderTabButton('goals', 'Objetivos', Target)}
+        {renderTabButton('app', 'App', Settings2)}
       </div>
 
       <section className="settings-intro">
         <span className="eyebrow">Configuración</span>
         <h2>{tab === 'boxes' ? 'Cajas' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : 'Objetivos'}</h2>
-        <p>Completá la configuración del turno y dejá listo el entorno para operar con cajas, cuentas, plataformas y objetivos.</p>
+        <p>Completá la configuración del turno y dejá listo el entorno para operar con cajas, cuentas, plataformas y objetivos según la lógica de negocio del sistema.</p>
       </section>
 
       {tab === 'boxes' && <>
@@ -491,6 +504,49 @@ function LiveSettings({ data, setToast, onSaved }) {
               <span className="muted-copy">Campos: nombre, color_id, imagen, imagen_mini</span>
             </div>
           </div>
+        </div>
+      </>}
+
+      {tab === 'turns' && <>
+        <div className="config-two-columns">
+          <section className="config-card">
+            <div className="config-list-head"><h3>Tipos de turno</h3><span>{(data.shiftTypes || []).length} registros</span></div>
+            {(data.shiftTypes || []).map((type) => (
+              <div className="config-list-row" key={type.id}>
+                <input value={type.nombre || ''} onChange={async (event) => {
+                  const next = event.target.value.trim()
+                  if (!next) return
+                  await persistUpdate(() => updateShiftType(type.id, { name: next, color: 'teal' }), 'Tipo de turno actualizado en Supabase')
+                }} placeholder="Nombre del tipo" />
+                <button type="button" className="delete-button" title="Eliminar tipo de turno" onClick={() => persistUpdate(() => deleteShiftType(type.id), 'Tipo de turno eliminado de Supabase')}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => persistUpdate(() => createShiftType({ boxId: data.boxes?.[0]?.id || null, name: 'Nuevo turno', color: 'teal' }), 'Tipo de turno creado en Supabase')}><Plus size={15} /> Agregar tipo de turno</button>
+          </section>
+
+          <section className="config-card">
+            <div className="config-list-head"><h3>Días de turno</h3><span>{(data.shiftDays || []).length} registros</span></div>
+            {(data.shiftDays || []).map((day) => (
+              <div className="config-list-row" key={day.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                <input value={day.nombre || ''} onChange={async (event) => {
+                  const next = event.target.value.trim()
+                  if (!next) return
+                  await persistUpdate(() => updateDayShift(day.id, { name: next, weekday: day.dia_semana || 1, start: day.hora_inicio || '08:00', end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Día de turno actualizado en Supabase')
+                }} placeholder="Nombre del día" />
+                <input type="number" min="1" max="7" value={day.dia_semana || 1} onChange={async (event) => {
+                  await persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: Number(event.target.value), start: day.hora_inicio || '08:00', end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Orden del día actualizado en Supabase')
+                }} />
+                <input type="time" value={day.hora_inicio || '08:00'} onChange={async (event) => {
+                  await persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana || 1, start: event.target.value, end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de inicio actualizada en Supabase')
+                }} />
+                <input type="time" value={day.hora_fin || '18:00'} onChange={async (event) => {
+                  await persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana || 1, start: day.hora_inicio || '08:00', end: event.target.value, crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de fin actualizada en Supabase')
+                }} />
+                <button type="button" className="delete-button" title="Eliminar día" onClick={() => persistUpdate(() => deleteDayShift(day.id), 'Día de turno eliminado de Supabase')}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => persistUpdate(() => createDayShift({ typeId: data.shiftTypes?.[0]?.id || null, name: 'Nuevo día', weekday: 1, start: '08:00', end: '18:00', crossesMidnight: false }), 'Día de turno creado en Supabase')}><Plus size={15} /> Agregar día</button>
+          </section>
         </div>
       </>}
 
@@ -644,6 +700,35 @@ function LiveSettings({ data, setToast, onSaved }) {
         }}><Plus size={15} /> Agregar plataforma</button>
       </section>}
 
+      {tab === 'account-types' && <>
+        <section className="config-card">
+          <div className="config-list-head"><h3>Tipos de cuenta</h3><span>{(data.accountTypes || []).length} registros</span></div>
+          {(data.accountTypes || []).map((type) => (
+            <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto auto auto auto', gap: '8px', alignItems: 'center' }}>
+              <input value={type.nombre || ''} onChange={async (event) => {
+                const next = event.target.value.trim()
+                if (!next) return
+                await persistUpdate(() => updateAccountType(type.id, {
+                  name: next,
+                  shared: Boolean(type.es_compartido),
+                  advertising: Boolean(type.es_publicidad),
+                  saving: Boolean(type.ahorro),
+                  canCollect: Boolean(type.cobros),
+                  canWithdraw: Boolean(type.retiros),
+                }), 'Tipo de cuenta actualizado en Supabase')
+              }} placeholder="Nombre del tipo" />
+              <label className="toggle-cell" title="Compartida"><input type="checkbox" checked={Boolean(type.es_compartido)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: !Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <label className="toggle-cell" title="Publicidad"><input type="checkbox" checked={Boolean(type.es_publicidad)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: !Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <label className="toggle-cell" title="Ahorro"><input type="checkbox" checked={Boolean(type.ahorro)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: !Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <label className="toggle-cell" title="Cobros"><input type="checkbox" checked={Boolean(type.cobros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: !Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <button type="button" className="delete-button" title="Eliminar tipo de cuenta" onClick={() => persistUpdate(() => deleteAccountType(type.id), 'Tipo de cuenta eliminado de Supabase')}><X size={14} /></button>
+            </div>
+          ))}
+          <button type="button" className="config-add" onClick={() => persistUpdate(() => createAccountType({ name: 'Nuevo tipo de cuenta', shared: false, advertising: false, saving: false, canCollect: true, canWithdraw: true }), 'Tipo de cuenta creado en Supabase')}><Plus size={15} /> Agregar tipo de cuenta</button>
+        </section>
+      </>}
+
       {tab === 'users' && <>
         <section className="config-card">
           <div className="config-list-head"><h3>Usuarios</h3><span>{(data.users || []).length} registros</span></div>
@@ -688,6 +773,27 @@ function LiveSettings({ data, setToast, onSaved }) {
             }}><Plus size={15} /> Agregar condición</button>
           </section>
         </div>
+      </>}
+
+      {tab === 'app' && <>
+        <section className="config-card">
+          <div className="config-list-head"><h3>Configuración de la aplicación</h3><span>Único registro activo</span></div>
+          <div className="account-settings-fields">
+            <label><span>Nombre</span><input value={(data.appConfig?.[0]?.nombre) || 'Caja Europa'} onChange={async (event) => {
+              const next = event.target.value.trim()
+              if (!next) return
+              await persistUpdate(() => saveAppConfig({ name: next, icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración de la app guardada en Supabase')
+            }} /></label>
+            <label><span>Ícono</span><input value={(data.appConfig?.[0]?.icono) || 'banknote'} onChange={async (event) => {
+              const next = event.target.value.trim()
+              if (!next) return
+              await persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: next, theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Ícono actualizado en Supabase')
+            }} /></label>
+            <label className="toggle-cell" aria-label="Tema oscuro"><span>Tema</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: !Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Tema actualizado')} /></label>
+            <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración visual guardada')} /></label>
+            <label className="toggle-cell" aria-label="Singleton"><span>Singleton</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.singleton !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: !Boolean(data.appConfig?.[0]?.singleton !== false) }), 'Configuración singleton guardada')} /></label>
+          </div>
+        </section>
       </>}
 
       {tab === 'goals' && <section className="config-card">
