@@ -2,26 +2,26 @@
 
 :root {
   font-family: Manrope, sans-serif;
-  color: #e9f1ef;
-  background: #090f12;
+  color: #e7edf1;
+  background: #111719;
   font-synthesis: none;
-  --bg: #080d10;
+  --bg: #111719;
   --bg-2: #0d171b;
   --surface: #101c1f;
-  --panel: #142022;
-  --panel-2: #1a2b2d;
-  --line: rgba(121, 146, 146, 0.32);
-  --muted: #81939a;
+  --panel: #192123;
+  --panel-2: #202b2e;
+  --line: #2b383b;
+  --muted: #879598;
   --muted-2: #a9b9bd;
   --text: #eaf3f1;
-  --cyan: #7ad7c7;
-  --green: #96d5a5;
-  --orange: #f1b16a;
-  --red: #ef8184;
+  --cyan: #72d7ca;
+  --green: #83d5a2;
+  --orange: #f5ad69;
+  --red: #ec817f;
   --lavender: #c6a3ff;
-  --box-soft: #253c3c;
+  --box-soft: #1d302f;
   --box-line: rgba(124, 155, 150, 0.4);
-  --danger: #ff7a7a;
+  --danger: #e74c3c;
 }
 
 * { box-sizing: border-box; }
@@ -428,9 +428,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: inherit;
   background: linear-gradient(90deg, rgba(122, 215, 199, 0.9), rgba(125, 164, 255, 0.7));
 }
+.goal-strip-head .icon-button {
+  flex: 0 0 auto;
+}
 .summary-bar {
   display: grid;
-  grid-template-columns: 1.4fr repeat(5, minmax(0, 1fr));
+  grid-template-columns: minmax(150px, 1.3fr) repeat(5, minmax(120px, 1fr));
   gap: 0;
   border-radius: 10px;
   overflow: hidden;
@@ -544,7 +547,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .panel {
   border: 1px solid var(--line);
   border-radius: 10px;
-  background: rgba(20, 28, 30, 0.8);
+  background: rgba(25, 33, 35, 0.9);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
@@ -557,8 +560,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .top-panels {
   display: grid;
-  grid-template-columns: minmax(0, 2.15fr) minmax(220px, 0.9fr) minmax(220px, 0.9fr);
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
   align-items: stretch;
 }
 
@@ -570,16 +573,30 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .compact-bonus,
 .chip-summary {
   min-height: 116px;
+  min-width: 0;
 }
 
 .three-panels {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: 18px;
+  align-items: stretch;
 }
 
 .three-panels.lower {
   margin-top: 0;
+}
+
+.top-panels .publicity {
+  grid-column: 1;
+}
+
+.top-panels .compact-bonus {
+  grid-column: 2;
+}
+
+.top-panels .chip-summary {
+  grid-column: 3;
 }
 
 .mini-card,
@@ -1006,7 +1023,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   margin: 0;
   font-size: 13px;
   letter-spacing: 0.02em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 .panel-title small {
   color: var(--muted);
