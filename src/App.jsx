@@ -29,7 +29,33 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { createBonusLine, createExpense, createInitialSetup, createTip, loadCurrentShiftData, updateAccountValue, updateAdvertisingLine, updateShiftRounding } from './lib/data'
+import {
+  createBonusCondition,
+  createBox,
+  createExpense,
+  createExpenseType,
+  createHolder,
+  createInitialSetup,
+  createPlatform,
+  createTip,
+  createWallet,
+  deleteBonusCondition,
+  deleteBox,
+  deleteExpenseType,
+  deleteHolder,
+  deletePlatform,
+  deleteWallet,
+  loadCurrentShiftData,
+  updateAccountValue,
+  updateAdvertisingLine,
+  updateBonusCondition,
+  updateBox,
+  updateExpenseType,
+  updateHolder,
+  updatePlatform,
+  updateShiftRounding,
+  updateWallet,
+} from './lib/data'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 
@@ -113,7 +139,7 @@ function App() {
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
           {!loadError && appData && view === 'bonuses' && <LiveBonuses bonuses={appData.bonuses} />}
-          {!loadError && appData && view === 'settings' && <LiveSettings data={appData} setToast={setToast} />}
+          {!loadError && appData && view === 'settings' && <LiveSettings data={appData} setToast={setToast} onSaved={reloadData} />}
         </main>
       </div>
       {toast && <div className="toast"><Sparkles size={16} />{toast}</div>}
@@ -287,7 +313,17 @@ function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(nul
 
 function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
 
-function LiveSettings({ data, setToast }) {
+function LiveSettings({ data, setToast, onSaved }) {
+  const persistUpdate = async (action, successMessage) => {
+    try {
+      await action()
+      setToast(successMessage)
+      onSaved?.()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar la configuración')
+    }
+  }
+
   const buildUniqueItems = (items, getItem) => {
     const unique = new Map()
     items.forEach((entry) => {
@@ -302,8 +338,8 @@ function LiveSettings({ data, setToast }) {
   }
 
   const buildDefaultConfig = useMemo(() => {
-    const holdersFromData = buildUniqueItems(data.accounts || [], (account) => account.cuentas?.titulares || { id: account.cuenta_id, nombre: 'Sin titular' })
-    const walletsFromData = buildUniqueItems(data.accounts || [], (account) => account.cuentas?.billeteras || { id: account.cuenta_id, nombre: 'Sin billetera' })
+    const holdersFromData = buildUniqueItems(data.holders || data.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.titulares || { id: entry?.cuenta_id, nombre: 'Sin titular' })))
+    const walletsFromData = buildUniqueItems(data.wallets || data.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.billeteras || { id: entry?.cuenta_id, nombre: 'Sin billetera' })))
     const availability = {}
     holdersFromData.forEach((holder) => {
       const holderName = holder.nombre || 'Sin titular'
@@ -320,34 +356,14 @@ function LiveSettings({ data, setToast }) {
         holders: holdersFromData.map((holder) => holder.nombre || 'Sin titular'),
         wallets: walletsFromData.map((wallet) => wallet.nombre || 'Sin billetera'),
         availability,
-        walletModes: Object.fromEntries((walletsFromData.map((wallet) => [wallet.nombre || 'Sin billetera', 'Cobros + Retiros']))),
+        walletModes: Object.fromEntries((walletsFromData.map((wallet) => [wallet.nombre || 'Sin billetera', 'Cobros y retiros']))),
       },
-      expenses: [
-        { id: 'expense-1', name: 'Gasto operativo', inverted: false },
-        { id: 'expense-2', name: 'Transferencia', inverted: false },
-        { id: 'expense-3', name: 'Cuenta extra', inverted: true },
-      ],
-      platforms: ['Web', 'App', 'Local'],
-      platformColors: { Web: 'teal', App: 'blue', Local: 'green' },
-      platformEnabled: { Web: true, App: true, Local: true },
-      userClarifications: [
-        { id: 'clarification-1', text: 'Cliente con retiro previo', color: 'blue', emoji: '📌' },
-        { id: 'clarification-2', text: 'Revisa saldo antes de cerrar', color: 'orange', emoji: '⚠️' },
-      ],
-      bonusTypes: [
-        { id: 'bonus-type-1', name: 'Comisión', percentageCount: 1 },
-        { id: 'bonus-type-2', name: 'Publicidad', percentageCount: 2 },
-      ],
-      bonusConditions: [
-        { id: 'bonus-condition-1', label: 'Cobro del día', allow: true },
-        { id: 'bonus-condition-2', label: 'Cliente recurrente', allow: false },
-      ],
-      monthlyGoal: { final: 0, achieved: 0 },
-      bonusGoal: { total: 0, percentages: { Noche: 33, Mañana: 33, Tarde: 34 } },
-      savingsGoal: { total: 0, shifts: { Noche: 0, Mañana: 0, Tarde: 0 } },
-      branding: { icon: 'banknote', suffix: 'flow' },
+      expenses: (data.expenseTypes || []).map((expense) => ({ id: expense.id, name: expense.nombre || 'Gasto', inverted: Boolean(expense.invertir_signo) })),
+      platforms: (data.platforms || []).map((platform) => platform.nombre || 'Plataforma'),
+      platformColors: Object.fromEntries((data.platforms || []).map((platform) => [platform.nombre || 'Plataforma', platform.color_id ? 'teal' : 'teal'])),
+      bonusConditions: (data.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
     }
-  }, [data.accounts, data.boxes])
+  }, [data.accounts, data.boxes, data.holders, data.wallets, data.platforms, data.expenseTypes, data.bonusConditions])
 
   const [tab, setTab] = useState('accounts')
   const [draft, setDraft] = useState(buildDefaultConfig)
@@ -436,8 +452,16 @@ function LiveSettings({ data, setToast }) {
             <div className="config-list-head"><h3>Mis cajas</h3><span>{draft.boxes.length} espacios</span></div>
             {draft.boxes.map((box, index) => (
               <div className="config-list-row" key={box.id || index}>
-                <input value={box.title} onChange={(event) => setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) }))} />
-                <select value={box.color} onChange={(event) => setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, color: event.target.value } : item) }))}>
+                <input value={box.title} onChange={(event) => setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) }))} onBlur={async (event) => {
+                  const value = event.target.value.trim()
+                  if (!box.id || !value) return
+                  await persistUpdate(() => updateBox(box.id, { name: value, color: box.color || 'teal' }), 'Caja actualizada en Supabase')
+                }} />
+                <select value={box.color} onChange={(event) => {
+                  const nextColor = event.target.value
+                  setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, color: nextColor } : item) }))
+                  if (box.id) persistUpdate(() => updateBox(box.id, { name: box.title, color: nextColor }), 'Color de caja actualizado en Supabase')
+                }}>
                   <option value="teal">Turquesa</option>
                   <option value="blue">Azul</option>
                   <option value="green">Verde</option>
@@ -448,25 +472,23 @@ function LiveSettings({ data, setToast }) {
                   <option value="violet">Violeta</option>
                   <option value="slate">Pizarra</option>
                 </select>
-                <button type="button" className="delete-button" title="Eliminar caja" onClick={() => setDraft((current) => ({ ...current, boxes: current.boxes.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+                <button type="button" className="delete-button" title="Eliminar caja" onClick={() => {
+                  if (!box.id) return
+                  persistUpdate(() => deleteBox(box.id), 'Caja eliminada de Supabase')
+                }}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, boxes: [...current.boxes, { id: `box-${Date.now()}`, title: 'Nueva caja', color: 'teal' }] }))}><Plus size={15} /> Agregar caja</button>
+            <button type="button" className="config-add" onClick={async () => {
+              const name = 'Nueva caja'
+              await persistUpdate(() => createBox({ name, color: 'teal' }), 'Caja creada en Supabase')
+            }}><Plus size={15} /> Agregar caja</button>
           </div>
 
           <div className="config-card">
-            <div className="config-list-head"><h3>Marca de la caja</h3><span>Se guarda como etiqueta</span></div>
-            <div className="config-list-row">
-              <select value={draft.branding.icon} onChange={(event) => setDraft((current) => ({ ...current, branding: { ...current.branding, icon: event.target.value } }))}>
-                <option value="banknote">Billete</option>
-                <option value="wallet">Billetera</option>
-                <option value="coins">Monedas</option>
-                <option value="gift">Regalo</option>
-                <option value="ticket">Ticket</option>
-              </select>
-            </div>
-            <div className="config-list-row">
-              <input value={draft.branding.suffix} onChange={(event) => setDraft((current) => ({ ...current, branding: { ...current.branding, suffix: event.target.value } }))} placeholder="Sufijo de marca" />
+            <div className="config-list-head"><h3>Referencia DB</h3><span>Los valores se mantienen en Supabase</span></div>
+            <div className="config-list-row" style={{ display: 'grid', gap: '8px' }}>
+              <span className="muted-copy">Tabla: cajas</span>
+              <span className="muted-copy">Campos: nombre, color_id, imagen, imagen_mini</span>
             </div>
           </div>
         </div>
@@ -482,11 +504,22 @@ function LiveSettings({ data, setToast }) {
                   const next = [...draft.accounts.holders]
                   next[index] = event.target.value
                   updateAccounts({ holders: next })
+                }} onBlur={async (event) => {
+                  const value = event.target.value.trim()
+                  if (!value || !data.holders.find(item => item.nombre === holder)) return
+                  const target = data.holders.find(item => item.nombre === holder)
+                  await persistUpdate(() => updateHolder(target.id, { name: value }), 'Titular actualizado en Supabase')
                 }} placeholder="Nombre del titular" />
-                <button type="button" className="delete-button" title="Eliminar titular" onClick={() => updateAccounts({ holders: draft.accounts.holders.filter((_, itemIndex) => itemIndex !== index) })}><X size={14} /></button>
+                <button type="button" className="delete-button" title="Eliminar titular" onClick={async () => {
+                  const current = data.holders.find(item => item.nombre === holder)
+                  if (!current) return
+                  await persistUpdate(() => deleteHolder(current.id), 'Titular eliminado de Supabase')
+                }}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="config-add" onClick={() => updateAccounts({ holders: [...draft.accounts.holders, 'Nuevo titular'] })}><Plus size={15} /> Agregar titular</button>
+            <button type="button" className="config-add" onClick={async () => {
+              await persistUpdate(() => createHolder({ name: 'Nuevo titular' }), 'Titular creado en Supabase')
+            }}><Plus size={15} /> Agregar titular</button>
           </div>
 
           <div className="config-list">
@@ -498,16 +531,34 @@ function LiveSettings({ data, setToast }) {
                   const next = [...draft.accounts.wallets]
                   next[index] = event.target.value
                   updateAccounts({ wallets: next })
+                }} onBlur={async (event) => {
+                  const value = event.target.value.trim()
+                  if (!value || !data.wallets.find(item => item.nombre === wallet)) return
+                  const target = data.wallets.find(item => item.nombre === wallet)
+                  await persistUpdate(() => updateWallet(target.id, { name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' }), 'Billetera actualizada en Supabase')
                 }} placeholder="Nombre de billetera" />
-                <select value={draft.accounts.walletModes?.[wallet] || 'Cobros + Retiros'} onChange={(event) => updateAccounts({ walletModes: { ...(draft.accounts.walletModes || {}), [wallet]: event.target.value } })}>
+                <select value={draft.accounts.walletModes?.[wallet] || 'Cobros + Retiros'} onChange={async (event) => {
+                  const nextMode = event.target.value
+                  updateAccounts({ walletModes: { ...(draft.accounts.walletModes || {}), [wallet]: nextMode } })
+                  const target = data.wallets.find(item => item.nombre === wallet)
+                  if (target) {
+                    await persistUpdate(() => updateWallet(target.id, { name: wallet, typeName: nextMode === 'Cobros + Retiros' ? 'Cobros y retiros' : nextMode === 'Solo Cobros' ? 'Cobros' : 'Depósito' }), 'Modo de billetera actualizado en Supabase')
+                  }
+                }}>
                   <option>Cobros + Retiros</option>
                   <option>Solo Cobros</option>
                   <option>Solo Depósito</option>
                 </select>
-                <button type="button" className="delete-button" title="Eliminar billetera" onClick={() => updateAccounts({ wallets: draft.accounts.wallets.filter((_, itemIndex) => itemIndex !== index) })}><X size={14} /></button>
+                <button type="button" className="delete-button" title="Eliminar billetera" onClick={async () => {
+                  const current = data.wallets.find(item => item.nombre === wallet)
+                  if (!current) return
+                  await persistUpdate(() => deleteWallet(current.id), 'Billetera eliminada de Supabase')
+                }}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="config-add" onClick={() => updateAccounts({ wallets: [...draft.accounts.wallets, 'Nueva billetera'], walletModes: { ...(draft.accounts.walletModes || {}), ['Nueva billetera']: 'Cobros + Retiros' } })}><Plus size={15} /> Agregar billetera</button>
+            <button type="button" className="config-add" onClick={async () => {
+              await persistUpdate(() => createWallet({ name: 'Nueva billetera', typeName: 'Cobros y retiros' }), 'Billetera creada en Supabase')
+            }}><Plus size={15} /> Agregar billetera</button>
           </div>
         </div>
 
@@ -527,23 +578,50 @@ function LiveSettings({ data, setToast }) {
         <div className="config-list-head"><h3>Opciones del selector</h3><span>{draft.expenses.length} categorías</span></div>
         {draft.expenses.map((expense, index) => (
           <div className="config-list-row" key={expense.id || `expense-${index}`}>
-            <input value={expense.name} onChange={(event) => setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) }))} placeholder="Nombre del gasto" />
+            <input value={expense.name} onChange={(event) => setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) }))} onBlur={async (event) => {
+              const value = event.target.value.trim()
+              if (!value || !data.expenseTypes.find(item => item.nombre === expense.name)) return
+              const target = data.expenseTypes.find(item => item.nombre === expense.name)
+              await persistUpdate(() => updateExpenseType(target.id, { name: value, inverted: expense.inverted }), 'Tipo de gasto actualizado en Supabase')
+            }} placeholder="Nombre del gasto" />
             <label className="toggle-cell" aria-label={`Invertir signo para ${expense.name}`}>
-              <input type="checkbox" checked={expense.inverted} onChange={() => setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, inverted: !item.inverted } : item) }))} />
+              <input type="checkbox" checked={expense.inverted} onChange={async () => {
+                setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, inverted: !item.inverted } : item) }))
+                const target = data.expenseTypes.find(item => item.nombre === expense.name)
+                if (target) {
+                  await persistUpdate(() => updateExpenseType(target.id, { name: expense.name, inverted: !expense.inverted }), 'Regla de signo guardada en Supabase')
+                }
+              }} />
               <span />
             </label>
-            <button type="button" className="delete-button" title="Eliminar gasto" onClick={() => setDraft((current) => ({ ...current, expenses: current.expenses.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+            <button type="button" className="delete-button" title="Eliminar gasto" onClick={async () => {
+              const target = data.expenseTypes.find(item => item.nombre === expense.name)
+              if (!target) return
+              await persistUpdate(() => deleteExpenseType(target.id), 'Tipo de gasto eliminado de Supabase')
+            }}><X size={14} /></button>
           </div>
         ))}
-        <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, expenses: [...current.expenses, { id: `expense-${Date.now()}`, name: 'Nueva categoría', inverted: false }] }))}><Plus size={15} /> Agregar categoría</button>
+        <button type="button" className="config-add" onClick={async () => {
+          await persistUpdate(() => createExpenseType({ name: 'Nueva categoría', inverted: false }), 'Categoría creada en Supabase')
+        }}><Plus size={15} /> Agregar categoría</button>
       </section>}
 
       {tab === 'platforms' && <section className="config-card">
         <div className="config-list-head"><h3>Plataformas</h3><span>{draft.platforms.length} elementos</span></div>
         {draft.platforms.map((platform, index) => (
           <div className="config-list-row" key={`${platform}-${index}`}>
-            <input value={platform} onChange={(event) => setDraft((current) => ({ ...current, platforms: current.platforms.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} placeholder="Nombre de plataforma" />
-            <select value={draft.platformColors?.[platform] || 'teal'} onChange={(event) => setDraft((current) => ({ ...current, platformColors: { ...(current.platformColors || {}), [platform]: event.target.value } }))}>
+            <input value={platform} onChange={(event) => setDraft((current) => ({ ...current, platforms: current.platforms.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} onBlur={async (event) => {
+              const value = event.target.value.trim()
+              const target = data.platforms.find(item => item.nombre === platform)
+              if (!value || !target) return
+              await persistUpdate(() => updatePlatform(target.id, { name: value, color: draft.platformColors?.[platform] || 'teal' }), 'Plataforma actualizada en Supabase')
+            }} placeholder="Nombre de plataforma" />
+            <select value={draft.platformColors?.[platform] || 'teal'} onChange={async (event) => {
+              const nextColor = event.target.value
+              setDraft((current) => ({ ...current, platformColors: { ...(current.platformColors || {}), [platform]: nextColor } }))
+              const target = data.platforms.find(item => item.nombre === platform)
+              if (target) await persistUpdate(() => updatePlatform(target.id, { name: platform, color: nextColor }), 'Color de plataforma guardado en Supabase')
+            }}>
               <option value="teal">Turquesa</option>
               <option value="blue">Azul</option>
               <option value="green">Verde</option>
@@ -553,122 +631,75 @@ function LiveSettings({ data, setToast }) {
               <option value="yellow">Amarillo</option>
               <option value="violet">Violeta</option>
             </select>
-            <button type="button" className="delete-button" title="Eliminar plataforma" onClick={() => setDraft((current) => ({ ...current, platforms: current.platforms.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+            <button type="button" className="delete-button" title="Eliminar plataforma" onClick={async () => {
+              const target = data.platforms.find(item => item.nombre === platform)
+              if (!target) return
+              await persistUpdate(() => deletePlatform(target.id), 'Plataforma eliminada de Supabase')
+            }}><X size={14} /></button>
           </div>
         ))}
-        <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, platforms: [...current.platforms, 'Nueva plataforma'], platformColors: { ...(current.platformColors || {}), ['Nueva plataforma']: 'teal' } }))}><Plus size={15} /> Agregar plataforma</button>
+        <button type="button" className="config-add" onClick={async () => {
+          const boxId = data.boxes?.[0]?.id || null
+          await persistUpdate(() => createPlatform({ name: 'Nueva plataforma', color: 'teal', boxId }), 'Plataforma creada en Supabase')
+        }}><Plus size={15} /> Agregar plataforma</button>
       </section>}
 
       {tab === 'users' && <>
         <section className="config-card">
-          <div className="config-list-head"><h3>Aclaraciones</h3><span>{draft.userClarifications.length} elementos</span></div>
-          {draft.userClarifications.map((clarification, index) => (
-            <div className="config-list-row" key={clarification.id || index}>
-              <input value={clarification.text} onChange={(event) => setDraft((current) => ({ ...current, userClarifications: current.userClarifications.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item) }))} placeholder="Texto aclaración" />
-              <select value={clarification.color} onChange={(event) => setDraft((current) => ({ ...current, userClarifications: current.userClarifications.map((item, itemIndex) => itemIndex === index ? { ...item, color: event.target.value } : item) }))}>
-                <option value="teal">Turquesa</option>
-                <option value="blue">Azul</option>
-                <option value="green">Verde</option>
-                <option value="orange">Naranja</option>
-                <option value="pink">Rosa</option>
-                <option value="red">Rojo</option>
-                <option value="yellow">Amarillo</option>
-                <option value="violet">Violeta</option>
-              </select>
-              <input value={clarification.emoji || ''} maxLength={2} onChange={(event) => setDraft((current) => ({ ...current, userClarifications: current.userClarifications.map((item, itemIndex) => itemIndex === index ? { ...item, emoji: event.target.value } : item) }))} placeholder="🙂" />
-              <button type="button" className="delete-button" title="Eliminar aclaración" onClick={() => setDraft((current) => ({ ...current, userClarifications: current.userClarifications.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+          <div className="config-list-head"><h3>Usuarios</h3><span>{(data.users || []).length} registros</span></div>
+          {(data.users || []).length ? (data.users || []).slice(0, 12).map((user) => (
+            <div className="config-list-row" key={user.id}>
+              <span>{user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`}</span>
+              <small className="muted-copy">{user.bloqueado ? 'Bloqueado' : 'Activo'}</small>
             </div>
-          ))}
-          <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, userClarifications: [...current.userClarifications, { id: `clarification-${Date.now()}`, text: 'Nueva aclaración', color: 'blue', emoji: '•' }] }))}><Plus size={15} /> Agregar aclaración</button>
+          )) : <div className="empty-inline-block">No hay usuarios activos en Supabase.</div>}
         </section>
       </>}
 
       {tab === 'bonuses' && <>
         <div className="config-two-columns">
           <section className="config-card">
-            <div className="config-list-head"><h3>Tipos de bonos</h3><span>{draft.bonusTypes.length} elementos</span></div>
-            {draft.bonusTypes.map((bonusType, index) => (
-              <div className="config-list-row" key={bonusType.id || index}>
-                <input value={bonusType.name} onChange={(event) => setDraft((current) => ({ ...current, bonusTypes: current.bonusTypes.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) }))} placeholder="Nombre del tipo" />
-                <input type="number" min="1" max="20" value={bonusType.percentageCount || 1} onChange={(event) => setDraft((current) => ({ ...current, bonusTypes: current.bonusTypes.map((item, itemIndex) => itemIndex === index ? { ...item, percentageCount: Math.max(1, Math.min(20, Number(event.target.value) || 1)) } : item) }))} style={{ width: '84px' }} />
-                <button type="button" className="delete-button" title="Eliminar tipo" onClick={() => setDraft((current) => ({ ...current, bonusTypes: current.bonusTypes.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
-              </div>
-            ))}
-            <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, bonusTypes: [...current.bonusTypes, { id: `bonus-type-${Date.now()}`, name: 'Nuevo tipo', percentageCount: 1 }] }))}><Plus size={15} /> Agregar tipo</button>
-          </section>
-
-          <section className="config-card">
             <div className="config-list-head"><h3>Condiciones de bono</h3><span>{draft.bonusConditions.length} elementos</span></div>
             {draft.bonusConditions.map((condition, index) => (
               <div className="config-list-row" key={condition.id || index}>
-                <input value={condition.label} onChange={(event) => setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) }))} placeholder="Etiqueta" />
+                <input value={condition.label} onChange={(event) => setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) }))} onBlur={async (event) => {
+                  const value = event.target.value.trim()
+                  const target = data.bonusConditions?.find(item => item.nombre === condition.label)
+                  if (!value || !target) return
+                  await persistUpdate(() => updateBonusCondition(target.id, { name: value, platform: condition.allow }), 'Condición de bono guardada en Supabase')
+                }} placeholder="Etiqueta" />
                 <label className="toggle-cell" aria-label={`Habilitar ${condition.label}`}>
-                  <input type="checkbox" checked={condition.allow} onChange={() => setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, allow: !item.allow } : item) }))} />
+                  <input type="checkbox" checked={condition.allow} onChange={async () => {
+                    setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, allow: !item.allow } : item) }))
+                    const target = data.bonusConditions?.find(item => item.nombre === condition.label)
+                    if (target) await persistUpdate(() => updateBonusCondition(target.id, { name: condition.label, platform: !condition.allow }), 'Condición de bono actualizada en Supabase')
+                  }} />
                   <span />
                 </label>
-                <button type="button" className="delete-button" title="Eliminar condición" onClick={() => setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+                <button type="button" className="delete-button" title="Eliminar condición" onClick={async () => {
+                  const target = data.bonusConditions?.find(item => item.nombre === condition.label)
+                  if (!target) return
+                  await persistUpdate(() => deleteBonusCondition(target.id), 'Condición de bono eliminada de Supabase')
+                }}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, bonusConditions: [...current.bonusConditions, { id: `bonus-condition-${Date.now()}`, label: 'Nueva condición', allow: true }] }))}><Plus size={15} /> Agregar condición</button>
+            <button type="button" className="config-add" onClick={async () => {
+              await persistUpdate(() => createBonusCondition({ name: 'Nueva condición', platform: true }), 'Condición creada en Supabase')
+            }}><Plus size={15} /> Agregar condición</button>
           </section>
         </div>
       </>}
 
-      {tab === 'goals' && <>
-        <div className="config-two-columns">
-          <section className="config-card">
-            <div className="config-list-head"><h3>Objetivo de depósitos</h3><span>Meta mensual</span></div>
-            <div className="config-list-row">
-              <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
-                <span>Objetivo final</span>
-                <input type="number" value={draft.monthlyGoal.final} onChange={(event) => setDraft((current) => ({ ...current, monthlyGoal: { ...current.monthlyGoal, final: Number(event.target.value) || 0 } }))} />
-              </label>
-            </div>
-            <div className="config-list-row">
-              <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
-                <span>Objetivo alcanzado</span>
-                <input type="number" value={draft.monthlyGoal.achieved} onChange={(event) => setDraft((current) => ({ ...current, monthlyGoal: { ...current.monthlyGoal, achieved: Number(event.target.value) || 0 } }))} />
-              </label>
-            </div>
-          </section>
-
-          <section className="config-card">
-            <div className="config-list-head"><h3>Objetivos de bonos</h3><span>Por turno</span></div>
-            <div className="config-list-row">
-              <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
-                <span>Meta total</span>
-                <input type="number" value={draft.bonusGoal.total} onChange={(event) => setDraft((current) => ({ ...current, bonusGoal: { ...current.bonusGoal, total: Number(event.target.value) || 0 } }))} />
-              </label>
-            </div>
-            {Object.entries(draft.bonusGoal.percentages || {}).map(([shift, value]) => (
-              <div className="config-list-row" key={shift}>
-                <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
-                  <span>{shift}</span>
-                  <input type="number" min="0" max="100" value={value} onChange={(event) => setDraft((current) => ({ ...current, bonusGoal: { ...current.bonusGoal, percentages: { ...(current.bonusGoal.percentages || {}), [shift]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) } } }))} />
-                </label>
-              </div>
-            ))}
-          </section>
-        </div>
-
-        <section className="config-card">
-          <div className="config-list-head"><h3>Objetivo de ahorro</h3><span>Meta mensual por turno</span></div>
-          <div className="config-list-row">
-            <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
-              <span>Meta total</span>
-              <input type="number" value={draft.savingsGoal.total} onChange={(event) => setDraft((current) => ({ ...current, savingsGoal: { ...current.savingsGoal, total: Number(event.target.value) || 0 } }))} />
-            </label>
+      {tab === 'goals' && <section className="config-card">
+        <div className="config-list-head"><h3>Objetivos activos</h3><span>{(data.goals || []).length} registros</span></div>
+        {(data.goals || []).length ? (data.goals || []).map((goal, index) => (
+          <div className="config-list-row" key={`${goal.subobjetivos?.id || goal.id || index}`} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px', alignItems: 'center' }}>
+            <span><strong>Meta</strong><br />{money.format(Number(goal.objetivo_final_turno || goal.subobjetivos?.objetivo_final_dia || 0))}</span>
+            <span><strong>Alcanzado</strong><br />{money.format(Number(goal.objetivo_alcanzado_turno || goal.subobjetivos?.objetivo_alcanzado_dia || 0))}</span>
+            <span><strong>Nombre</strong><br />{goal.subobjetivos?.objetivos?.nombre || 'Objetivo'}</span>
           </div>
-          {Object.entries(draft.savingsGoal.shifts || {}).map(([shift, value]) => (
-            <div className="config-list-row" key={shift}>
-              <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
-                <span>{shift}</span>
-                <input type="number" value={value} onChange={(event) => setDraft((current) => ({ ...current, savingsGoal: { ...current.savingsGoal, shifts: { ...(current.savingsGoal.shifts || {}), [shift]: Number(event.target.value) || 0 } } }))} />
-              </label>
-            </div>
-          ))}
-        </section>
-      </>}
+        )) : <div className="empty-inline-block">No hay objetivos activos en Supabase para este turno.</div>}
+      </section>}
 
       {selected && (
         <div className="modal-backdrop" onClick={() => setSelected(null)}>

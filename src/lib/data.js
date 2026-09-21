@@ -27,7 +27,7 @@ export async function loadCurrentShiftData(boxId = null) {
   if (shiftError) throw shiftError
   if (!shift) return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes: [], logistics: [], users: [], goals: [], chips: [] }
 
-  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips] = await Promise.all([
+  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id)),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
@@ -38,6 +38,10 @@ export async function loadCurrentShiftData(boxId = null) {
     query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(nombre), telefonos_usuario(numero), titulares_usuario(nombre), paneles_x_usuario(paneles(nombre))', request => request.order('fecha_creacion', { ascending: false })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
     query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id)),
+    query('titulares', 'id, nombre, orden_num'),
+    query('billeteras', 'id, nombre, orden_num, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)'),
+    query('plataformas', 'id, nombre, caja_id, color_id'),
+    query('condiciones_bono', 'id, nombre, plataforma'),
   ])
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
@@ -49,7 +53,7 @@ export async function loadCurrentShiftData(boxId = null) {
 
   const logisticsWithAccounts = logistics.map(line => ({ ...line, cuentas_x_turno: { cuentas: accountById.get(accountLinks.find(link => link.id === line.cuenta_x_turno_id)?.cuenta_id) || null } }))
 
-  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips }
+  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, bonusConditions }
 }
 
 export async function loadConfigurationData() {
@@ -116,6 +120,173 @@ export async function createExpense(shiftId, { typeId, value, notes }) {
   const { data, error } = await supabase.from('gastos').insert({ turno_id: shiftId, tipo_gasto_id: typeId, monto: Number(value) || 0, notas: notes?.trim() || null }).select().single()
   if (error) throw error
   return data
+}
+
+function colorHex(color) {
+  const palette = {
+    teal: '#72d7ca',
+    blue: '#82b8ff',
+    green: '#83d5a2',
+    orange: '#f5ad69',
+    pink: '#ed9fc1',
+    red: '#ef8888',
+    yellow: '#e8d477',
+    violet: '#c2a0ed',
+    slate: '#aebdca',
+  }
+  return palette[color] || '#72d7ca'
+}
+
+async function ensureColor(name, color = 'teal') {
+  requireSupabase()
+  const { data: existing, error: findError } = await supabase.from('colores').select('id').eq('nombre', name).limit(1).maybeSingle()
+  if (findError) throw findError
+  if (existing) return existing.id
+  const { data, error } = await supabase.from('colores').insert({ nombre: name, hex: colorHex(color) }).select('id').single()
+  if (error) throw error
+  return data.id
+}
+
+export async function createBox({ name, color = 'teal' }) {
+  requireSupabase()
+  const colorId = await ensureColor(name, color)
+  const { data, error } = await supabase.from('cajas').insert({ nombre: name.trim(), color_id: colorId, es_publicidad: false }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateBox(id, { name, color = 'teal' }) {
+  requireSupabase()
+  const colorId = await ensureColor(name || 'Caja', color)
+  const { data, error } = await supabase.from('cajas').update({ nombre: name.trim(), color_id: colorId }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteBox(id) {
+  requireSupabase()
+  const { error } = await supabase.from('cajas').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createHolder({ name }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('titulares').insert({ nombre: name.trim() }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateHolder(id, { name }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('titulares').update({ nombre: name.trim() }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteHolder(id) {
+  requireSupabase()
+  const { error } = await supabase.from('titulares').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
+  requireSupabase()
+  const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).limit(1).maybeSingle()
+  if (typeError) throw typeError
+  let typeId = typeRow?.id
+  if (!typeId) {
+    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true }).select('id').single()
+    if (createdTypeError) throw createdTypeError
+    typeId = createdType.id
+  }
+  const { data, error } = await supabase.from('billeteras').insert({ nombre: name.trim(), tipo_billetera_id: typeId }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateWallet(id, { name, typeName = 'Cobros y retiros' }) {
+  requireSupabase()
+  const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).limit(1).maybeSingle()
+  if (typeError) throw typeError
+  let typeId = typeRow?.id
+  if (!typeId) {
+    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true }).select('id').single()
+    if (createdTypeError) throw createdTypeError
+    typeId = createdType.id
+  }
+  const { data, error } = await supabase.from('billeteras').update({ nombre: name.trim(), tipo_billetera_id: typeId }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteWallet(id) {
+  requireSupabase()
+  const { error } = await supabase.from('billeteras').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createExpenseType({ name, inverted = false }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('tipos_gasto').insert({ nombre: name.trim(), invertir_signo: Boolean(inverted) }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateExpenseType(id, { name, inverted = false }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('tipos_gasto').update({ nombre: name.trim(), invertir_signo: Boolean(inverted) }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteExpenseType(id) {
+  requireSupabase()
+  const { error } = await supabase.from('tipos_gasto').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createPlatform({ name, color = 'teal', boxId = null }) {
+  requireSupabase()
+  const boxTargetId = boxId || (await supabase.from('cajas').select('id').limit(1).maybeSingle()).data?.id
+  if (!boxTargetId) throw new Error('No hay una caja disponible para crear la plataforma')
+  const colorId = await ensureColor(name, color)
+  const { data, error } = await supabase.from('plataformas').insert({ nombre: name.trim(), caja_id: boxTargetId, color_id: colorId }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updatePlatform(id, { name, color = 'teal' }) {
+  requireSupabase()
+  const colorId = await ensureColor(name || 'Plataforma', color)
+  const { data, error } = await supabase.from('plataformas').update({ nombre: name.trim(), color_id: colorId }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deletePlatform(id) {
+  requireSupabase()
+  const { error } = await supabase.from('plataformas').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createBonusCondition({ name, platform = false }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('condiciones_bono').insert({ nombre: name.trim(), plataforma: Boolean(platform) }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateBonusCondition(id, { name, platform = false }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('condiciones_bono').update({ nombre: name.trim(), plataforma: Boolean(platform) }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteBonusCondition(id) {
+  requireSupabase()
+  const { error } = await supabase.from('condiciones_bono').delete().eq('id', id)
+  if (error) throw error
 }
 
 async function findOrCreate(table, match, values) {
