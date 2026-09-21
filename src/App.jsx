@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import {
   ArrowLeftRight,
   BarChart3,
   Banknote,
   Bell,
   Boxes,
+  Check,
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
@@ -13,6 +14,7 @@ import {
   Eye,
   FileText,
   Gift,
+  GripVertical,
   LayoutGrid,
   LockKeyhole,
   Menu,
@@ -284,6 +286,159 @@ function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(nul
 
 function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
 
-function LiveSettings({ data, setToast }) { const holders = [...new Map(data.accounts.map(account => [account.cuentas?.titulares?.id || account.cuenta_id, account.cuentas?.titulares || { id: account.cuenta_id, nombre: 'Sin titular' }])).values()]; const wallets = [...new Map(data.accounts.map(account => [account.cuentas?.billeteras?.id || account.cuenta_id, account.cuentas?.billeteras || { id: account.cuenta_id, nombre: 'Sin billetera' }])).values()]; return <><GoalStrip open={false} onToggle={() => {}} /><div className="settings-tabs"><button className="active">Matriz de cuentas</button></div><section className="settings-intro"><span className="eyebrow">Datos del turno</span><h2>Titulares y billeteras</h2><p>Estos registros provienen de las cuentas vinculadas al turno abierto.</p></section><div className="settings-grid"><ConfigList title="Titulares" items={holders} /><ConfigList title="Billeteras" items={wallets} select /></div><section className="panel availability"><PanelTitle icon={SlidersHorizontal} title="Cuentas del turno" meta={`${data.accounts.length} cuentas`} action={<button className="primary-button" onClick={() => setToast('La matriz se actualiza desde cuentas_x_turno')}>Actualizar</button>} />{data.accounts.map(account => <div className="availability-row" key={account.id}><b>{account.cuentas?.titulares?.nombre || 'Sin titular'} · {account.cuentas?.billeteras?.nombre || 'Sin billetera'}</b><span>{money.format(account.valor || 0)}</span><span>{account.cobros ? 'Cobros' : 'Sin cobros'}</span><span>{account.retiros ? 'Retiros' : 'Sin retiros'}</span></div>)}{!data.accounts.length && <EmptyInline text="No hay cuentas vinculadas al turno actual." />}</section></> }
+function LiveSettings({ data, setToast }) {
+  const holders = [...new Map(data.accounts.map(account => [account.cuentas?.titulares?.id || account.cuenta_id, account.cuentas?.titulares || { id: account.cuenta_id, nombre: 'Sin titular' }])).values()]
+  const wallets = [...new Map(data.accounts.map(account => [account.cuentas?.billeteras?.id || account.cuenta_id, account.cuentas?.billeteras || { id: account.cuenta_id, nombre: 'Sin billetera' }])).values()]
+
+  const initialAvailability = () => {
+    const next = {}
+    holders.forEach((holder) => {
+      next[holder.nombre || 'Sin titular'] = {}
+      wallets.forEach((wallet) => {
+        next[holder.nombre || 'Sin titular'][wallet.nombre || 'Sin billetera'] = true
+      })
+    })
+    return next
+  }
+
+  const [availability, setAvailability] = useState(initialAvailability)
+  const [selected, setSelected] = useState(null)
+
+  useEffect(() => {
+    setAvailability(initialAvailability())
+  }, [data.accounts])
+
+  const walletModes = useMemo(() => {
+    const map = {}
+    wallets.forEach((wallet) => {
+      map[wallet.nombre || 'Sin billetera'] = 'Cobros + Retiros'
+    })
+    return map
+  }, [wallets])
+
+  const targetSetting = selected
+    ? { holder: selected.holder, wallet: selected.wallet, category: 'Normal', alias: '', cuil: '', password: '', note: '' }
+    : null
+
+  const toggleWallet = (holderName, walletName) => {
+    setAvailability((current) => ({
+      ...current,
+      [holderName]: {
+        ...(current[holderName] || {}),
+        [walletName]: !(current[holderName]?.[walletName] ?? true),
+      },
+    }))
+  }
+
+  return <>
+    <GoalStrip open={false} onToggle={() => {}} />
+    <div className="settings-page">
+      <div className="settings-tabs">
+        <button type="button" className="active">Matriz de cuentas</button>
+        <button type="button">Cuentas y saldo</button>
+      </div>
+
+      <section className="settings-intro">
+        <span className="eyebrow">Datos del turno</span>
+        <h2>Titulares y billeteras</h2>
+        <p>Estos registros provienen de las cuentas vinculadas al turno abierto. La matriz de configuración se mantiene en un único titular y una billetera por cada tipo, y debajo se personaliza cada cuenta.</p>
+      </section>
+
+      <div className="config-two-columns">
+        <div className="config-list">
+          <div className="config-list-head"><h3>Titulares</h3><span>{holders.length} elementos</span></div>
+          {holders.map((holder) => (
+            <div className="config-list-row sortable" key={holder.id || holder.nombre}>
+              <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
+              <input value={holder.nombre || 'Sin titular'} readOnly />
+              <button type="button" className="delete-button" title="Eliminar titular" onClick={() => setToast('Se elimina desde la configuración de caja cuando se conecte el editor real')}><X size={14} /></button>
+            </div>
+          ))}
+          <button type="button" className="config-add" onClick={() => setToast('Se agregará un titular desde la configuración completa')}><Plus size={15} /> Agregar titular</button>
+        </div>
+
+        <div className="config-list">
+          <div className="config-list-head"><h3>Billeteras</h3><span>{wallets.length} elementos</span></div>
+          {wallets.map((wallet) => (
+            <div className="wallet-config-row" key={wallet.id || wallet.nombre}>
+              <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
+              <input value={wallet.nombre || 'Sin billetera'} readOnly />
+              <select value={walletModes[wallet.nombre || 'Sin billetera'] || 'Cobros + Retiros'} onChange={() => setToast('El tipo de billetera se guardará en la configuración del turno')}>
+                <option>Cobros + Retiros</option>
+                <option>Solo Cobros</option>
+                <option>Solo Depósito</option>
+              </select>
+              <button type="button" className="delete-button" title="Eliminar billetera" onClick={() => setToast('Se elimina desde la configuración de caja cuando se conecte el editor real')}><X size={14} /></button>
+            </div>
+          ))}
+          <button type="button" className="config-add" onClick={() => setToast('Se agregará una billetera desde la configuración completa')}><Plus size={15} /> Agregar billetera</button>
+        </div>
+      </div>
+
+      <section className="config-card matrix-config-card">
+        <div className="config-list-head"><h3>Billeteras utilizables por titular</h3><span>Activá y configurá cada cuenta</span></div>
+        <div className="availability-table">
+          <div className="availability-row availability-head" style={{ '--wallet-count': wallets.length }}>
+            <b>Titular</b>
+            {wallets.map((wallet) => <span key={wallet.id || wallet.nombre}>{wallet.nombre || 'Sin billetera'}</span>)}
+          </div>
+
+          {holders.map((holder) => (
+            <div key={holder.id || holder.nombre} className="availability-row" style={{ '--wallet-count': wallets.length }}>
+              <b>{holder.nombre || 'Sin titular'}</b>
+              {wallets.map((wallet) => {
+                const walletName = wallet.nombre || 'Sin billetera'
+                const holderName = holder.nombre || 'Sin titular'
+                const enabled = availability[holderName]?.[walletName] !== false
+                return <div className="account-config-cell" key={`${holderName}-${walletName}`}>
+                  <label className="toggle-cell" aria-label={`Activar ${holderName} · ${walletName}`}>
+                    <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />
+                    <span />
+                  </label>
+                  <button
+                    type="button"
+                    className="account-settings-button"
+                    title={`Configurar ${holderName} · ${walletName}`}
+                    onClick={() => setSelected({ holder: holderName, wallet: walletName })}
+                  >
+                    <Settings2 size={14} />
+                  </button>
+                </div>
+              })}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {selected && targetSetting && (
+        <div className="modal-backdrop" onClick={() => setSelected(null)}>
+          <div className="modal account-settings-modal" onClick={(event) => event.stopPropagation()}>
+            <button type="button" className="modal-close" onClick={() => setSelected(null)} title="Cerrar"><X size={18} /></button>
+            <div className="modal-icon"><Settings2 size={21} /></div>
+            <h2>{selected.holder} · {selected.wallet}</h2>
+            <p>Datos del titular y la billetera para esta cuenta operativa.</p>
+            <div className="account-settings-fields">
+              <label><span>Alias</span><input value={targetSetting.alias} onChange={() => setToast('Guardado en la configuración real cuando se conecte el editor completo')} /></label>
+              <label><span>CUIL</span><input value={targetSetting.cuil} onChange={() => setToast('Guardado en la configuración real cuando se conecte el editor completo')} /></label>
+              <label><span>Contraseña</span><input value={targetSetting.password} onChange={() => setToast('Guardado en la configuración real cuando se conecte el editor completo')} /></label>
+              <label><span>Tipo de billetera</span>
+                <select value={targetSetting.category} onChange={() => setToast('Tipo actualizado en la configuración real cuando se conecte el editor completo')}>
+                  <option>Normal</option>
+                  <option>Depósitos</option>
+                  <option>Compartidas</option>
+                  <option>Ahorro</option>
+                </select>
+              </label>
+              <label className="account-settings-note"><span>Nota</span><textarea rows="4" value={targetSetting.note} onChange={() => setToast('Nota guardada en la configuración real cuando se conecte el editor completo')} /></label>
+            </div>
+            <div className="modal-actions">
+              <button type="button" className="close-button" onClick={() => setSelected(null)}>Listo <Check size={16} /></button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  </>
+}
 
 export default App
