@@ -26,7 +26,7 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { loadCurrentShiftData, updateAccountValue, updateAdvertisingLine, updateShiftRounding } from './lib/data'
+import { createInitialSetup, loadCurrentShiftData, updateAccountValue, updateAdvertisingLine, updateShiftRounding } from './lib/data'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 
@@ -61,6 +61,11 @@ function App() {
   const shiftName = shift?.dias_turno?.nombre ?? 'Sin turno abierto'
   const shiftTime = shift?.dias_turno ? `${shift.dias_turno.hora_inicio.slice(0, 5)} - ${shift.dias_turno.hora_fin.slice(0, 5)}` : '--:-- - --:--'
   const activeBox = shift?.cajas?.nombre ?? 'Sin caja'
+  const reloadData = () => {
+    setLoadError('')
+    setAppData(null)
+    loadCurrentShiftData().then(setAppData).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
+  }
 
   return (
     <div className="app-shell">
@@ -98,7 +103,8 @@ function App() {
 
           {loadError && <div className="empty-state"><strong>Error al cargar Supabase</strong><p>{loadError}</p></div>}
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
-          {!loadError && appData && view === 'dashboard' && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} />}
+          {!loadError && appData && view === 'dashboard' && !appData.shift && <SetupWizard onCreated={reloadData} setToast={setToast} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
@@ -114,6 +120,46 @@ function App() {
 function GoalStrip({ open, onToggle, goals = [] }) {
   const summary = goals.slice(0, 2)
   return <section className={`goal-strip ${open ? 'expanded' : ''}`}><div className="goal-strip-head"><strong>Objetivos del turno</strong><div className="goal-summary">{summary.length ? summary.map(goal => <span key={goal.label}>{goal.label} <b>{goal.percent}%</b><i><em style={{ width: `${goal.percent}%` }} /></i><small>{money.format(goal.current)} / {money.format(goal.target)}</small></span>) : <small className="muted-copy">Sin objetivos configurados</small>}</div><button className="icon-button" onClick={onToggle} aria-label="Mostrar objetivos">{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></div>{open && <div className="goal-details">{goals.length ? goals.map(goal => <Goal key={goal.label} {...goal} />) : <EmptyInline text="No hay objetivos asociados a este turno." />}</div>}</section>
+}
+
+function SetupWizard({ onCreated, setToast }) {
+  const [boxName, setBoxName] = useState('')
+  const [shiftName, setShiftName] = useState('')
+  const [startTime, setStartTime] = useState('00:00')
+  const [endTime, setEndTime] = useState('08:00')
+  const [initialAmount, setInitialAmount] = useState('0')
+  const [holders, setHolders] = useState('')
+  const [wallets, setWallets] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  async function handleSubmit(event) {
+    event.preventDefault()
+    const holderNames = holders.split(',').map(value => value.trim()).filter(Boolean)
+    const walletNames = wallets.split(',').map(value => value.trim()).filter(Boolean)
+    if (!boxName.trim() || !shiftName.trim() || !holderNames.length || !walletNames.length) {
+      setToast('Completá caja, turno, titulares y billeteras')
+      return
+    }
+    setSaving(true)
+    try {
+      await createInitialSetup({ boxName: boxName.trim(), shiftName: shiftName.trim(), startTime, endTime, holderNames, walletNames, initialAmount })
+      setToast('Configuración inicial creada en Supabase')
+      onCreated()
+    } catch (error) {
+      setToast(error.message || 'No se pudo crear la configuración inicial')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <section className="setup-page">
+    <div className="setup-intro"><span className="eyebrow">Primer acceso</span><h2>Configurá tu primera caja</h2><p>Estos datos se van a guardar en Supabase y después vas a poder editarlos desde Configuración.</p></div>
+    <form className="panel setup-form" onSubmit={handleSubmit}>
+      <div className="setup-section"><h3>Turno y caja</h3><div className="setup-fields"><label>Nombre de la caja<input value={boxName} onChange={event => setBoxName(event.target.value)} placeholder="Ej. Noruega" /></label><label>Nombre del turno<input value={shiftName} onChange={event => setShiftName(event.target.value)} placeholder="Ej. Turno noche" /></label><label>Hora de inicio<input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} /></label><label>Hora de fin<input type="time" value={endTime} onChange={event => setEndTime(event.target.value)} /></label><label>Monto inicial<input type="number" min="0" step="0.01" value={initialAmount} onChange={event => setInitialAmount(event.target.value)} /></label></div></div>
+      <div className="setup-section"><h3>Catálogos iniciales</h3><div className="setup-fields"><label className="full-field">Titulares, separados por coma<textarea value={holders} onChange={event => setHolders(event.target.value)} placeholder="Ej. Persona 1, Persona 2" /></label><label className="full-field">Billeteras, separadas por coma<textarea value={wallets} onChange={event => setWallets(event.target.value)} placeholder="Ej. Billetera 1, Billetera 2" /></label></div></div>
+      <div className="setup-actions"><small>Se crearán también las cuentas operativas y sus vínculos con el turno.</small><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando...' : 'Crear configuración'}</button></div>
+    </form>
+  </section>
 }
 function Goal({ label, current, target, percent }) { return <div className="goal-row"><strong>Obj. {label}</strong><i><em style={{ width: `${percent}%` }} /></i><b>{percent}%</b><small>{money.format(current)} <span>/</span> {money.format(target)}</small></div> }
 
@@ -162,15 +208,6 @@ function BonusList({ rows }) { return <section className="panel movement-card bo
 function EmptyInline({ text }) { return <p className="empty-inline">{text}</p> }
 function PanelTitle({ icon: Icon, title, meta, action }) { return <div className="panel-title"><div><Icon size={16} /><h2>{title}</h2>{meta && <small>{meta}</small>}</div>{action && <span className="panel-action">{action}</span>}</div> }
 
-function Statistics() { return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel stats-toolbar"><div><span className="eyebrow">Período activo</span><h2>120 turnos dentro del período</h2></div><div className="stats-filters"><label>Desde<input type="date" defaultValue="2026-09-01" /></label><label>Hasta<input type="date" defaultValue="2026-09-21" /></label><button>Hoy</button><button>Semana actual</button></div></section><div className="stats-grid">{['Total', 'Mañana', 'Tarde', 'Noche'].map((period, index) => <section className={`panel stat-card ${index === 0 ? 'featured' : ''}`} key={period}><div className="stat-head"><h2>{period}</h2><small>{index ? 40 : 120} turnos</small></div><h3>GENERAL</h3>{[['Propinas', ['$ 454.516', '$ 94.700', '$ 189.022', '$ 170.794'][index]], ['Caja inicial', ['$ 528.145', '$ 571.768', '$ 481.815', '$ 530.851'][index]], ['Caja final', ['$ 535.992', '$ 501.972', '$ 534.720', '$ 571.285'][index]], ['Diferencia real', ['$ 282.270', '$ 349.701', '$ 353.210', '$ 143.897'][index]], ['Ganancia real', ['$ 217.347', '$ 269.270', '$ 271.972', '$ 110.801'][index]]].map(([label, value]) => <div className="stat-line" key={label}><span>{label}</span><b>{value}</b></div>)}<h3>BONOS</h3>{[['Otorgados', '$ 28.580.327'], ['Recuperados', '$ 3.534.133'], ['Bonos netos', '$ 25.046.194']].map(([label, value]) => <div className="stat-line" key={label}><span>{label}</span><b>{value}</b></div>)}<h3>GASTOS</h3>{['Adelanto', 'Sueldos', 'Propinas', 'Fichas'].map(label => <div className="stat-line" key={label}><span>{label}</span><b>$ 400.000</b></div>)}</section>)}</div></> }
-
-function Logistics({ setToast }) { const [filter, setFilter] = useState(''); const rows = ['Ever Lombardo · Prex', 'Ever Lombardo · Mercado Pago', 'Mateo Ferrer · Naranja X', 'Pablo Totaro · Personal Pay', 'Fede Acuña · Ualá', 'Guillermo Bibbo · Ualá', 'Suiza · Lemon']; return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel logistics-page"><PanelTitle icon={WalletCards} title="Ruta de cuentas" meta="Control de reinicios y recomendaciones" action={<button className="primary-button" onClick={() => setToast('Nueva billetera lista para asignar')}> <Plus size={14} /> Agregar billetera</button>} /><div className="search-line wide"><Search size={14} /><input placeholder="Filtrar cliente o billetera" value={filter} onChange={(event) => setFilter(event.target.value)} /></div><div className="logistics-table"><div className="logistics-head"><span>En uso</span><span>Cliente</span><span>Billetera</span><span>Aclaración</span><span>Último cobro</span><span>Último retiro</span><span>Último reinicio</span></div>{rows.filter(row => row.toLowerCase().includes(filter.toLowerCase())).map((row, index) => { const [client, wallet] = row.split(' · '); return <div className={`logistics-row ${index === 4 ? 'attention' : ''}`} key={row}><input type="checkbox" defaultChecked={index === 4} /><b>{client}</b><strong>{wallet}</strong><span>Máximo 250k · Pagos</span><time>20/09/2026 · 02:16</time><time>20/09/2026 · 07:52</time><button onClick={() => setToast(`Ruta actualizada para ${client}`)}>{index === 4 ? 'Noruega' : 'Sin caja'}</button></div> })}</div></section></> }
-
-function UsersView() { const [expanded, setExpanded] = useState(users[1]); return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel directory"><PanelTitle icon={Users} title="Usuarios" meta="66 registros" action={<><div className="search-line"><Search size={14} /><input placeholder="Buscar por nombre, teléfono o titular" /></div><button className="primary-button"><Plus size={14} /> Nuevo usuario</button></>} />{users.concat(['juanpablo3682f', 'fabian7594f', 'maria9416y', 'pablo1369y']).map(user => <div className={`directory-row ${expanded === user ? 'expanded' : ''}`} key={user}><button className="expand-button" onClick={() => setExpanded(expanded === user ? '' : user)}>{expanded === user ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button><b>{user}</b><div className="tags"><span>Noruega</span><span>Ganamos</span></div><button className="icon-button"><Settings2 size={15} /></button>{expanded === user && <div className="user-detail"><label>Nombre de usuario<input defaultValue={user} /></label><label>Número de teléfono<input defaultValue="+54 9 2214 98-0834" /></label><label>Titular<input placeholder="Titular" /></label><label>Panel<select><option>Sin seleccionar</option><option>Principal</option></select></label><label>Aclaraciones<textarea placeholder="Notas operativas" /></label></div>}</div>)}</section></> }
-
-function Bonuses() { const groups = [{ name: 'Regular', items: ['Bono 10%', 'Bono 10%', 'Bono 15%', 'Bono 20%', 'Bono 30%'] }, { name: 'Múltiple', items: ['Ganamos 20% · MultiPanel 30%', 'Ganamos 30% · MultiPanel 40%', 'MultiPanel 20% · Ganamos 50%'] }, { name: 'Específico', items: ['Ganamos 40%', 'MultiPanel 50%', 'Ganamos 60%'] }]; return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos" meta="50 registros" action={<><div className="search-line"><Search size={14} /><input placeholder="Buscar bono, porcentaje o condición" /></div><button className="primary-button"><Plus size={14} /> Nuevo bono</button></>} />{groups.map(group => <div className="bonus-group" key={group.name}><div className="group-heading"><h2>{group.name}</h2><small>{group.items.length} bonos</small></div><div className="bonus-cards">{group.items.map((item, index) => <article className="bonus-card" key={`${group.name}-${item}-${index}`}><div className={`bonus-art art-${index % 4}`}><Gift size={31} /><strong>{item.includes('%') ? item.match(/\d+%/)?.[0] : '★'}</strong></div><div><h3>{item}</h3><p>{group.name}</p><small>Fijo · {10 + index * 10}%</small><footer><button className="icon-button"><Settings2 size={14} /></button><button className="icon-button"><ArrowLeftRight size={14} /></button></footer></div></article>)}</div></div>)}</section></> }
-
-function SettingsView({ setToast }) { return <><GoalStrip open={true} onToggle={() => {}} /><div className="settings-tabs">{['Cajas', 'Matriz de cuentas', 'Gastos', 'Control de fichas', 'Usuarios', 'Bonos', 'Objetivos'].map((tab, index) => <button className={index === 1 ? 'active' : ''} key={tab}>{tab}</button>)}</div><section className="settings-intro"><span className="eyebrow">Matriz de cuentas</span><h2>Titulares y billeteras</h2><p>Definí las listas y qué billeteras puede usar cada titular.</p></section><div className="settings-grid"><ConfigList title="Titulares" items={['Guillermo Bibbo', 'Carlos Almonacid', 'Fede Acuña', 'Pablo Totaro', 'Mateo Ferrer', 'Ever Lombardo', 'Escocia', 'Suiza']} /><ConfigList title="Billeteras" items={wallets} select /></div><section className="panel availability"><PanelTitle icon={SlidersHorizontal} title="Billeteras utilizables por titular" meta="Activá y configurá cada cuenta" action={<button className="primary-button" onClick={() => setToast('Configuración guardada')}>Guardar cambios</button>} />{accountRows.map((row, rowIndex) => <div className="availability-row" key={row.name}><b>{row.name}</b>{wallets.map((wallet, index) => <label key={wallet}><input type="checkbox" defaultChecked={(rowIndex + index) % 3 === 0} /><span /></label>)}</div>)}</section></> }
 function ConfigList({ title, items, select }) { return <section className="panel config-list"><div className="panel-title"><h2>{title}</h2><small>{items.length} elementos</small></div>{items.map(item => <div className="config-row" key={item.id || item}><span className="drag">⠿</span><input defaultValue={item.nombre || item} />{select && <select defaultValue="Cobros + retiros"><option>Cobros + retiros</option><option>Solo cobros</option><option>Solo depósito</option></select>}<button className="icon-button"><X size={14} /></button></div>)}{!items.length && <EmptyInline text="No hay registros configurados." />}<button className="secondary-button"><Plus size={14} /> Agregar</button></section> }
 
 function LiveStatistics({ data }) {

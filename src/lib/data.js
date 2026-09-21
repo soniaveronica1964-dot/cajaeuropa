@@ -25,19 +25,28 @@ export async function loadCurrentShiftData() {
   if (shiftError) throw shiftError
   if (!shift) return { shift: null, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], logistics: [], users: [], goals: [], chips: [] }
 
-  const [accounts, advertising, bonuses, tips, expenses, logistics, users, goals, chips] = await Promise.all([
-    query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros, cuentas(alias, titulares(nombre), billeteras(nombre))', request => request.eq('turno_id', shift.id)),
+  const [accountLinks, advertising, bonuses, tips, expenses, logistics, users, goals, chips] = await Promise.all([
+    query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id)),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('propinas', 'id, monto, notas, usuario_texto, fecha_hora_creacion', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('gastos', 'id, monto, notas, fecha_hora_creacion, tipos_gasto(nombre, invertir_signo)', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
-    query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, logistica!inner(turno_id), cuentas_x_turno(cuentas(alias, titulares(nombre), billeteras(nombre)))', request => request.eq('logistica.turno_id', shift.id).order('num_orden')), 
+    query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, cuenta_x_turno_id, logistica!inner(turno_id)', request => request.eq('logistica.turno_id', shift.id).order('num_orden')), 
     query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(nombre), telefonos_usuario(numero), titulares_usuario(nombre), paneles_x_usuario(paneles(nombre))', request => request.order('fecha_creacion', { ascending: false })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
     query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id)),
   ])
 
-  return { shift, accounts, advertising, bonuses, tips, expenses, logistics, users, goals, chips }
+  const accountIds = accountLinks.map(account => account.cuenta_id)
+  const accounts = accountIds.length
+    ? await query('cuentas', 'id, alias, titular_id, billetera_id, titulares(nombre), billeteras(nombre)', request => request.in('id', accountIds))
+    : []
+  const accountById = new Map(accounts.map(account => [account.id, account]))
+  const linkedAccounts = accountLinks.map(link => ({ ...link, cuentas: accountById.get(link.cuenta_id) || null }))
+
+  const logisticsWithAccounts = logistics.map(line => ({ ...line, cuentas_x_turno: { cuentas: accountById.get(accountLinks.find(link => link.id === line.cuenta_x_turno_id)?.cuenta_id) || null } }))
+
+  return { shift, accounts: linkedAccounts, advertising, bonuses, tips, expenses, logistics: logisticsWithAccounts, users, goals, chips }
 }
 
 export async function loadConfigurationData() {
@@ -79,6 +88,70 @@ export function updateAdvertisingLine(lineId, field, value) {
     throw new Error('Campo de publicidad no permitido')
   }
   return updateRow('lineas_publicidad', lineId, { [field]: Math.max(0, Number(value) || 0) })
+}
+
+async function findOrCreate(table, match, values) {
+  requireSupabase()
+  let request = supabase.from(table).select('*')
+  Object.entries(match).forEach(([column, value]) => {
+    request = request.eq(column, value)
+  })
+  const { data: existing, error: findError } = await request.limit(1).maybeSingle()
+  if (findError) throw findError
+  if (existing) return existing
+
+  const { data, error } = await supabase.from(table).insert(values).select().single()
+  if (error) throw error
+  return data
+}
+
+async function ensureLink(table, match, values = match) {
+  await findOrCreate(table, match, values)
+}
+
+export async function createInitialSetup({ boxName, shiftName, startTime, endTime, holderNames, walletNames, initialAmount }) {
+  requireSupabase()
+  const color = await findOrCreate('colores', { nombre: 'Tema inicial' }, { nombre: 'Tema inicial', hex: '#C7A0FF' })
+  const walletType = await findOrCreate('tipos_billetera', { nombre: 'Cobros y retiros' }, { nombre: 'Cobros y retiros', cobros: true, retiros: true })
+  const accountType = await findOrCreate('tipos_cuenta', { nombre: 'Cuenta operativa' }, { nombre: 'Cuenta operativa', cobros: true, retiros: true, ahorro: false })
+  const box = await findOrCreate('cajas', { nombre: boxName }, { nombre: boxName, color_id: color.id, es_publicidad: false })
+
+  const wallets = []
+  for (const name of walletNames) {
+    wallets.push(await findOrCreate('billeteras', { nombre: name }, { nombre: name, tipo_billetera_id: walletType.id }))
+  }
+  const holders = []
+  for (const name of holderNames) {
+    holders.push(await findOrCreate('titulares', { nombre: name }, { nombre: name }))
+  }
+  for (const holder of holders) await ensureLink('titulares_x_caja', { titular_id: holder.id, caja_id: box.id })
+  for (const wallet of wallets) await ensureLink('billeteras_x_caja', { billetera_id: wallet.id, caja_id: box.id })
+
+  const shiftType = await findOrCreate('tipos_turno', { caja_id: box.id, nombre: shiftName }, { caja_id: box.id, nombre: shiftName, color_id: color.id })
+  const day = await findOrCreate('dias_turno', { tipo_turno_id: shiftType.id, nombre: `${shiftName} inicial` }, {
+    nombre: `${shiftName} inicial`, dia_semana: new Date().getDay() || 7, hora_inicio: startTime, hora_fin: endTime, cruza_medianoche: false, tipo_turno_id: shiftType.id,
+  })
+  const { data: openShift, error: shiftError } = await supabase.from('turnos').select('*').eq('caja_id', box.id).eq('abierto', true).limit(1).maybeSingle()
+  if (shiftError) throw shiftError
+  const shift = openShift || (await supabase.from('turnos').insert({ dia_turno_id: day.id, abierto: true, caja_inicial: Number(initialAmount) || 0, redondeo: 0 }).select().single()).data
+  if (!shift) throw new Error('No se pudo crear el turno inicial')
+
+  for (const holder of holders) {
+    for (const wallet of wallets) {
+      const account = await findOrCreate('cuentas', { titular_id: holder.id, billetera_id: wallet.id }, {
+        titular_id: holder.id, billetera_id: wallet.id, alias: `${holder.nombre} · ${wallet.nombre}`, tipo_cuenta_id: accountType.id,
+      })
+      await ensureLink('cuentas_x_caja', { cuenta_id: account.id, caja_id: box.id })
+      await ensureLink('cuentas_x_turno', { turno_id: shift.id, cuenta_id: account.id, caja_id: box.id }, {
+        turno_id: shift.id, cuenta_id: account.id, caja_id: box.id, valor: 0, cobros: true, retiros: true,
+      })
+    }
+  }
+
+  await findOrCreate('publicidad', { turno_id: shift.id }, { turno_id: shift.id })
+  await findOrCreate('bonos', { turno_id: shift.id }, { turno_id: shift.id, total_otorgado: 0, total_recuperado: 0, total_publicidad: 0, numero_bonos: 0 })
+  await findOrCreate('logistica', { turno_id: shift.id }, { turno_id: shift.id })
+  return shift
 }
 
 export async function loadStatistics(from, to, cajaId) {
