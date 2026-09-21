@@ -23,6 +23,7 @@ import {
   Settings2,
   SlidersHorizontal,
   Sparkles,
+  Target,
   UserRound,
   Users,
   WalletCards,
@@ -677,9 +678,9 @@ function LiveSettings({ data, setToast }) {
             <h2>{selected.holder} · {selected.wallet}</h2>
             <p>Datos del titular y la billetera para esta cuenta operativa.</p>
             <div className="account-settings-fields">
-              <label><span>Alias</span><input value={selected.alias} onChange={() => setSelected((current) => ({ ...current, alias: event.target.value }))} /></label>
-              <label><span>CUIL</span><input value={selected.cuil} onChange={() => setSelected((current) => ({ ...current, cuil: event.target.value }))} /></label>
-              <label><span>Contraseña</span><input value={selected.password} onChange={() => setSelected((current) => ({ ...current, password: event.target.value }))} /></label>
+              <label><span>Alias</span><input value={selected.alias} onChange={(event) => setSelected((current) => ({ ...current, alias: event.target.value }))} /></label>
+              <label><span>CUIL</span><input value={selected.cuil} onChange={(event) => setSelected((current) => ({ ...current, cuil: event.target.value }))} /></label>
+              <label><span>Contraseña</span><input value={selected.password} onChange={(event) => setSelected((current) => ({ ...current, password: event.target.value }))} /></label>
               <label><span>Tipo de billetera</span>
                 <select value={selected.category} onChange={(event) => setSelected((current) => ({ ...current, category: event.target.value }))}>
                   <option>Normal</option>
