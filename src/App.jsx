@@ -291,7 +291,7 @@ function LiveSettings({ data, setToast }) {
     const unique = new Map()
     items.forEach((entry) => {
       const item = getItem(entry)
-      const label = item?.nombre || 'Sin dato'
+      const label = item?.nombre || item?.title || 'Sin dato'
       const key = String(label).trim().toLowerCase() || 'sin-dato'
       if (!unique.has(key)) {
         unique.set(key, { ...item, id: item?.id ?? key, nombre: label })
@@ -300,176 +300,376 @@ function LiveSettings({ data, setToast }) {
     return [...unique.values()]
   }
 
-  const holdersFromData = useMemo(() => buildUniqueItems(data.accounts, (account) => account.cuentas?.titulares || { id: account.cuenta_id, nombre: 'Sin titular' }), [data.accounts])
-  const walletsFromData = useMemo(() => buildUniqueItems(data.accounts, (account) => account.cuentas?.billeteras || { id: account.cuenta_id, nombre: 'Sin billetera' }), [data.accounts])
-
-  const [holders, setHolders] = useState([])
-  const [wallets, setWallets] = useState([])
-
-  useEffect(() => {
-    setHolders(holdersFromData)
-  }, [holdersFromData])
-
-  useEffect(() => {
-    setWallets(walletsFromData)
-  }, [walletsFromData])
-
-  const buildAvailability = () => {
-    const next = {}
-    holders.forEach((holder) => {
+  const buildDefaultConfig = useMemo(() => {
+    const holdersFromData = buildUniqueItems(data.accounts || [], (account) => account.cuentas?.titulares || { id: account.cuenta_id, nombre: 'Sin titular' })
+    const walletsFromData = buildUniqueItems(data.accounts || [], (account) => account.cuentas?.billeteras || { id: account.cuenta_id, nombre: 'Sin billetera' })
+    const availability = {}
+    holdersFromData.forEach((holder) => {
       const holderName = holder.nombre || 'Sin titular'
-      next[holderName] = {}
-      wallets.forEach((wallet) => {
+      availability[holderName] = {}
+      walletsFromData.forEach((wallet) => {
         const walletName = wallet.nombre || 'Sin billetera'
-        next[holderName][walletName] = true
+        availability[holderName][walletName] = true
       })
     })
-    return next
-  }
 
-  const [availability, setAvailability] = useState({})
+    return {
+      boxes: (data.boxes || []).map((box) => ({ id: box.id, title: box.nombre || 'Caja', color: box.color_id || 'teal' })),
+      accounts: {
+        holders: holdersFromData.map((holder) => holder.nombre || 'Sin titular'),
+        wallets: walletsFromData.map((wallet) => wallet.nombre || 'Sin billetera'),
+        availability,
+        walletModes: Object.fromEntries((walletsFromData.map((wallet) => [wallet.nombre || 'Sin billetera', 'Cobros + Retiros']))),
+      },
+      expenses: [
+        { id: 'expense-1', name: 'Gasto operativo', inverted: false },
+        { id: 'expense-2', name: 'Transferencia', inverted: false },
+        { id: 'expense-3', name: 'Cuenta extra', inverted: true },
+      ],
+      platforms: ['Web', 'App', 'Local'],
+      platformColors: { Web: 'teal', App: 'blue', Local: 'green' },
+      platformEnabled: { Web: true, App: true, Local: true },
+      userClarifications: [
+        { id: 'clarification-1', text: 'Cliente con retiro previo', color: 'blue', emoji: '📌' },
+        { id: 'clarification-2', text: 'Revisa saldo antes de cerrar', color: 'orange', emoji: '⚠️' },
+      ],
+      bonusTypes: [
+        { id: 'bonus-type-1', name: 'Comisión', percentageCount: 1 },
+        { id: 'bonus-type-2', name: 'Publicidad', percentageCount: 2 },
+      ],
+      bonusConditions: [
+        { id: 'bonus-condition-1', label: 'Cobro del día', allow: true },
+        { id: 'bonus-condition-2', label: 'Cliente recurrente', allow: false },
+      ],
+      monthlyGoal: { final: 0, achieved: 0 },
+      bonusGoal: { total: 0, percentages: { Noche: 33, Mañana: 33, Tarde: 34 } },
+      savingsGoal: { total: 0, shifts: { Noche: 0, Mañana: 0, Tarde: 0 } },
+      branding: { icon: 'banknote', suffix: 'flow' },
+    }
+  }, [data.accounts, data.boxes])
+
+  const [tab, setTab] = useState('accounts')
+  const [draft, setDraft] = useState(buildDefaultConfig)
   const [selected, setSelected] = useState(null)
 
   useEffect(() => {
-    setAvailability(buildAvailability())
-  }, [holders, wallets])
+    setDraft(buildDefaultConfig)
+  }, [buildDefaultConfig])
 
-  const walletModes = useMemo(() => {
-    const map = {}
-    wallets.forEach((wallet) => {
-      map[wallet.nombre || 'Sin billetera'] = 'Cobros + Retiros'
-    })
-    return map
-  }, [wallets])
-
-  const targetSetting = selected
-    ? { holder: selected.holder, wallet: selected.wallet, category: 'Normal', alias: '', cuil: '', password: '', note: '' }
-    : null
+  const updateAccounts = (patch) => {
+    setDraft((current) => ({ ...current, accounts: { ...current.accounts, ...patch } }))
+  }
 
   const toggleWallet = (holderName, walletName) => {
-    setAvailability((current) => ({
+    setDraft((current) => ({
       ...current,
-      [holderName]: {
-        ...(current[holderName] || {}),
-        [walletName]: !(current[holderName]?.[walletName] ?? true),
+      accounts: {
+        ...current.accounts,
+        availability: {
+          ...(current.accounts.availability || {}),
+          [holderName]: {
+            ...((current.accounts.availability || {})[holderName] || {}),
+            [walletName]: !(((current.accounts.availability || {})[holderName] || {})[walletName] ?? true),
+          },
+        },
       },
     }))
   }
 
-  const removeHolder = (holder) => {
-    const holderName = holder?.nombre || 'Sin titular'
-    setHolders((current) => current.filter((item) => (item.nombre || 'Sin titular') !== holderName))
-    setAvailability((current) => {
-      const next = { ...current }
-      delete next[holderName]
-      Object.keys(next).forEach((name) => {
-        if (next[name]?.[holderName] !== undefined) {
-          const { [holderName]: _removed, ...rest } = next[name]
-          next[name] = rest
-        }
-      })
-      return next
-    })
-    setSelected((current) => (current && current.holder === holderName ? null : current))
-  }
+  const buildTargetSetting = (holderName, walletName) => ({
+    holder: holderName,
+    wallet: walletName,
+    category: 'Normal',
+    alias: `${holderName} · ${walletName}`,
+    cuil: '',
+    password: '',
+    note: '',
+  })
 
-  const removeWallet = (wallet) => {
-    const walletName = wallet?.nombre || 'Sin billetera'
-    setWallets((current) => current.filter((item) => (item.nombre || 'Sin billetera') !== walletName))
-    setAvailability((current) => {
-      const next = { ...current }
-      Object.keys(next).forEach((holderName) => {
-        if (next[holderName]?.[walletName] !== undefined) {
-          const { [walletName]: _removed, ...rest } = next[holderName]
-          next[holderName] = rest
-        }
-      })
-      return next
-    })
-    setSelected((current) => (current && current.wallet === walletName ? null : current))
-  }
+  const renderTabButton = (id, label, Icon) => (
+    <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon size={15} /> {label}</button>
+  )
+
+  const accountEntryRows = draft.accounts.holders.map((holder) => {
+    const holderName = holder || 'Sin titular'
+    return <div key={holderName} className="availability-row" style={{ '--wallet-count': draft.accounts.wallets.length }}>
+      <b>{holderName}</b>
+      {draft.accounts.wallets.map((wallet) => {
+        const walletName = wallet || 'Sin billetera'
+        const enabled = draft.accounts.availability?.[holderName]?.[walletName] !== false
+        return <div className="account-config-cell" key={`${holderName}-${walletName}`}>
+          <label className="toggle-cell" aria-label={`Activar ${holderName} · ${walletName}`}>
+            <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />
+            <span />
+          </label>
+          <button type="button" className="account-settings-button" title={`Configurar ${holderName} · ${walletName}`} onClick={() => setSelected(buildTargetSetting(holderName, walletName))}>
+            <Settings2 size={14} />
+          </button>
+        </div>
+      })}
+    </div>
+  })
 
   return <>
     <GoalStrip open={false} onToggle={() => {}} />
     <div className="settings-page">
       <div className="settings-tabs">
-        <button type="button" className="active">Matriz de cuentas</button>
-        <button type="button">Cuentas y saldo</button>
+        {renderTabButton('boxes', 'Cajas', Banknote)}
+        {renderTabButton('accounts', 'Matriz de cuentas', WalletCards)}
+        {renderTabButton('expenses', 'Gastos', FileText)}
+        {renderTabButton('platforms', 'Control de fichas', Boxes)}
+        {renderTabButton('users', 'Usuarios', Users)}
+        {renderTabButton('bonuses', 'Bonos', Gift)}
+        {renderTabButton('goals', 'Objetivos', Target)}
       </div>
 
       <section className="settings-intro">
-        <span className="eyebrow">Datos del turno</span>
-        <h2>Titulares y billeteras</h2>
-        <p>Estos registros provienen de las cuentas vinculadas al turno abierto. La matriz de configuración se mantiene en un único titular y una billetera por cada tipo, y debajo se personaliza cada cuenta.</p>
+        <span className="eyebrow">Configuración</span>
+        <h2>{tab === 'boxes' ? 'Cajas' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : 'Objetivos'}</h2>
+        <p>Completá la configuración del turno y dejá listo el entorno para operar con cajas, cuentas, plataformas y objetivos.</p>
       </section>
 
-      <div className="config-two-columns">
-        <div className="config-list">
-          <div className="config-list-head"><h3>Titulares</h3><span>{holders.length} elementos</span></div>
-          {holders.map((holder) => (
-            <div className="config-list-row sortable" key={holder.id || holder.nombre}>
-              <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
-              <input value={holder.nombre || 'Sin titular'} readOnly />
-              <button type="button" className="delete-button" title="Eliminar titular" onClick={() => removeHolder(holder)}><X size={14} /></button>
-            </div>
-          ))}
-          <button type="button" className="config-add" onClick={() => setToast('Se agregará un titular desde la configuración completa')}><Plus size={15} /> Agregar titular</button>
-        </div>
-
-        <div className="config-list">
-          <div className="config-list-head"><h3>Billeteras</h3><span>{wallets.length} elementos</span></div>
-          {wallets.map((wallet) => (
-            <div className="wallet-config-row" key={wallet.id || wallet.nombre}>
-              <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
-              <input value={wallet.nombre || 'Sin billetera'} readOnly />
-              <select value={walletModes[wallet.nombre || 'Sin billetera'] || 'Cobros + Retiros'} onChange={() => setToast('El tipo de billetera se guardará en la configuración del turno')}>
-                <option>Cobros + Retiros</option>
-                <option>Solo Cobros</option>
-                <option>Solo Depósito</option>
-              </select>
-              <button type="button" className="delete-button" title="Eliminar billetera" onClick={() => removeWallet(wallet)}><X size={14} /></button>
-            </div>
-          ))}
-          <button type="button" className="config-add" onClick={() => setToast('Se agregará una billetera desde la configuración completa')}><Plus size={15} /> Agregar billetera</button>
-        </div>
-      </div>
-
-      <section className="config-card matrix-config-card">
-        <div className="config-list-head"><h3>Billeteras utilizables por titular</h3><span>Activá y configurá cada cuenta</span></div>
-        <div className="availability-table">
-          <div className="availability-row availability-head" style={{ '--wallet-count': wallets.length }}>
-            <b>Titular</b>
-            {wallets.map((wallet) => <span key={wallet.id || wallet.nombre}>{wallet.nombre || 'Sin billetera'}</span>)}
+      {tab === 'boxes' && <>
+        <div className="config-two-columns">
+          <div className="config-list">
+            <div className="config-list-head"><h3>Mis cajas</h3><span>{draft.boxes.length} espacios</span></div>
+            {draft.boxes.map((box, index) => (
+              <div className="config-list-row" key={box.id || index}>
+                <input value={box.title} onChange={(event) => setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) }))} />
+                <select value={box.color} onChange={(event) => setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, color: event.target.value } : item) }))}>
+                  <option value="teal">Turquesa</option>
+                  <option value="blue">Azul</option>
+                  <option value="green">Verde</option>
+                  <option value="orange">Naranja</option>
+                  <option value="pink">Rosa</option>
+                  <option value="red">Rojo</option>
+                  <option value="yellow">Amarillo</option>
+                  <option value="violet">Violeta</option>
+                  <option value="slate">Pizarra</option>
+                </select>
+                <button type="button" className="delete-button" title="Eliminar caja" onClick={() => setDraft((current) => ({ ...current, boxes: current.boxes.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, boxes: [...current.boxes, { id: `box-${Date.now()}`, title: 'Nueva caja', color: 'teal' }] }))}><Plus size={15} /> Agregar caja</button>
           </div>
 
-          {holders.map((holder) => (
-            <div key={holder.id || holder.nombre} className="availability-row" style={{ '--wallet-count': wallets.length }}>
-              <b>{holder.nombre || 'Sin titular'}</b>
-              {wallets.map((wallet) => {
-                const walletName = wallet.nombre || 'Sin billetera'
-                const holderName = holder.nombre || 'Sin titular'
-                const enabled = availability[holderName]?.[walletName] !== false
-                return <div className="account-config-cell" key={`${holderName}-${walletName}`}>
-                  <label className="toggle-cell" aria-label={`Activar ${holderName} · ${walletName}`}>
-                    <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />
-                    <span />
-                  </label>
-                  <button
-                    type="button"
-                    className="account-settings-button"
-                    title={`Configurar ${holderName} · ${walletName}`}
-                    onClick={() => setSelected({ holder: holderName, wallet: walletName })}
-                  >
-                    <Settings2 size={14} />
-                  </button>
-                </div>
-              })}
+          <div className="config-card">
+            <div className="config-list-head"><h3>Marca de la caja</h3><span>Se guarda como etiqueta</span></div>
+            <div className="config-list-row">
+              <select value={draft.branding.icon} onChange={(event) => setDraft((current) => ({ ...current, branding: { ...current.branding, icon: event.target.value } }))}>
+                <option value="banknote">Billete</option>
+                <option value="wallet">Billetera</option>
+                <option value="coins">Monedas</option>
+                <option value="gift">Regalo</option>
+                <option value="ticket">Ticket</option>
+              </select>
+            </div>
+            <div className="config-list-row">
+              <input value={draft.branding.suffix} onChange={(event) => setDraft((current) => ({ ...current, branding: { ...current.branding, suffix: event.target.value } }))} placeholder="Sufijo de marca" />
+            </div>
+          </div>
+        </div>
+      </>}
+
+      {tab === 'accounts' && <>
+        <div className="config-two-columns">
+          <div className="config-list">
+            <div className="config-list-head"><h3>Titulares</h3><span>{draft.accounts.holders.length} elementos</span></div>
+            {draft.accounts.holders.map((holder, index) => (
+              <div className="config-list-row" key={`${holder}-${index}`}>
+                <input value={holder} onChange={(event) => {
+                  const next = [...draft.accounts.holders]
+                  next[index] = event.target.value
+                  updateAccounts({ holders: next })
+                }} placeholder="Nombre del titular" />
+                <button type="button" className="delete-button" title="Eliminar titular" onClick={() => updateAccounts({ holders: draft.accounts.holders.filter((_, itemIndex) => itemIndex !== index) })}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => updateAccounts({ holders: [...draft.accounts.holders, 'Nuevo titular'] })}><Plus size={15} /> Agregar titular</button>
+          </div>
+
+          <div className="config-list">
+            <div className="config-list-head"><h3>Billeteras</h3><span>{draft.accounts.wallets.length} elementos</span></div>
+            {draft.accounts.wallets.map((wallet, index) => (
+              <div className="wallet-config-row" key={`${wallet}-${index}`}>
+                <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
+                <input value={wallet} onChange={(event) => {
+                  const next = [...draft.accounts.wallets]
+                  next[index] = event.target.value
+                  updateAccounts({ wallets: next })
+                }} placeholder="Nombre de billetera" />
+                <select value={draft.accounts.walletModes?.[wallet] || 'Cobros + Retiros'} onChange={(event) => updateAccounts({ walletModes: { ...(draft.accounts.walletModes || {}), [wallet]: event.target.value } })}>
+                  <option>Cobros + Retiros</option>
+                  <option>Solo Cobros</option>
+                  <option>Solo Depósito</option>
+                </select>
+                <button type="button" className="delete-button" title="Eliminar billetera" onClick={() => updateAccounts({ wallets: draft.accounts.wallets.filter((_, itemIndex) => itemIndex !== index) })}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => updateAccounts({ wallets: [...draft.accounts.wallets, 'Nueva billetera'], walletModes: { ...(draft.accounts.walletModes || {}), ['Nueva billetera']: 'Cobros + Retiros' } })}><Plus size={15} /> Agregar billetera</button>
+          </div>
+        </div>
+
+        <section className="config-card matrix-config-card">
+          <div className="config-list-head"><h3>Billeteras utilizables por titular</h3><span>Activá y configurá cada cuenta</span></div>
+          <div className="availability-table">
+            <div className="availability-row availability-head" style={{ '--wallet-count': draft.accounts.wallets.length }}>
+              <b>Titular</b>
+              {draft.accounts.wallets.map((wallet) => <span key={wallet}>{wallet || 'Sin billetera'}</span>)}
+            </div>
+            {accountEntryRows}
+          </div>
+        </section>
+      </>}
+
+      {tab === 'expenses' && <section className="config-card">
+        <div className="config-list-head"><h3>Opciones del selector</h3><span>{draft.expenses.length} categorías</span></div>
+        {draft.expenses.map((expense, index) => (
+          <div className="config-list-row" key={expense.id || `expense-${index}`}>
+            <input value={expense.name} onChange={(event) => setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) }))} placeholder="Nombre del gasto" />
+            <label className="toggle-cell" aria-label={`Invertir signo para ${expense.name}`}>
+              <input type="checkbox" checked={expense.inverted} onChange={() => setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, inverted: !item.inverted } : item) }))} />
+              <span />
+            </label>
+            <button type="button" className="delete-button" title="Eliminar gasto" onClick={() => setDraft((current) => ({ ...current, expenses: current.expenses.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+          </div>
+        ))}
+        <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, expenses: [...current.expenses, { id: `expense-${Date.now()}`, name: 'Nueva categoría', inverted: false }] }))}><Plus size={15} /> Agregar categoría</button>
+      </section>}
+
+      {tab === 'platforms' && <section className="config-card">
+        <div className="config-list-head"><h3>Plataformas</h3><span>{draft.platforms.length} elementos</span></div>
+        {draft.platforms.map((platform, index) => (
+          <div className="config-list-row" key={`${platform}-${index}`}>
+            <input value={platform} onChange={(event) => setDraft((current) => ({ ...current, platforms: current.platforms.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} placeholder="Nombre de plataforma" />
+            <select value={draft.platformColors?.[platform] || 'teal'} onChange={(event) => setDraft((current) => ({ ...current, platformColors: { ...(current.platformColors || {}), [platform]: event.target.value } }))}>
+              <option value="teal">Turquesa</option>
+              <option value="blue">Azul</option>
+              <option value="green">Verde</option>
+              <option value="orange">Naranja</option>
+              <option value="pink">Rosa</option>
+              <option value="red">Rojo</option>
+              <option value="yellow">Amarillo</option>
+              <option value="violet">Violeta</option>
+            </select>
+            <button type="button" className="delete-button" title="Eliminar plataforma" onClick={() => setDraft((current) => ({ ...current, platforms: current.platforms.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+          </div>
+        ))}
+        <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, platforms: [...current.platforms, 'Nueva plataforma'], platformColors: { ...(current.platformColors || {}), ['Nueva plataforma']: 'teal' } }))}><Plus size={15} /> Agregar plataforma</button>
+      </section>}
+
+      {tab === 'users' && <>
+        <section className="config-card">
+          <div className="config-list-head"><h3>Aclaraciones</h3><span>{draft.userClarifications.length} elementos</span></div>
+          {draft.userClarifications.map((clarification, index) => (
+            <div className="config-list-row" key={clarification.id || index}>
+              <input value={clarification.text} onChange={(event) => setDraft((current) => ({ ...current, userClarifications: current.userClarifications.map((item, itemIndex) => itemIndex === index ? { ...item, text: event.target.value } : item) }))} placeholder="Texto aclaración" />
+              <select value={clarification.color} onChange={(event) => setDraft((current) => ({ ...current, userClarifications: current.userClarifications.map((item, itemIndex) => itemIndex === index ? { ...item, color: event.target.value } : item) }))}>
+                <option value="teal">Turquesa</option>
+                <option value="blue">Azul</option>
+                <option value="green">Verde</option>
+                <option value="orange">Naranja</option>
+                <option value="pink">Rosa</option>
+                <option value="red">Rojo</option>
+                <option value="yellow">Amarillo</option>
+                <option value="violet">Violeta</option>
+              </select>
+              <input value={clarification.emoji || ''} maxLength={2} onChange={(event) => setDraft((current) => ({ ...current, userClarifications: current.userClarifications.map((item, itemIndex) => itemIndex === index ? { ...item, emoji: event.target.value } : item) }))} placeholder="🙂" />
+              <button type="button" className="delete-button" title="Eliminar aclaración" onClick={() => setDraft((current) => ({ ...current, userClarifications: current.userClarifications.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
             </div>
           ))}
-        </div>
-      </section>
+          <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, userClarifications: [...current.userClarifications, { id: `clarification-${Date.now()}`, text: 'Nueva aclaración', color: 'blue', emoji: '•' }] }))}><Plus size={15} /> Agregar aclaración</button>
+        </section>
+      </>}
 
-      {selected && targetSetting && (
+      {tab === 'bonuses' && <>
+        <div className="config-two-columns">
+          <section className="config-card">
+            <div className="config-list-head"><h3>Tipos de bonos</h3><span>{draft.bonusTypes.length} elementos</span></div>
+            {draft.bonusTypes.map((bonusType, index) => (
+              <div className="config-list-row" key={bonusType.id || index}>
+                <input value={bonusType.name} onChange={(event) => setDraft((current) => ({ ...current, bonusTypes: current.bonusTypes.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) }))} placeholder="Nombre del tipo" />
+                <input type="number" min="1" max="20" value={bonusType.percentageCount || 1} onChange={(event) => setDraft((current) => ({ ...current, bonusTypes: current.bonusTypes.map((item, itemIndex) => itemIndex === index ? { ...item, percentageCount: Math.max(1, Math.min(20, Number(event.target.value) || 1)) } : item) }))} style={{ width: '84px' }} />
+                <button type="button" className="delete-button" title="Eliminar tipo" onClick={() => setDraft((current) => ({ ...current, bonusTypes: current.bonusTypes.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, bonusTypes: [...current.bonusTypes, { id: `bonus-type-${Date.now()}`, name: 'Nuevo tipo', percentageCount: 1 }] }))}><Plus size={15} /> Agregar tipo</button>
+          </section>
+
+          <section className="config-card">
+            <div className="config-list-head"><h3>Condiciones de bono</h3><span>{draft.bonusConditions.length} elementos</span></div>
+            {draft.bonusConditions.map((condition, index) => (
+              <div className="config-list-row" key={condition.id || index}>
+                <input value={condition.label} onChange={(event) => setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) }))} placeholder="Etiqueta" />
+                <label className="toggle-cell" aria-label={`Habilitar ${condition.label}`}>
+                  <input type="checkbox" checked={condition.allow} onChange={() => setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, allow: !item.allow } : item) }))} />
+                  <span />
+                </label>
+                <button type="button" className="delete-button" title="Eliminar condición" onClick={() => setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.filter((_, itemIndex) => itemIndex !== index) }))}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => setDraft((current) => ({ ...current, bonusConditions: [...current.bonusConditions, { id: `bonus-condition-${Date.now()}`, label: 'Nueva condición', allow: true }] }))}><Plus size={15} /> Agregar condición</button>
+          </section>
+        </div>
+      </>}
+
+      {tab === 'goals' && <>
+        <div className="config-two-columns">
+          <section className="config-card">
+            <div className="config-list-head"><h3>Objetivo de depósitos</h3><span>Meta mensual</span></div>
+            <div className="config-list-row">
+              <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
+                <span>Objetivo final</span>
+                <input type="number" value={draft.monthlyGoal.final} onChange={(event) => setDraft((current) => ({ ...current, monthlyGoal: { ...current.monthlyGoal, final: Number(event.target.value) || 0 } }))} />
+              </label>
+            </div>
+            <div className="config-list-row">
+              <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
+                <span>Objetivo alcanzado</span>
+                <input type="number" value={draft.monthlyGoal.achieved} onChange={(event) => setDraft((current) => ({ ...current, monthlyGoal: { ...current.monthlyGoal, achieved: Number(event.target.value) || 0 } }))} />
+              </label>
+            </div>
+          </section>
+
+          <section className="config-card">
+            <div className="config-list-head"><h3>Objetivos de bonos</h3><span>Por turno</span></div>
+            <div className="config-list-row">
+              <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
+                <span>Meta total</span>
+                <input type="number" value={draft.bonusGoal.total} onChange={(event) => setDraft((current) => ({ ...current, bonusGoal: { ...current.bonusGoal, total: Number(event.target.value) || 0 } }))} />
+              </label>
+            </div>
+            {Object.entries(draft.bonusGoal.percentages || {}).map(([shift, value]) => (
+              <div className="config-list-row" key={shift}>
+                <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
+                  <span>{shift}</span>
+                  <input type="number" min="0" max="100" value={value} onChange={(event) => setDraft((current) => ({ ...current, bonusGoal: { ...current.bonusGoal, percentages: { ...(current.bonusGoal.percentages || {}), [shift]: Math.max(0, Math.min(100, Number(event.target.value) || 0)) } } }))} />
+                </label>
+              </div>
+            ))}
+          </section>
+        </div>
+
+        <section className="config-card">
+          <div className="config-list-head"><h3>Objetivo de ahorro</h3><span>Meta mensual por turno</span></div>
+          <div className="config-list-row">
+            <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
+              <span>Meta total</span>
+              <input type="number" value={draft.savingsGoal.total} onChange={(event) => setDraft((current) => ({ ...current, savingsGoal: { ...current.savingsGoal, total: Number(event.target.value) || 0 } }))} />
+            </label>
+          </div>
+          {Object.entries(draft.savingsGoal.shifts || {}).map(([shift, value]) => (
+            <div className="config-list-row" key={shift}>
+              <label style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '6px', color: 'var(--muted)', fontSize: '11px' }}>
+                <span>{shift}</span>
+                <input type="number" value={value} onChange={(event) => setDraft((current) => ({ ...current, savingsGoal: { ...current.savingsGoal, shifts: { ...(current.savingsGoal.shifts || {}), [shift]: Number(event.target.value) || 0 } } }))} />
+              </label>
+            </div>
+          ))}
+        </section>
+      </>}
+
+      {selected && (
         <div className="modal-backdrop" onClick={() => setSelected(null)}>
           <div className="modal account-settings-modal" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="modal-close" onClick={() => setSelected(null)} title="Cerrar"><X size={18} /></button>
@@ -477,18 +677,18 @@ function LiveSettings({ data, setToast }) {
             <h2>{selected.holder} · {selected.wallet}</h2>
             <p>Datos del titular y la billetera para esta cuenta operativa.</p>
             <div className="account-settings-fields">
-              <label><span>Alias</span><input value={targetSetting.alias} onChange={() => setToast('Guardado en la configuración real cuando se conecte el editor completo')} /></label>
-              <label><span>CUIL</span><input value={targetSetting.cuil} onChange={() => setToast('Guardado en la configuración real cuando se conecte el editor completo')} /></label>
-              <label><span>Contraseña</span><input value={targetSetting.password} onChange={() => setToast('Guardado en la configuración real cuando se conecte el editor completo')} /></label>
+              <label><span>Alias</span><input value={selected.alias} onChange={() => setSelected((current) => ({ ...current, alias: event.target.value }))} /></label>
+              <label><span>CUIL</span><input value={selected.cuil} onChange={() => setSelected((current) => ({ ...current, cuil: event.target.value }))} /></label>
+              <label><span>Contraseña</span><input value={selected.password} onChange={() => setSelected((current) => ({ ...current, password: event.target.value }))} /></label>
               <label><span>Tipo de billetera</span>
-                <select value={targetSetting.category} onChange={() => setToast('Tipo actualizado en la configuración real cuando se conecte el editor completo')}>
+                <select value={selected.category} onChange={(event) => setSelected((current) => ({ ...current, category: event.target.value }))}>
                   <option>Normal</option>
                   <option>Depósitos</option>
                   <option>Compartidas</option>
                   <option>Ahorro</option>
                 </select>
               </label>
-              <label className="account-settings-note"><span>Nota</span><textarea rows="4" value={targetSetting.note} onChange={() => setToast('Nota guardada en la configuración real cuando se conecte el editor completo')} /></label>
+              <label className="account-settings-note"><span>Nota</span><textarea rows="4" value={selected.note} onChange={(event) => setSelected((current) => ({ ...current, note: event.target.value }))} /></label>
             </div>
             <div className="modal-actions">
               <button type="button" className="close-button" onClick={() => setSelected(null)}>Listo <Check size={16} /></button>
