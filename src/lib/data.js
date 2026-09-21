@@ -13,24 +13,27 @@ async function query(table, columns, configure = () => {}) {
   return data ?? []
 }
 
-export async function loadCurrentShiftData() {
+export async function loadCurrentShiftData(boxId = null) {
   requireSupabase()
-  const { data: shift, error: shiftError } = await supabase
+  const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini')
+  let shiftRequest = supabase
     .from('turnos')
     .select('id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, cajas(id, nombre), dias_turno(id, nombre, hora_inicio, hora_fin)')
     .eq('abierto', true)
     .order('fecha_hora_inicio', { ascending: false })
     .limit(1)
-    .maybeSingle()
+  if (boxId) shiftRequest = shiftRequest.eq('caja_id', boxId)
+  const { data: shift, error: shiftError } = await shiftRequest.maybeSingle()
   if (shiftError) throw shiftError
-  if (!shift) return { shift: null, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], logistics: [], users: [], goals: [], chips: [] }
+  if (!shift) return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes: [], logistics: [], users: [], goals: [], chips: [] }
 
-  const [accountLinks, advertising, bonuses, tips, expenses, logistics, users, goals, chips] = await Promise.all([
+  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id)),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('propinas', 'id, monto, notas, usuario_texto, fecha_hora_creacion', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
-    query('gastos', 'id, monto, notas, fecha_hora_creacion, tipos_gasto(nombre, invertir_signo)', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
+    query('gastos', 'id, tipo_gasto_id, monto, notas, fecha_hora_creacion, tipos_gasto(nombre, invertir_signo)', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
+    query('tipos_gasto', 'id, nombre, invertir_signo'),
     query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, cuenta_x_turno_id, logistica!inner(turno_id)', request => request.eq('logistica.turno_id', shift.id).order('num_orden')), 
     query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(nombre), telefonos_usuario(numero), titulares_usuario(nombre), paneles_x_usuario(paneles(nombre))', request => request.order('fecha_creacion', { ascending: false })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
@@ -46,7 +49,7 @@ export async function loadCurrentShiftData() {
 
   const logisticsWithAccounts = logistics.map(line => ({ ...line, cuentas_x_turno: { cuentas: accountById.get(accountLinks.find(link => link.id === line.cuenta_x_turno_id)?.cuenta_id) || null } }))
 
-  return { shift, accounts: linkedAccounts, advertising, bonuses, tips, expenses, logistics: logisticsWithAccounts, users, goals, chips }
+  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips }
 }
 
 export async function loadConfigurationData() {
@@ -88,6 +91,31 @@ export function updateAdvertisingLine(lineId, field, value) {
     throw new Error('Campo de publicidad no permitido')
   }
   return updateRow('lineas_publicidad', lineId, { [field]: Math.max(0, Number(value) || 0) })
+}
+
+export async function createBonusLine(shiftId, { value, recovered, notes }) {
+  requireSupabase()
+  const { data: bonus, error: bonusError } = await supabase.from('bonos').select('id').eq('turno_id', shiftId).limit(1).maybeSingle()
+  if (bonusError) throw bonusError
+  if (!bonus) throw new Error('Este turno todavía no tiene un registro de bonos')
+  const { data, error } = await supabase.from('lineas_bonos').insert({ bono_id: bonus.id, valor: Number(value) || 0, recuperado: Boolean(recovered), es_publicidad: false, notas: notes?.trim() || null }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function createTip(shiftId, { value, user, notes }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('propinas').insert({ turno_id: shiftId, monto: Number(value) || 0, usuario_texto: user?.trim() || null, notas: notes?.trim() || null }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function createExpense(shiftId, { typeId, value, notes }) {
+  requireSupabase()
+  if (!typeId) throw new Error('Seleccioná un tipo de gasto')
+  const { data, error } = await supabase.from('gastos').insert({ turno_id: shiftId, tipo_gasto_id: typeId, monto: Number(value) || 0, notas: notes?.trim() || null }).select().single()
+  if (error) throw error
+  return data
 }
 
 async function findOrCreate(table, match, values) {
@@ -148,7 +176,10 @@ export async function createInitialSetup({ boxName, shiftName, startTime, endTim
     }
   }
 
-  await findOrCreate('publicidad', { turno_id: shift.id }, { turno_id: shift.id })
+  const advertising = await findOrCreate('publicidad', { turno_id: shift.id }, { turno_id: shift.id })
+  const { data: advertisingLines, error: advertisingLinesError } = await supabase.from('lineas_publicidad').select('id').eq('publicidad_id', advertising.id).limit(1)
+  if (advertisingLinesError) throw advertisingLinesError
+  if (!advertisingLines?.length) await supabase.from('lineas_publicidad').insert({ publicidad_id: advertising.id })
   await findOrCreate('bonos', { turno_id: shift.id }, { turno_id: shift.id, total_otorgado: 0, total_recuperado: 0, total_publicidad: 0, numero_bonos: 0 })
   await findOrCreate('logistica', { turno_id: shift.id }, { turno_id: shift.id })
   return shift

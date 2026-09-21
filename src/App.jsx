@@ -26,7 +26,7 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
-import { createInitialSetup, loadCurrentShiftData, updateAccountValue, updateAdvertisingLine, updateShiftRounding } from './lib/data'
+import { createBonusLine, createExpense, createInitialSetup, createTip, loadCurrentShiftData, updateAccountValue, updateAdvertisingLine, updateShiftRounding } from './lib/data'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 
@@ -60,11 +60,12 @@ function App() {
   const shift = appData?.shift
   const shiftName = shift?.dias_turno?.nombre ?? 'Sin turno abierto'
   const shiftTime = shift?.dias_turno ? `${shift.dias_turno.hora_inicio.slice(0, 5)} - ${shift.dias_turno.hora_fin.slice(0, 5)}` : '--:-- - --:--'
-  const activeBox = shift?.cajas?.nombre ?? 'Sin caja'
-  const reloadData = () => {
+  const selectedBoxId = shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null
+  const activeBox = shift?.cajas?.nombre ?? appData?.boxes?.find(boxItem => boxItem.id === selectedBoxId)?.nombre ?? 'Sin caja'
+  const reloadData = (boxId = selectedBoxId) => {
     setLoadError('')
     setAppData(null)
-    loadCurrentShiftData().then(setAppData).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
+    loadCurrentShiftData(boxId).then(setAppData).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
   }
 
   return (
@@ -81,7 +82,7 @@ function App() {
           <button className="icon-button" title="Turno siguiente"><ChevronRight size={17} /></button>
         </div>
         <div className="top-actions">
-          <div className="box-select"><small>CAJA</small><strong>{activeBox}</strong><span className="box-dot" /></div>
+          <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={reloadData} />
           <span className="saved"><i /> {shift ? 'Conectado' : 'Sin turno'}</span>
           <button className="icon-button" title="Notificaciones"><Bell size={17} /></button>
           <button className="lock-button" title="Bloquear caja"><LockKeyhole size={16} /></button>
@@ -104,7 +105,7 @@ function App() {
           {loadError && <div className="empty-state"><strong>Error al cargar Supabase</strong><p>{loadError}</p></div>}
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && <SetupWizard onCreated={reloadData} setToast={setToast} />}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
@@ -120,6 +121,18 @@ function App() {
 function GoalStrip({ open, onToggle, goals = [] }) {
   const summary = goals.slice(0, 2)
   return <section className={`goal-strip ${open ? 'expanded' : ''}`}><div className="goal-strip-head"><strong>Objetivos del turno</strong><div className="goal-summary">{summary.length ? summary.map(goal => <span key={goal.label}>{goal.label} <b>{goal.percent}%</b><i><em style={{ width: `${goal.percent}%` }} /></i><small>{money.format(goal.current)} / {money.format(goal.target)}</small></span>) : <small className="muted-copy">Sin objetivos configurados</small>}</div><button className="icon-button" onClick={onToggle} aria-label="Mostrar objetivos">{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></div>{open && <div className="goal-details">{goals.length ? goals.map(goal => <Goal key={goal.label} {...goal} />) : <EmptyInline text="No hay objetivos asociados a este turno." />}</div>}</section>
+}
+
+function BoxSelector({ boxes, selectedId, onChange }) {
+  const [open, setOpen] = useState(false)
+  const selected = boxes.find(box => box.id === selectedId) || boxes[0]
+  useEffect(() => {
+    if (!open) return undefined
+    const close = (event) => { if (!event.target.closest('.box-select')) setOpen(false) }
+    document.addEventListener('mousedown', close)
+    return () => document.removeEventListener('mousedown', close)
+  }, [open])
+  return <div className={`box-select ${open ? 'open' : ''}`}><small>CAJA</small><button type="button" className="box-select-trigger" aria-expanded={open} onClick={() => setOpen(value => !value)}><strong>{selected?.nombre || 'Sin cajas'}</strong><span className="box-dot" /></button>{open && <div className="box-options">{boxes.length ? boxes.map(box => <button type="button" className={box.id === selected?.id ? 'selected' : ''} key={box.id} onClick={() => { setOpen(false); onChange(box.id) }}><i />{box.nombre}</button>) : <span className="box-option-empty">No hay cajas configuradas</span>}</div>}</div>
 }
 
 function SetupWizard({ onCreated, setToast }) {
@@ -171,7 +184,7 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, openGoal, setOpenGoal, setToast }) {
+function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved }) {
   const [rounding, setRounding] = useState('')
   if (!data.shift) return <section className="panel empty-state"><strong>No hay un turno abierto</strong><p>Creá o abrí un turno en Supabase para cargar la operación real de la caja.</p></section>
   const goals = mapGoals(data.goals)
@@ -184,27 +197,52 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast }) {
   const accountWallets = [...new Set(accounts.map(account => account.wallet))]
   return <>
     <GoalStrip open={openGoal} onToggle={() => setOpenGoal(value => !value)} goals={goals} />
-    <section className="summary-bar"><div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div><Metric label="Caja inicial" value={money.format(data.shift.caja_inicial)} tone="positive" /><Metric label="Caja final" value={data.shift.caja_final == null ? 'Sin cierre' : money.format(data.shift.caja_final)} tone="positive" /><Metric label="Propinas" value={money.format(tipsTotal)} tone="positive" /><Metric label="Gastos" value={money.format(expensesTotal)} tone="negative" /><Metric label="Bonos netos" value={money.format(bonusTotal)} tone="positive" /><label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? data.shift.redondeo : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={() => updateShiftRounding(data.shift.id, rounding).catch(() => setToast('No se pudo guardar el redondeo'))} /></span></label></section>
+    <section className="summary-bar"><div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div><Metric label="Caja inicial" value={money.format(data.shift.caja_inicial)} tone="positive" /><Metric label="Caja final" value={data.shift.caja_final == null ? 'Sin cierre' : money.format(data.shift.caja_final)} tone="positive" /><Metric label="Propinas" value={money.format(tipsTotal)} tone="positive" /><Metric label="Gastos" value={money.format(expensesTotal)} tone="negative" /><Metric label="Bonos netos" value={money.format(bonusTotal)} tone="positive" /><label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? data.shift.redondeo : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={() => updateShiftRounding(data.shift.id, rounding).then(onSaved).catch(() => setToast('No se pudo guardar el redondeo'))} /></span></label></section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
-        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} /></div>
-        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} />
+        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} /></div>
+        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard /><UsersCard users={data.users} /></div>
-        <div className="three-panels lower"><MovementCard title="Gastos" icon={FileText} amount={expensesTotal} rows={data.expenses} /><MovementCard title="Propinas" icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} /><BonusList rows={data.bonuses} /></div>
+        <div className="three-panels lower"><MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} /><MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} /><BonusList shiftId={data.shift.id} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /></div>
       </div>
     </div>
   </>
 }
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
-function Publicity({ rows, setToast }) { const fields = [['Total', 'total_llegados'], ['Nuevos', 'nuevos'], ['Repetidos', 'repetidos'], ['Sin respuesta', 'sin_respuesta']]; return <section className="panel publicity"><PanelTitle icon={Bell} title="Publicidad" action={<Copy size={15} />} /><div className="publicity-rows">{rows.length ? rows.map(row => <div className="publicity-row" key={row.id}><strong><FileText size={13} /> Línea {row.id}</strong>{fields.map(([label, field]) => <label key={field}><small>{label}</small><span><button aria-label={`Disminuir ${label}`} onClick={() => updateAdvertisingLine(row.id, field, Number(row[field]) - 1).catch(() => setToast('No se pudo guardar publicidad'))}>−</button><b>{row[field] ?? 0}</b><button aria-label={`Aumentar ${label}`} onClick={() => updateAdvertisingLine(row.id, field, Number(row[field]) + 1).catch(() => setToast('No se pudo guardar publicidad'))}>+</button></span></label>)}<em>{row.total_derivados ?? 0} derivados</em></div>) : <EmptyInline text="No hay líneas de publicidad para este turno." />}</div></section> }
+function Publicity({ rows, setToast, onSaved }) { const fields = [['Total', 'total_llegados'], ['Nuevos', 'nuevos'], ['Repetidos', 'repetidos'], ['Sin respuesta', 'sin_respuesta']]; const change = (row, field, value) => updateAdvertisingLine(row.id, field, Math.max(0, value)).then(onSaved).catch(() => setToast('No se pudo guardar publicidad')); return <section className="panel publicity"><PanelTitle icon={Bell} title="Publicidad" action={<Copy size={15} />} /><div className="publicity-rows">{rows.length ? rows.map(row => <div className="publicity-row" key={row.id}><strong><FileText size={13} /> Línea {row.id}</strong>{fields.map(([label, field]) => <label key={field}><small>{label}</small><span><button aria-label={`Disminuir ${label}`} onClick={() => change(row, field, Number(row[field]) - 1)}>−</button><b>{row[field] ?? 0}</b><button aria-label={`Aumentar ${label}`} onClick={() => change(row, field, Number(row[field]) + 1)}>+</button></span></label>)}<em>{row.total_derivados ?? 0} derivados</em></div>) : <EmptyInline text="No hay líneas de publicidad para este turno." />}</div></section> }
 function BonusSummary({ rows }) { const total = rows.reduce((sum, row) => sum + (row.recuperado ? -Number(row.valor || 0) : Number(row.valor || 0)), 0); return <section className="panel compact-bonus"><PanelTitle icon={Gift} title="Bonos netos" action={<Eye size={15} />} /><strong className="accent-number">{money.format(total)}</strong><p>Últimos movimientos</p>{rows.slice(0, 4).map(row => <div className="mini-row" key={row.id}><span className={row.recuperado ? 'success' : ''}>{row.recuperado ? 'Recuperado' : 'Otorgado'}</span><time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time><b>{money.format(row.valor)}</b></div>)}{!rows.length && <EmptyInline text="No hay bonos registrados." />}</section> }
 function ChipSummary({ chips }) { return <section className="panel chip-summary"><PanelTitle icon={Boxes} title="Fichas finales" action={<Plus size={15} />} />{chips.length ? chips.map(chip => <div className="chip-item" key={chip.id}><span>{chip.plataformas?.nombre || 'Plataforma'}</span><b>{money.format(chip.fichas_inicial)}</b><strong className={chip.fichas_final == null ? '' : 'success'}>{chip.fichas_final == null ? 'Sin cierre' : money.format(chip.fichas_final)}</strong></div>) : <EmptyInline text="No hay fichas configuradas para este turno." />}</section> }
-function AccountMatrix({ accounts, holders, wallets, total, setToast }) { return <section className="panel account-panel"><PanelTitle icon={WalletCards} title="Matriz de cuentas" meta={`${holders.length} titulares · ${wallets.length} billeteras`} action={<button className="text-action" onClick={() => setToast('La matriz refleja los valores guardados en Supabase')}>Estado de datos</button>} /><div className="matrix-wrap">{accounts.length ? <><div className="matrix-row matrix-head"><strong>Titular</strong>{wallets.map(wallet => <span key={wallet}>{wallet}</span>)}<span>Total</span></div>{holders.map(holder => { const holderAccounts = accounts.filter(account => account.holder === holder); const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0); return <div className="matrix-row" key={holder}><strong>{holder}</strong>{wallets.map(wallet => { const account = holderAccounts.find(item => item.wallet === wallet); return <label key={`${holder}-${wallet}`} className={account?.amount ? 'green' : ''}>{account ? <><span>$</span><input defaultValue={account.amount.toLocaleString('es-AR')} onFocus={(event) => event.target.select()} onBlur={(event) => updateAccountValue(account.id, event.target.value.replace(/\./g, '').replace(',', '.')).catch(() => setToast('No se pudo guardar el valor de la cuenta'))} /></> : '—'}</label> })}<b>{money.format(holderTotal)}</b></div> })}<div className="matrix-total"><span>Total billetera</span>{wallets.map(wallet => <b key={wallet}>{money.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}<strong>{money.format(total)}</strong></div></> : <EmptyInline text="No hay cuentas vinculadas al turno abierto." />}</div></section> }
+function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved }) { const saveAccount = (account, event) => updateAccountValue(account.id, event.target.value.replace(/\./g, '').replace(',', '.')).then(onSaved).catch(() => setToast('No se pudo guardar el valor de la cuenta')); return <section className="panel account-panel"><PanelTitle icon={WalletCards} title="Matriz de cuentas" meta={`${holders.length} titulares · ${wallets.length} billeteras`} action={<button className="text-action" onClick={() => setToast('La matriz refleja los valores guardados en Supabase')}>Estado de datos</button>} /><div className="matrix-wrap">{accounts.length ? <><div className="matrix-row matrix-head"><strong>Titular</strong>{wallets.map(wallet => <span key={wallet}>{wallet}</span>)}<span>Total</span></div>{holders.map(holder => { const holderAccounts = accounts.filter(account => account.holder === holder); const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0); return <div className="matrix-row" key={holder}><strong>{holder}</strong>{wallets.map(wallet => { const account = holderAccounts.find(item => item.wallet === wallet); return <label key={`${holder}-${wallet}`} className={account?.amount ? 'green' : ''}>{account ? <><span>$</span><input defaultValue={account.amount.toLocaleString('es-AR')} onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} /></> : '—'}</label> })}<b>{money.format(holderTotal)}</b></div> })}<div className="matrix-total"><span>Total billetera</span>{wallets.map(wallet => <b key={wallet}>{money.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}<strong>{money.format(total)}</strong></div></> : <EmptyInline text="No hay cuentas vinculadas al turno abierto." />}</div></section> }
 function LogisticsCard({ rows }) { return <section className="panel mini-card logistics-card"><PanelTitle icon={WalletCards} title="Logística" action={<ChevronRight size={15} />} />{rows.length ? rows.slice(0, 4).map(row => { const account = row.cuentas_x_turno?.cuentas; return <div className="route-row" key={row.id}><span>{row.num_orden ?? '—'}</span><b>{account?.titulares?.nombre || 'Sin titular'} · {account?.billeteras?.nombre || 'Sin billetera'}</b></div> }) : <EmptyInline text="No hay rutas de logística configuradas." />}</section> }
 function StatusCard() { return <section className="panel mini-card"><PanelTitle icon={Sparkles} title="Estados" action={<SlidersHorizontal size={15} />} /><EmptyInline text="Los estados se mostrarán cuando estén configurados en Supabase." /></section> }
 function UsersCard({ users }) { return <section className="panel mini-card"><PanelTitle icon={Users} title="Usuarios" action={<Plus size={15} />} /><div className="search-line"><Search size={14} /><input placeholder="Buscar usuario" /></div>{users.slice(0, 5).map(user => <div className="user-row" key={user.id}><span><UserRound size={15} /></span><b>{user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`}</b><ChevronRight size={14} /></div>)}{!users.length && <EmptyInline text="No hay usuarios registrados." />}</section> }
-function MovementCard({ title, icon: Icon, amount, rows }) { return <section className="panel movement-card"><PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} action={<Eye size={15} />} /><div className="entry-form"><input placeholder="Tipo" /><input placeholder="$ Monto" /><input placeholder="Notas" /><button className="send-button"><ArrowLeftRight size={14} /></button></div><small className="section-kicker">Últimos registros</small>{rows.slice(0, 5).map(row => <div className="movement-row" key={row.id}><span>{row.usuario_texto || row.notas || row.tipos_gasto?.nombre || 'Movimiento'}</span><b>{money.format(row.monto)}</b></div>)}{!rows.length && <EmptyInline text="No hay movimientos registrados." />}<footer>Total <strong>{money.format(amount)}</strong></footer></section> }
-function BonusList({ rows }) { return <section className="panel movement-card bonus-list"><PanelTitle icon={Gift} title="Bonos" meta={`${rows.filter(row => !row.recuperado).length} otorgados · ${rows.filter(row => row.recuperado).length} recuperados`} action={<Plus size={15} />} /><div className="entry-form"><input placeholder="$ Insertar bono otorgado" /><button className="send-button"><ArrowLeftRight size={14} /></button></div><small className="section-kicker">Últimos bonos</small>{rows.slice(0, 8).map(row => <div className="movement-row" key={row.id}><span className={row.recuperado ? 'success' : 'warning'}>{row.recuperado ? 'Recuperado' : 'Otorgado'}</span><time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time><b>{money.format(row.valor)}</b></div>)}{!rows.length && <EmptyInline text="No hay bonos registrados." />}</section> }
+function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, rows, onSaved, setToast }) {
+  const [value, setValue] = useState('')
+  const [detail, setDetail] = useState('')
+  const [typeId, setTypeId] = useState(options[0]?.id || '')
+  const add = async () => {
+    if (!Number(value)) { setToast('Ingresá un monto válido'); return }
+    try {
+      if (kind === 'expenses') await createExpense(shiftId, { typeId, value, notes: detail })
+      else await createTip(shiftId, { value, user: detail, notes: '' })
+      setValue(''); setDetail(''); setToast(`${title} guardado`); onSaved()
+    } catch (error) { setToast(error.message || `No se pudo guardar ${title.toLowerCase()}`) }
+  }
+  return <section className="panel movement-card"><PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} action={<button className="icon-button" title={`Ver ${title.toLowerCase()}`}><Eye size={15} /></button>} /><div className="entry-form">{kind === 'expenses' ? <select value={typeId} onChange={(event) => setTypeId(event.target.value)}><option value="">Tipo</option>{options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}</select> : <input placeholder="Usuario" value={detail} onChange={(event) => setDetail(event.target.value)} />}<input placeholder="$ Monto" value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') add() }} />{kind === 'expenses' ? <input placeholder="Notas" value={detail} onChange={(event) => setDetail(event.target.value)} /> : <span /> }<button className="send-button" title={`Agregar ${title.toLowerCase()}`} onClick={add}><ArrowLeftRight size={14} /></button></div><small className="section-kicker">Últimos registros</small>{rows.slice(0, 5).map(row => <div className="movement-row" key={row.id}><span>{row.usuario_texto || row.notas || row.tipos_gasto?.nombre || 'Movimiento'}</span><b>{money.format(row.monto)}</b></div>)}{!rows.length && <EmptyInline text="No hay movimientos registrados." />}<footer>Total <strong>{money.format(amount)}</strong></footer></section>
+}
+function BonusList({ shiftId, rows, onSaved, setToast }) {
+  const [open, setOpen] = useState(false)
+  const [value, setValue] = useState('')
+  const [recovered, setRecovered] = useState(false)
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const save = async () => {
+    if (!Number(value)) { setToast('Ingresá un monto válido'); return }
+    setSaving(true)
+    try { await createBonusLine(shiftId, { value, recovered, notes }); setOpen(false); setValue(''); setNotes(''); setRecovered(false); setToast('Bono guardado'); onSaved() } catch (error) { setToast(error.message || 'No se pudo guardar el bono') } finally { setSaving(false) }
+  }
+  return <section className="panel movement-card bonus-list"><PanelTitle icon={Gift} title="Bonos" meta={`${rows.filter(row => !row.recuperado).length} otorgados · ${rows.filter(row => row.recuperado).length} recuperados`} action={<button className="icon-button" title="Agregar bono" onClick={() => setOpen(true)}><Plus size={15} /></button>} /><div className="entry-form"><input placeholder="$ Insertar bono otorgado" value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') save() }} /><button className="send-button" title="Agregar bono" onClick={save}><ArrowLeftRight size={14} /></button></div><small className="section-kicker">Últimos bonos</small>{rows.slice(0, 8).map(row => <div className="movement-row" key={row.id}><span className={row.recuperado ? 'success' : 'warning'}>{row.recuperado ? 'Recuperado' : 'Otorgado'}</span><time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time><b>{money.format(row.valor)}</b></div>)}{!rows.length && <EmptyInline text="No hay bonos registrados." />}{open && <div className="modal-backdrop" onClick={() => !saving && setOpen(false)}><div className="modal bonus-entry-modal" onClick={(event) => event.stopPropagation()}><button className="modal-close" title="Cerrar" onClick={() => setOpen(false)}><X size={18} /></button><div className="modal-icon"><Gift size={20} /></div><h2>Agregar bono</h2><p>Elegí el tipo, indicá el monto y confirmá.</p><label className="modal-field"><span>Tipo</span><select value={recovered ? 'recuperado' : 'otorgado'} onChange={(event) => setRecovered(event.target.value === 'recuperado')}><option value="otorgado">Otorgado</option><option value="recuperado">Recuperado</option></select></label><label className="modal-field"><span>Monto</span><AmountInput value={value} onChange={setValue} /></label><label className="modal-field"><span>Nota</span><input value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Nota del bono" /></label><div className="modal-actions"><button className="ghost-button" onClick={() => setOpen(false)}>Cancelar</button><button className="close-button" onClick={save} disabled={saving}>{saving ? 'Guardando...' : 'Guardar'} <Check size={15} /></button></div></div></div>}</section>
+}
 function EmptyInline({ text }) { return <p className="empty-inline">{text}</p> }
 function PanelTitle({ icon: Icon, title, meta, action }) { return <div className="panel-title"><div><Icon size={16} /><h2>{title}</h2>{meta && <small>{meta}</small>}</div>{action && <span className="panel-action">{action}</span>}</div> }
 
