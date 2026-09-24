@@ -3,6 +3,7 @@ import {
   ArrowLeftRight,
   BarChart3,
   Banknote,
+  Bell,
   Boxes,
   Camera,
   Check,
