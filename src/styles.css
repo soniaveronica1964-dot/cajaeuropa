@@ -5,6 +5,7 @@
   color: #e7edf1;
   background: #111719;
   font-synthesis: none;
+  --topbar-height: 74px;
   --bg: #111719;
   --bg-2: #0d171b;
   --surface: #101c1f;
@@ -45,7 +46,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .topbar {
-  height: 74px;
+  height: var(--topbar-height);
   padding: 0 18px 0 16px;
   display: flex;
   align-items: center;
@@ -57,7 +58,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   position: sticky;
   top: 0;
   z-index: 20;
-  position: relative;
 }
 
 .brand {
@@ -274,15 +274,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .workspace {
   display: flex;
-  min-height: calc(100vh - 58px);
+  min-height: calc(100vh - var(--topbar-height));
   align-items: flex-start;
   background: linear-gradient(90deg, rgba(11, 15, 18, 0.98) 0, rgba(11, 15, 18, 0.98) 72px, rgba(11, 16, 18, 0.85) 72px, rgba(11, 16, 18, 0.85) 100%);
 }
 .sidebar {
   width: 100px;
   flex: 0 0 100px;
-  height: calc(100vh - 58px);
-  min-height: calc(100vh - 58px);
+  height: calc(100vh - var(--topbar-height));
+  min-height: calc(100vh - var(--topbar-height));
   padding: 12px 8px;
   border-right: 1px solid var(--line);
   background: rgba(8, 13, 16, 0.94);
@@ -291,7 +291,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: center;
   gap: 8px;
   position: sticky;
-  top: 58px;
+  top: var(--topbar-height);
   align-self: flex-start;
   z-index: 2;
 }
