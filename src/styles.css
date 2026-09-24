@@ -45,7 +45,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .topbar {
-  height: 58px;
+  height: 74px;
   padding: 0 18px 0 16px;
   display: flex;
   align-items: center;
@@ -57,6 +57,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   position: sticky;
   top: 0;
   z-index: 20;
+  position: relative;
 }
 
 .brand {
@@ -94,10 +95,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .shift-nav {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: 0 auto;
+  justify-content: center;
 }
 
 .shift-title {
@@ -149,7 +154,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   box-shadow: 0 0 8px var(--green);
 }
 
-.icon-button, .lock-button {
+.icon-button, .lock-button, .camera-button {
   width: 34px;
   height: 34px;
   display: grid;
@@ -164,6 +169,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-color: var(--lavender);
   color: var(--lavender);
   background: rgba(54, 44, 68, 0.82);
+}
+.camera-button {
+  background: rgba(122, 215, 199, 0.1);
+  border-color: rgba(114, 215, 202, 0.35);
+  color: var(--cyan);
 }
 .lock-button {
   background: var(--lavender);

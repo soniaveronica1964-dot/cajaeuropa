@@ -3,8 +3,8 @@ import {
   ArrowLeftRight,
   BarChart3,
   Banknote,
-  Bell,
   Boxes,
+  Camera,
   Check,
   ChevronDown,
   ChevronRight,
@@ -17,7 +17,6 @@ import {
   GripVertical,
   LayoutGrid,
   LockKeyhole,
-  Menu,
   Plus,
   Search,
   Settings2,
@@ -110,7 +109,6 @@ function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <button className="mobile-menu icon-button" aria-label="Abrir menú"><Menu size={18} /></button>
         <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
           <div className="brand-mark"><Banknote size={21} /></div>
           <div><strong>CAJA<span>Europa</span></strong><small>Control operativo</small></div>
@@ -123,7 +121,7 @@ function App() {
         <div className="top-actions">
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={reloadData} />
           <span className="saved"><i /> {shift ? 'Conectado' : 'Sin turno'}</span>
-          <button className="icon-button" title="Notificaciones"><Bell size={17} /></button>
+          <button className="camera-button" title="Cámara"><Camera size={16} /></button>
           <button className="lock-button" title="Bloquear caja"><LockKeyhole size={16} /></button>
         </div>
       </header>
