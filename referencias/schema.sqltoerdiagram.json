@@ -1,0 +1,386 @@
+{
+  "app": "dbdiga",
+  "version": 1,
+  "sql": "-- =========================================================\n-- 0. MOTOR DE VIGENCIA INTELIGENTE (GLOBAL)\n-- =========================================================\n\n-- Tabla centralizada de historial de activación/desactivación para TODO el sistema.\nCREATE TABLE historial_vigencias (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    entidad VARCHAR(100) NOT NULL,       -- Nombre de la tabla (ej: 'colores', 'cajas', 'billeteras')\n    registro_id BIGINT NOT NULL,         -- ID del registro en esa tabla\n    fecha_hora_inicio TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n    fecha_hora_fin TIMESTAMPTZ,          -- NULL significa que actualmente SÍ está activo\n    \n    CHECK (fecha_hora_fin IS NULL OR fecha_hora_fin >= fecha_hora_inicio)\n);\n\n-- Índices de alto rendimiento para consultas de estado actual e histórico\nCREATE INDEX idx_historial_vigencias_entidad_reg \n    ON historial_vigencias(entidad, registro_id, fecha_hora_inicio DESC);\n\n-- Índice único parcial crucial: Garantiza que un registro SOLO pueda tener un periodo abierto (activo) a la vez.\nCREATE UNIQUE INDEX idx_unico_activo_por_entidad \n    ON historial_vigencias(entidad, registro_id) \n    WHERE fecha_hora_fin IS NULL;\n\n\n-- =========================================================\n-- 1. CONFIGURACIÓN Y CATÁLOGOS\n-- =========================================================\n\nCREATE TABLE app_config (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    icono VARCHAR(255),\n    imagen TEXT,\n    imagen_mini TEXT,\n    tema BOOLEAN NOT NULL DEFAULT FALSE,\n    ver_notas BOOLEAN NOT NULL DEFAULT TRUE,\n    singleton BOOLEAN NOT NULL DEFAULT TRUE,\n    CONSTRAINT chk_app_config_singleton CHECK (singleton),\n    CONSTRAINT uq_app_config_singleton UNIQUE (singleton)\n);\n\nCREATE TABLE colores (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    hex VARCHAR(7) NOT NULL\n        CHECK (hex ~ '^#[0-9A-Fa-f]{6}$')\n);\n\nCREATE TABLE tipos_gasto (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    invertir_signo BOOLEAN NOT NULL DEFAULT FALSE\n);\n\nCREATE TABLE tipos_billetera (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    cobros BOOLEAN NOT NULL DEFAULT FALSE,\n    retiros BOOLEAN NOT NULL DEFAULT FALSE\n);\n\nCREATE TABLE tipos_cuenta (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    es_compartido BOOLEAN NOT NULL DEFAULT FALSE,\n    es_publicidad BOOLEAN NOT NULL DEFAULT FALSE,\n    cobros BOOLEAN NOT NULL DEFAULT FALSE,\n    retiros BOOLEAN NOT NULL DEFAULT FALSE,\n    ahorro BOOLEAN NOT NULL DEFAULT FALSE\n);\n\nCREATE TABLE tipos_estado (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    cantidad_porcentaje NUMERIC(5,2)\n        CHECK (cantidad_porcentaje BETWEEN 0 AND 100)\n);\n\nCREATE TABLE condiciones_bono (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    plataforma BOOLEAN NOT NULL DEFAULT FALSE\n);\n\nCREATE TABLE titulares (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(150) NOT NULL,\n    orden_num INTEGER\n);\n\nCREATE TABLE billeteras (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    orden_num INTEGER,\n    tipo_billetera_id BIGINT NOT NULL\n        REFERENCES tipos_billetera(id)\n        ON DELETE RESTRICT\n);\n\nCREATE TABLE cajas (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    imagen TEXT,\n    imagen_mini TEXT,\n    color_id BIGINT REFERENCES colores(id)\n        ON DELETE SET NULL,\n    es_publicidad BOOLEAN NOT NULL DEFAULT FALSE\n);\n\n-- =========================================================\n-- TABLAS DE CONFIGURACIÓN: TITULARES Y BILLETERAS POR CAJA\n-- =========================================================\n\nCREATE TABLE titulares_x_caja (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    titular_id BIGINT NOT NULL REFERENCES titulares(id)\n        ON DELETE CASCADE,\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE CASCADE,\n\n    UNIQUE (titular_id, caja_id)\n);\n\nCREATE TABLE billeteras_x_caja (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    billetera_id BIGINT NOT NULL REFERENCES billeteras(id)\n        ON DELETE CASCADE,\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE CASCADE,\n\n    UNIQUE (billetera_id, caja_id)\n);\n\nCREATE TABLE tipos_turno (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE CASCADE,\n    nombre VARCHAR(100) NOT NULL,\n    color_id BIGINT REFERENCES colores(id)\n        ON DELETE SET NULL\n);\n\nCREATE TABLE dias_turno (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    dia_semana SMALLINT NOT NULL\n        CHECK (dia_semana BETWEEN 1 AND 7),\n    hora_inicio TIME NOT NULL,\n    hora_fin TIME NOT NULL,\n    cruza_medianoche BOOLEAN NOT NULL DEFAULT FALSE,\n    tipo_turno_id BIGINT NOT NULL REFERENCES tipos_turno(id)\n        ON DELETE CASCADE,\n\n    CHECK (\n        (\n            cruza_medianoche = FALSE\n            AND hora_fin > hora_inicio\n        )\n        OR\n        (\n            cruza_medianoche = TRUE\n            AND hora_fin <= hora_inicio\n        )\n    )\n);\n\n-- =========================================================\n-- 2. TURNOS Y CAJAS\n-- =========================================================\n\nCREATE TABLE turnos (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    dia_turno_id BIGINT NOT NULL REFERENCES dias_turno(id)\n        ON DELETE RESTRICT,\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE RESTRICT,\n    abierto BOOLEAN NOT NULL DEFAULT FALSE,\n    fecha_hora_inicio TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n    fecha_hora_fin TIMESTAMPTZ,\n    caja_inicial NUMERIC(14,2) NOT NULL DEFAULT 0\n        CHECK (caja_inicial >= 0),\n    caja_final NUMERIC(14,2)\n        CHECK (caja_final >= 0),\n    redondeo NUMERIC(14,2) NOT NULL DEFAULT 0,\n\n    CHECK (\n        fecha_hora_fin IS NULL\n        OR fecha_hora_fin >= fecha_hora_inicio\n    ),\n\n    CONSTRAINT chk_turno_cerrado_completo CHECK (\n        abierto = TRUE\n        OR (fecha_hora_fin IS NOT NULL AND caja_final IS NOT NULL)\n    )\n);\n\nCREATE OR REPLACE FUNCTION fn_set_caja_id_turno()\nRETURNS TRIGGER\nLANGUAGE plpgsql\nSET search_path = public, pg_temp\nAS $$\nBEGIN\n    SELECT tt.caja_id\n    INTO NEW.caja_id\n    FROM dias_turno dt\n    JOIN tipos_turno tt ON tt.id = dt.tipo_turno_id\n    WHERE dt.id = NEW.dia_turno_id;\n\n    RETURN NEW;\nEND;\n$$;\n\nCREATE TRIGGER trg_set_caja_id_turno\nBEFORE INSERT OR UPDATE OF dia_turno_id ON turnos\nFOR EACH ROW\nEXECUTE FUNCTION fn_set_caja_id_turno();\n\nCREATE UNIQUE INDEX idx_turno_unico_abierto_por_caja\n    ON turnos(caja_id) WHERE abierto;\n\nCREATE TABLE cuentas (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    titular_id BIGINT NOT NULL\n        REFERENCES titulares(id)\n        ON DELETE RESTRICT,\n    billetera_id BIGINT NOT NULL\n        REFERENCES billeteras(id)\n        ON DELETE RESTRICT,\n    alias VARCHAR(150),\n    cuil VARCHAR(20),\n    patron TEXT,\n    notas TEXT,\n    tipo_cuenta_id BIGINT NOT NULL REFERENCES tipos_cuenta(id)\n        ON DELETE RESTRICT,\n    activa BOOLEAN NOT NULL DEFAULT TRUE,\n\n    UNIQUE (titular_id, billetera_id)\n);\n\nCREATE TABLE cuentas_x_caja (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    cuenta_id BIGINT NOT NULL REFERENCES cuentas(id)\n        ON DELETE CASCADE,\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE CASCADE,\n\n    UNIQUE (cuenta_id, caja_id)\n);\n\nCREATE TABLE cuentas_x_turno (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE,\n    cuenta_id BIGINT NOT NULL,\n    caja_id BIGINT NOT NULL,\n    valor NUMERIC(14,2) NOT NULL DEFAULT 0,\n    cobros BOOLEAN NOT NULL DEFAULT FALSE,\n    retiros BOOLEAN NOT NULL DEFAULT FALSE,\n\n    UNIQUE (turno_id, cuenta_id, caja_id),\n\n    FOREIGN KEY (cuenta_id, caja_id)\n        REFERENCES cuentas_x_caja (cuenta_id, caja_id)\n        ON DELETE RESTRICT\n);\n\n-- =========================================================\n-- 3. MOVIMIENTOS OPERATIVOS\n-- =========================================================\n\nCREATE TABLE propinas (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    usuario_id BIGINT,\n    usuario_texto TEXT,\n    monto NUMERIC(14,2) NOT NULL,\n    notas TEXT,\n    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE\n);\n\nCREATE TABLE cargas_ta (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    usuario_id BIGINT,\n    usuario_texto TEXT,\n    monto NUMERIC(14,2) NOT NULL,\n    notas TEXT,\n    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE\n);\n\nCREATE TABLE dinero_encontrado (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    cuenta_x_turno_id BIGINT NOT NULL REFERENCES cuentas_x_turno(id)\n        ON DELETE RESTRICT,\n    monto NUMERIC(14,2) NOT NULL,\n    notas TEXT,\n    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()\n);\n\nCREATE TABLE gastos (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    tipo_gasto_id BIGINT NOT NULL REFERENCES tipos_gasto(id)\n        ON DELETE RESTRICT,\n    monto NUMERIC(14,2) NOT NULL,\n    notas TEXT,\n    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE\n);\n\nCREATE TABLE notas_turno (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nota_general TEXT,\n    nota_heredable TEXT,\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE,\n\n    UNIQUE (turno_id)\n);\n\nCREATE TABLE movimientos (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    caja_desde_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE RESTRICT,\n    caja_hasta_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE RESTRICT,\n    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE,\n    monto NUMERIC(14,2) NOT NULL,\n    es_ahorro BOOLEAN NOT NULL DEFAULT FALSE,\n    cuenta_x_turno_id BIGINT NOT NULL REFERENCES cuentas_x_turno(id)\n        ON DELETE RESTRICT,\n    notas TEXT,\n\n    CHECK (caja_desde_id <> caja_hasta_id)\n);\n\n-- =========================================================\n-- 4. PUBLICIDAD Y BONOS\n-- =========================================================\n\nCREATE TABLE publicidad (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE,\n\n    UNIQUE (turno_id)\n);\n\nCREATE TABLE lineas_publicidad (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    publicidad_id BIGINT NOT NULL REFERENCES publicidad(id)\n        ON DELETE CASCADE,\n    total_llegados INTEGER NOT NULL DEFAULT 0,\n    nuevos INTEGER NOT NULL DEFAULT 0,\n    repetidos INTEGER NOT NULL DEFAULT 0,\n    sin_respuesta INTEGER NOT NULL DEFAULT 0,\n    total_derivados INTEGER NOT NULL DEFAULT 0\n);\n\nCREATE TABLE lineas_publicidad_x_caja (\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE CASCADE,\n    linea_publicidad_id BIGINT NOT NULL\n        REFERENCES lineas_publicidad(id)\n        ON DELETE CASCADE,\n    num_derivado INTEGER NOT NULL DEFAULT 0,\n\n    PRIMARY KEY (caja_id, linea_publicidad_id)\n);\n\nCREATE TABLE bonos (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE,\n    total_otorgado NUMERIC(14,2) NOT NULL DEFAULT 0,\n    total_recuperado NUMERIC(14,2) NOT NULL DEFAULT 0,\n    total_publicidad NUMERIC(14,2) NOT NULL DEFAULT 0,\n    numero_bonos INTEGER NOT NULL DEFAULT 0,\n\n    UNIQUE (turno_id)\n);\n\nCREATE TABLE lineas_bonos (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    bono_id BIGINT NOT NULL REFERENCES bonos(id)\n        ON DELETE CASCADE,\n    valor NUMERIC(14,2) NOT NULL,\n    recuperado BOOLEAN NOT NULL DEFAULT FALSE,\n    es_publicidad BOOLEAN NOT NULL DEFAULT FALSE,\n    notas TEXT,\n    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()\n);\n\n-- =========================================================\n-- 5. FICHAS Y PLATAFORMAS\n-- =========================================================\n\nCREATE TABLE plataformas (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE CASCADE,\n    nombre VARCHAR(100) NOT NULL,\n    color_id BIGINT REFERENCES colores(id)\n        ON DELETE SET NULL\n);\n\nCREATE TABLE subplataformas (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    plataforma_id BIGINT NOT NULL REFERENCES plataformas(id)\n        ON DELETE CASCADE,\n    color_id BIGINT REFERENCES colores(id)\n        ON DELETE SET NULL\n);\n\nCREATE TABLE fichas (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    fichas_inicial NUMERIC(14,2) NOT NULL DEFAULT 0\n        CHECK (fichas_inicial >= 0),\n    fichas_final NUMERIC(14,2)\n        CHECK (fichas_final >= 0),\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE,\n    plataforma_id BIGINT NOT NULL REFERENCES plataformas(id)\n        ON DELETE RESTRICT,\n\n    UNIQUE (turno_id, plataforma_id)\n);\n\nCREATE TABLE cargas_fichas (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    fichas_id BIGINT NOT NULL REFERENCES fichas(id)\n        ON DELETE CASCADE,\n    valor NUMERIC(14,2) NOT NULL,\n    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()\n);\n\n-- =========================================================\n-- 6. LOGÍSTICA\n-- =========================================================\n\nCREATE TABLE logistica (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE,\n\n    UNIQUE (turno_id)\n);\n\nCREATE TABLE lineas_logistica (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    logistica_id BIGINT NOT NULL REFERENCES logistica(id)\n        ON DELETE CASCADE,\n    cuenta_x_turno_id BIGINT NOT NULL\n        REFERENCES cuentas_x_turno(id)\n        ON DELETE RESTRICT,\n    aclaracion TEXT,\n    ultimo_reinicio_cobros TIMESTAMPTZ,\n    ultimo_reinicio_retiros TIMESTAMPTZ,\n    ultimo_reinicio_caja TIMESTAMPTZ,\n    ultimo_reinicio_general TIMESTAMPTZ,\n    num_orden INTEGER,\n\n    UNIQUE (logistica_id, cuenta_x_turno_id)\n);\n\n-- =========================================================\n-- 7. USUARIOS / CLIENTES\n-- =========================================================\n\nCREATE TABLE usuarios (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    fecha_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),\n    bloqueado BOOLEAN NOT NULL DEFAULT FALSE\n);\n\nCREATE TABLE nombres_usuario (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(150) NOT NULL,\n    usuario_id BIGINT NOT NULL REFERENCES usuarios(id)\n        ON DELETE CASCADE\n);\n\nCREATE TABLE telefonos_usuario (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    numero VARCHAR(50) NOT NULL,\n    usuario_id BIGINT NOT NULL REFERENCES usuarios(id)\n        ON DELETE CASCADE\n);\n\nCREATE TABLE titulares_usuario (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(150) NOT NULL,\n    usuario_id BIGINT NOT NULL REFERENCES usuarios(id)\n        ON DELETE CASCADE\n);\n\nCREATE TABLE paneles (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE CASCADE\n);\n\nCREATE TABLE paneles_x_usuario (\n    panel_id BIGINT NOT NULL REFERENCES paneles(id)\n        ON DELETE CASCADE,\n    usuario_id BIGINT NOT NULL REFERENCES usuarios(id)\n        ON DELETE CASCADE,\n\n    PRIMARY KEY (panel_id, usuario_id)\n);\n\nCREATE TABLE subplataformas_x_usuario (\n    subplataforma_id BIGINT NOT NULL\n        REFERENCES subplataformas(id)\n        ON DELETE CASCADE,\n    usuario_id BIGINT NOT NULL REFERENCES usuarios(id)\n        ON DELETE CASCADE,\n\n    PRIMARY KEY (subplataforma_id, usuario_id)\n);\n\nCREATE TABLE categorias_usuario (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(100) NOT NULL,\n    color_id BIGINT REFERENCES colores(id)\n        ON DELETE SET NULL,\n    emote_tipo VARCHAR(100)\n);\n\nCREATE TABLE categorias_x_usuario (\n    categoria_id BIGINT NOT NULL\n        REFERENCES categorias_usuario(id)\n        ON DELETE CASCADE,\n    usuario_id BIGINT NOT NULL REFERENCES usuarios(id)\n        ON DELETE CASCADE,\n\n    PRIMARY KEY (categoria_id, usuario_id)\n);\n\nCREATE TABLE usuarios_vinculados (\n    usuario_id BIGINT NOT NULL REFERENCES usuarios(id)\n        ON DELETE CASCADE,\n    usuario_rel_id BIGINT NOT NULL REFERENCES usuarios(id)\n        ON DELETE CASCADE,\n\n    PRIMARY KEY (usuario_id, usuario_rel_id),\n\n    CHECK (usuario_id < usuario_rel_id)\n);\n\n-- =========================================================\n-- 8. ESTADOS\n-- =========================================================\n\nCREATE TABLE estados (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    imagen TEXT,\n    imagen_mini TEXT,\n    nombre VARCHAR(100) NOT NULL,\n    tipo_estado_id BIGINT NOT NULL REFERENCES tipos_estado(id)\n        ON DELETE RESTRICT\n);\n\nCREATE TABLE lineas_estado (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    porcentaje NUMERIC(5,2) NOT NULL\n        CHECK (porcentaje BETWEEN 0 AND 100),\n    condicion_bono_id BIGINT NOT NULL\n        REFERENCES condiciones_bono(id)\n        ON DELETE RESTRICT,\n    subplataforma_id BIGINT NOT NULL\n        REFERENCES subplataformas(id)\n        ON DELETE CASCADE,\n    estado_id BIGINT NOT NULL REFERENCES estados(id)\n        ON DELETE CASCADE\n);\n\n-- =========================================================\n-- 9. OBJETIVOS\n-- =========================================================\n\nCREATE TABLE objetivos (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(150) NOT NULL,\n    fecha_inicio DATE NOT NULL,\n    fecha_fin DATE NOT NULL,\n    objetivo_alcanzado NUMERIC(14,2) NOT NULL DEFAULT 0,\n    objetivo_final NUMERIC(14,2) NOT NULL DEFAULT 0,\n\n    CHECK (fecha_fin >= fecha_inicio)\n);\n\nCREATE TABLE objetivos_x_tipo_turno (\n    objetivo_id BIGINT NOT NULL REFERENCES objetivos(id)\n        ON DELETE CASCADE,\n    tipo_turno_id BIGINT NOT NULL REFERENCES tipos_turno(id)\n        ON DELETE CASCADE,\n    porcentaje NUMERIC(5,2) NOT NULL\n        CHECK (porcentaje BETWEEN 0 AND 100),\n\n    PRIMARY KEY (objetivo_id, tipo_turno_id)\n);\n\nCREATE TABLE objetivos_x_caja (\n    objetivo_id BIGINT NOT NULL REFERENCES objetivos(id)\n        ON DELETE CASCADE,\n    caja_id BIGINT NOT NULL REFERENCES cajas(id)\n        ON DELETE CASCADE,\n\n    PRIMARY KEY (objetivo_id, caja_id)\n);\n\nCREATE TABLE subplataformas_x_objetivo (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    valor NUMERIC(14,2) NOT NULL DEFAULT 0,\n    subplataforma_id BIGINT NOT NULL\n        REFERENCES subplataformas(id)\n        ON DELETE CASCADE,\n    objetivo_id BIGINT NOT NULL REFERENCES objetivos(id)\n        ON DELETE CASCADE,\n\n    UNIQUE (subplataforma_id, objetivo_id)\n);\n\nCREATE TABLE subobjetivos (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    fecha DATE NOT NULL,\n    objetivo_id BIGINT NOT NULL REFERENCES objetivos(id)\n        ON DELETE CASCADE,\n    objetivo_alcanzado_dia NUMERIC(14,2) NOT NULL DEFAULT 0,\n    objetivo_final_dia NUMERIC(14,2) NOT NULL DEFAULT 0,\n\n    UNIQUE (fecha, objetivo_id)\n);\n\nCREATE TABLE subobjetivos_x_turno (\n    subobjetivo_id BIGINT NOT NULL REFERENCES subobjetivos(id)\n        ON DELETE CASCADE,\n    turno_id BIGINT NOT NULL REFERENCES turnos(id)\n        ON DELETE CASCADE,\n    objetivo_alcanzado_turno NUMERIC(14,2) NOT NULL DEFAULT 0,\n    objetivo_final_turno NUMERIC(14,2) NOT NULL DEFAULT 0,\n\n    PRIMARY KEY (subobjetivo_id, turno_id)\n);\n\n-- =========================================================\n-- 10. RELACIONES AÑADIDAS DESPUÉS DE CREAR USUARIOS\n-- =========================================================\n\nALTER TABLE propinas\n    ADD CONSTRAINT fk_propinas_usuario\n    FOREIGN KEY (usuario_id)\n    REFERENCES usuarios(id)\n    ON DELETE SET NULL;\n\nALTER TABLE cargas_ta\n    ADD CONSTRAINT fk_cargas_ta_usuario\n    FOREIGN KEY (usuario_id)\n    REFERENCES usuarios(id)\n    ON DELETE SET NULL;\n\n-- =========================================================\n-- 11. ÍNDICES\n-- =========================================================\n\nCREATE INDEX idx_billeteras_tipo_billetera ON billeteras(tipo_billetera_id);\nCREATE INDEX idx_cajas_color ON cajas(color_id);\nCREATE INDEX idx_titulares_x_caja_titular ON titulares_x_caja(titular_id);\nCREATE INDEX idx_titulares_x_caja_caja ON titulares_x_caja(caja_id);\nCREATE INDEX idx_billeteras_x_caja_billetera ON billeteras_x_caja(billetera_id);\nCREATE INDEX idx_billeteras_x_caja_caja ON billeteras_x_caja(caja_id);\nCREATE INDEX idx_tipos_turno_caja ON tipos_turno(caja_id);\nCREATE INDEX idx_tipos_turno_color ON tipos_turno(color_id);\nCREATE INDEX idx_dias_turno_tipo_turno ON dias_turno(tipo_turno_id);\nCREATE INDEX idx_turnos_dia_turno ON turnos(dia_turno_id);\nCREATE INDEX idx_turnos_caja ON turnos(caja_id);\n\nCREATE INDEX idx_cuentas_titular ON cuentas(titular_id);\nCREATE INDEX idx_cuentas_billetera ON cuentas(billetera_id);\nCREATE INDEX idx_cuentas_tipo_cuenta ON cuentas(tipo_cuenta_id);\nCREATE INDEX idx_cuentas_x_caja_caja ON cuentas_x_caja(caja_id);\nCREATE INDEX idx_cuentas_x_turno_cuenta_caja ON cuentas_x_turno(cuenta_id, caja_id);\n\nCREATE INDEX idx_propinas_turno ON propinas(turno_id);\nCREATE INDEX idx_propinas_usuario ON propinas(usuario_id);\nCREATE INDEX idx_cargas_ta_turno ON cargas_ta(turno_id);\nCREATE INDEX idx_cargas_ta_usuario ON cargas_ta(usuario_id);\nCREATE INDEX idx_dinero_encontrado_cuenta_x_turno ON dinero_encontrado(cuenta_x_turno_id);\nCREATE INDEX idx_gastos_turno ON gastos(turno_id);\nCREATE INDEX idx_gastos_tipo_gasto ON gastos(tipo_gasto_id);\nCREATE INDEX idx_movimientos_turno ON movimientos(turno_id);\nCREATE INDEX idx_movimientos_desde ON movimientos(caja_desde_id);\nCREATE INDEX idx_movimientos_hasta ON movimientos(caja_hasta_id);\n\nCREATE INDEX idx_lineas_publicidad_publicidad ON lineas_publicidad(publicidad_id);\nCREATE INDEX idx_lineas_publicidad_x_caja_linea ON lineas_publicidad_x_caja(linea_publicidad_id);\nCREATE INDEX idx_lineas_bonos_bono ON lineas_bonos(bono_id);\n\nCREATE INDEX idx_plataformas_caja ON plataformas(caja_id);\nCREATE INDEX idx_plataformas_color ON plataformas(color_id);\nCREATE INDEX idx_subplataformas_plataforma ON subplataformas(plataforma_id);\nCREATE INDEX idx_subplataformas_color ON subplataformas(color_id);\nCREATE INDEX idx_fichas_plataforma ON fichas(plataforma_id);\nCREATE INDEX idx_cargas_fichas_fichas ON cargas_fichas(fichas_id);\n\nCREATE INDEX idx_lineas_logistica_logistica ON lineas_logistica(logistica_id);\nCREATE INDEX idx_lineas_logistica_cuenta_x_turno ON lineas_logistica(cuenta_x_turno_id);\n\nCREATE INDEX idx_nombres_usuario_usuario ON nombres_usuario(usuario_id);\nCREATE INDEX idx_telefonos_usuario_usuario ON telefonos_usuario(usuario_id);\nCREATE INDEX idx_titulares_usuario_usuario ON titulares_usuario(usuario_id);\nCREATE INDEX idx_paneles_caja ON paneles(caja_id);\nCREATE INDEX idx_paneles_x_usuario_usuario ON paneles_x_usuario(usuario_id);\nCREATE INDEX idx_subplataformas_x_usuario_usuario ON subplataformas_x_usuario(usuario_id);\nCREATE INDEX idx_categorias_usuario_color ON categorias_usuario(color_id);\nCREATE INDEX idx_categorias_x_usuario_usuario ON categorias_x_usuario(usuario_id);\nCREATE INDEX idx_usuarios_vinculados_rel ON usuarios_vinculados(usuario_rel_id);\n\nCREATE INDEX idx_estados_tipo_estado ON estados(tipo_estado_id);\nCREATE INDEX idx_lineas_estado_condicion_bono ON lineas_estado(condicion_bono_id);\nCREATE INDEX idx_lineas_estado_subplataforma ON lineas_estado(subplataforma_id);\nCREATE INDEX idx_lineas_estado_estado ON lineas_estado(estado_id);\n\nCREATE INDEX idx_objetivos_x_tipo_turno_tipo_turno ON objetivos_x_tipo_turno(tipo_turno_id);\nCREATE INDEX idx_objetivos_x_caja_caja ON objetivos_x_caja(caja_id);\nCREATE INDEX idx_subplataformas_x_objetivo_objetivo ON subplataformas_x_objetivo(objetivo_id);\nCREATE INDEX idx_subplataformas_x_objetivo_subplataforma ON subplataformas_x_objetivo(subplataforma_id);\nCREATE INDEX idx_subobjetivos_objetivo ON subobjetivos(objetivo_id);\nCREATE INDEX idx_subobjetivos_x_turno_turno ON subobjetivos_x_turno(turno_id);\n\n-- =========================================================\n-- 12. CAJEROS Y PLANIFICACIÓN\n-- =========================================================\n\nCREATE TABLE cajeros (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    nombre VARCHAR(150) NOT NULL,\n    notas TEXT\n);\n\nCREATE TABLE asignaciones_cajero (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    cajero_id BIGINT NOT NULL REFERENCES cajeros(id)\n        ON DELETE CASCADE,\n    dia_turno_id BIGINT NOT NULL REFERENCES dias_turno(id)\n        ON DELETE CASCADE,\n    fecha_desde DATE NOT NULL DEFAULT CURRENT_DATE,\n    fecha_hasta DATE,\n\n    CHECK (\n        fecha_hasta IS NULL\n        OR fecha_hasta >= fecha_desde\n    )\n);\n\nCREATE TABLE excepciones_cajero (\n    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,\n    cajero_id BIGINT NOT NULL REFERENCES cajeros(id)\n        ON DELETE CASCADE,\n    fecha DATE NOT NULL,\n    dia_turno_id BIGINT REFERENCES dias_turno(id)\n        ON DELETE SET NULL,\n    tipo_excepcion VARCHAR(50) NOT NULL,\n    notas TEXT\n);\n\nCREATE INDEX idx_asignaciones_cajero_cajero ON asignaciones_cajero(cajero_id);\nCREATE INDEX idx_asignaciones_cajero_dia_turno ON asignaciones_cajero(dia_turno_id);\nCREATE INDEX idx_excepciones_cajero_fecha ON excepciones_cajero(fecha);\nCREATE INDEX idx_excepciones_cajero_dia_turno ON excepciones_cajero(dia_turno_id);\nCREATE INDEX idx_excepciones_cajero_cajero ON excepciones_cajero(cajero_id);",
+  "dialect": "postgres",
+  "positions": {
+    "historial_vigencias": {
+      "x": 4405,
+      "y": -4650
+    },
+    "app_config": {
+      "x": 4708,
+      "y": -4652
+    },
+    "colores": {
+      "x": 3705,
+      "y": -4637
+    },
+    "tipos_gasto": {
+      "x": 487,
+      "y": -349
+    },
+    "tipos_billetera": {
+      "x": 4441,
+      "y": -433
+    },
+    "tipos_cuenta": {
+      "x": 4769,
+      "y": -214
+    },
+    "tipos_estado": {
+      "x": 4990,
+      "y": -5446
+    },
+    "condiciones_bono": {
+      "x": 6283,
+      "y": -5468
+    },
+    "titulares": {
+      "x": 4733,
+      "y": -387
+    },
+    "billeteras": {
+      "x": 4714,
+      "y": -585
+    },
+    "cajas": {
+      "x": 3611,
+      "y": -2530
+    },
+    "titulares_x_caja": {
+      "x": 4288,
+      "y": -131
+    },
+    "billeteras_x_caja": {
+      "x": 4284,
+      "y": -706
+    },
+    "tipos_turno": {
+      "x": 4864,
+      "y": -2567
+    },
+    "dias_turno": {
+      "x": 4450,
+      "y": -2446
+    },
+    "turnos": {
+      "x": 4019,
+      "y": -2304
+    },
+    "cuentas": {
+      "x": 5126,
+      "y": -474
+    },
+    "cuentas_x_caja": {
+      "x": 4739,
+      "y": -803
+    },
+    "cuentas_x_turno": {
+      "x": 5454,
+      "y": -820
+    },
+    "propinas": {
+      "x": 424,
+      "y": -776
+    },
+    "cargas_ta": {
+      "x": 425,
+      "y": -1030
+    },
+    "dinero_encontrado": {
+      "x": 424,
+      "y": -143
+    },
+    "gastos": {
+      "x": 8,
+      "y": -320
+    },
+    "notas_turno": {
+      "x": 507,
+      "y": -524
+    },
+    "movimientos": {
+      "x": 424,
+      "y": 63
+    },
+    "publicidad": {
+      "x": 5805,
+      "y": -3651
+    },
+    "lineas_publicidad": {
+      "x": 6277,
+      "y": -3882
+    },
+    "lineas_publicidad_x_caja": {
+      "x": 5804,
+      "y": -3908
+    },
+    "bonos": {
+      "x": 5830,
+      "y": -3270
+    },
+    "lineas_bonos": {
+      "x": 6174,
+      "y": -3246
+    },
+    "plataformas": {
+      "x": 4636,
+      "y": -4403
+    },
+    "subplataformas": {
+      "x": 4218,
+      "y": -3981
+    },
+    "fichas": {
+      "x": 446,
+      "y": 355
+    },
+    "cargas_fichas": {
+      "x": 23,
+      "y": 430
+    },
+    "logistica": {
+      "x": 5870,
+      "y": -1237
+    },
+    "lineas_logistica": {
+      "x": 6169,
+      "y": -1113
+    },
+    "usuarios": {
+      "x": 1335,
+      "y": -2353
+    },
+    "nombres_usuario": {
+      "x": 795,
+      "y": -2531
+    },
+    "telefonos_usuario": {
+      "x": 935,
+      "y": -2379
+    },
+    "titulares_usuario": {
+      "x": 2063,
+      "y": -2427
+    },
+    "paneles": {
+      "x": 684,
+      "y": -2037
+    },
+    "paneles_x_usuario": {
+      "x": 1045,
+      "y": -2094
+    },
+    "subplataformas_x_usuario": {
+      "x": 1879,
+      "y": -2549
+    },
+    "categorias_usuario": {
+      "x": 1969,
+      "y": -1995
+    },
+    "categorias_x_usuario": {
+      "x": 1677,
+      "y": -2090
+    },
+    "usuarios_vinculados": {
+      "x": 1655,
+      "y": -2695
+    },
+    "estados": {
+      "x": 5452,
+      "y": -5355
+    },
+    "lineas_estado": {
+      "x": 5860,
+      "y": -5233
+    },
+    "objetivos": {
+      "x": 405,
+      "y": -4058
+    },
+    "objetivos_x_tipo_turno": {
+      "x": 1550,
+      "y": -3983
+    },
+    "objetivos_x_caja": {
+      "x": 836,
+      "y": -3927
+    },
+    "subplataformas_x_objetivo": {
+      "x": 835,
+      "y": -4263
+    },
+    "subobjetivos": {
+      "x": 789,
+      "y": -4551
+    },
+    "subobjetivos_x_turno": {
+      "x": 1365,
+      "y": -4551
+    },
+    "cajeros": {
+      "x": 6284,
+      "y": -1990
+    },
+    "asignaciones_cajero": {
+      "x": 5886,
+      "y": -2237
+    },
+    "excepciones_cajero": {
+      "x": 5885,
+      "y": -1820
+    }
+  },
+  "camera": {
+    "x": -4057,
+    "y": 724,
+    "scale": 0.8819
+  },
+  "annotations": [
+    {
+      "id": "amtwm15o2-a",
+      "type": "group",
+      "x": 3669.155361718018,
+      "y": -4687.0912335090325,
+      "w": 1260.7943856364936,
+      "h": 898.398091529561,
+      "text": "Config",
+      "color": "blue"
+    },
+    {
+      "id": "amtwlwnei-2",
+      "type": "group",
+      "x": 363.0849797738431,
+      "y": -4617.298224898274,
+      "w": 1460.9869057511635,
+      "h": 816.063453618684,
+      "text": "Objetivos",
+      "color": "amber"
+    },
+    {
+      "id": "amtwm07ru-8",
+      "type": "group",
+      "x": 5777.522767263846,
+      "y": -3303.132213283794,
+      "w": 709.5454240176805,
+      "h": 319.87992436780314,
+      "text": "Bonos",
+      "color": "green"
+    },
+    {
+      "id": "amtwm0fnm-9",
+      "type": "group",
+      "x": 5769.411881156924,
+      "y": -3939.1559243551833,
+      "w": 752.3044236308178,
+      "h": 404.4281112292106,
+      "text": "Publicidad",
+      "color": "green"
+    },
+    {
+      "id": "amtwm1eey-b",
+      "type": "group",
+      "x": 3584.262414955641,
+      "y": -2590.763398763708,
+      "w": 1492.2701820005432,
+      "h": 604.3862391703015,
+      "text": "Caja y Turnos",
+      "color": "purple"
+    },
+    {
+      "id": "amtwlzql6-7",
+      "type": "group",
+      "x": -33.27207612247969,
+      "y": -1058.0167154041899,
+      "w": 787.5861175771879,
+      "h": 1677.8747502521373,
+      "text": "Gastos Normales",
+      "color": "green"
+    },
+    {
+      "id": "amtwlxwm2-4",
+      "type": "group",
+      "x": 619.6260952123478,
+      "y": -2724.345861697176,
+      "w": 1676.5905083204461,
+      "h": 934.786641622195,
+      "text": "Usuarios",
+      "color": "amber"
+    },
+    {
+      "id": "amtwlx97e-3",
+      "type": "group",
+      "x": 4944.296306289589,
+      "y": -5499.343535255644,
+      "w": 1557.7018791203177,
+      "h": 461.22265036279396,
+      "text": "Estados",
+      "color": "amber"
+    },
+    {
+      "id": "amtwlym4i-5",
+      "type": "group",
+      "x": 4253.132057145592,
+      "y": -854.8836288762304,
+      "w": 1420.2952363747718,
+      "h": 912.2318198676762,
+      "text": "Cuentas",
+      "color": "purple"
+    },
+    {
+      "id": "amty093r9-2",
+      "type": "group",
+      "x": 5815.924733985494,
+      "y": -2295.8985571349726,
+      "w": 710.0719470095055,
+      "h": 757.0186695464058,
+      "text": "Cajeros",
+      "color": "blue"
+    },
+    {
+      "id": "amtwlza9m-6",
+      "type": "group",
+      "x": 5817.906996424419,
+      "y": -1292.1819870582667,
+      "w": 706.8682207347265,
+      "h": 515.5074878048398,
+      "text": "Logistica",
+      "color": "purple"
+    }
+  ],
+  "hidden": [],
+  "manualLinks": [
+    {
+      "from": {
+        "table": "linea_x_caja",
+        "col": "linea_id"
+      },
+      "to": {
+        "table": "lineas_publicidad",
+        "col": "id"
+      }
+    },
+    {
+      "from": {
+        "table": "gastos",
+        "col": "notas"
+      },
+      "to": {
+        "table": "propinas",
+        "col": "monto"
+      }
+    },
+    {
+      "from": {
+        "table": "gastos",
+        "col": "tipo_gasto_id"
+      },
+      "to": {
+        "table": "propinas",
+        "col": "notas"
+      }
+    }
+  ]
+}
