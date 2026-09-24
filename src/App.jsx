@@ -30,6 +30,7 @@ import {
   X,
 } from 'lucide-react'
 import {
+  createAccount,
   createAccountType,
   createBonusCondition,
   createBox,
@@ -53,6 +54,8 @@ import {
   deleteWallet,
   loadCurrentShiftData,
   saveAppConfig,
+  setAccountAvailability,
+  updateAccount,
   updateAccountType,
   updateAccountValue,
   updateAdvertisingLine,
@@ -355,7 +358,12 @@ function LiveSettings({ data, setToast, onSaved }) {
       availability[holderName] = {}
       walletsFromData.forEach((wallet) => {
         const walletName = wallet.nombre || 'Sin billetera'
-        availability[holderName][walletName] = true
+        const isAvailable = (data.accounts || []).some((account) => {
+          const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
+          const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+          return accountHolder === holderName && accountWallet === walletName
+        })
+        availability[holderName][walletName] = isAvailable
       })
     })
 
@@ -386,20 +394,69 @@ function LiveSettings({ data, setToast, onSaved }) {
     setDraft((current) => ({ ...current, accounts: { ...current.accounts, ...patch } }))
   }
 
-  const toggleWallet = (holderName, walletName) => {
-    setDraft((current) => ({
-      ...current,
-      accounts: {
-        ...current.accounts,
-        availability: {
-          ...(current.accounts.availability || {}),
-          [holderName]: {
-            ...((current.accounts.availability || {})[holderName] || {}),
-            [walletName]: !(((current.accounts.availability || {})[holderName] || {})[walletName] ?? true),
+  const toggleWallet = async (holderName, walletName) => {
+    const holder = data.holders?.find((item) => item.nombre === holderName)
+    const wallet = data.wallets?.find((item) => item.nombre === walletName)
+    const currentValue = draft.accounts.availability?.[holderName]?.[walletName] ?? true
+    const nextValue = !currentValue
+
+    if (!holder || !wallet || !data.shift?.id || !data.shift?.caja_id) {
+      setDraft((current) => ({
+        ...current,
+        accounts: {
+          ...current.accounts,
+          availability: {
+            ...(current.accounts.availability || {}),
+            [holderName]: {
+              ...((current.accounts.availability || {})[holderName] || {}),
+              [walletName]: nextValue,
+            },
           },
         },
-      },
-    }))
+      }))
+      return
+    }
+
+    const existingAccount = (data.accounts || []).find((account) => {
+      const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
+      const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+      return accountHolder === holderName && accountWallet === walletName
+    })
+
+    try {
+      const accountId = existingAccount?.cuenta_id ?? (await createAccount({
+        holderId: holder.id,
+        walletId: wallet.id,
+        alias: `${holderName} · ${walletName}`,
+        typeId: data.accountTypes?.[0]?.id ?? undefined,
+      })).id
+
+      await setAccountAvailability({
+        shiftId: data.shift.id,
+        boxId: data.shift.caja_id,
+        accountId,
+        enabled: nextValue,
+        value: existingAccount?.valor ?? 0,
+        canCollect: true,
+        canWithdraw: true,
+      })
+
+      setDraft((current) => ({
+        ...current,
+        accounts: {
+          ...current.accounts,
+          availability: {
+            ...(current.accounts.availability || {}),
+            [holderName]: {
+              ...((current.accounts.availability || {})[holderName] || {}),
+              [walletName]: nextValue,
+            },
+          },
+        },
+      }))
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar la cuenta')
+    }
   }
 
   const buildTargetSetting = (holderName, walletName) => ({
@@ -618,7 +675,7 @@ function LiveSettings({ data, setToast, onSaved }) {
         </div>
 
         <section className="config-card matrix-config-card">
-          <div className="config-list-head"><h3>Billeteras utilizables por titular</h3><span>Activá y configurá cada cuenta</span></div>
+          <div className="config-list-head"><h3>Cuentas</h3><span>Activá y configurá cada cuenta</span></div>
           <div className="availability-table">
             <div className="availability-row availability-head" style={{ '--wallet-count': draft.accounts.wallets.length }}>
               <b>Titular</b>

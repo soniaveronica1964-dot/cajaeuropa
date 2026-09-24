@@ -27,7 +27,7 @@ export async function loadCurrentShiftData(boxId = null) {
   if (shiftError) throw shiftError
   if (!shift) return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes: [], logistics: [], users: [], goals: [], chips: [] }
 
-  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions] = await Promise.all([
+  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id)),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
@@ -42,6 +42,7 @@ export async function loadCurrentShiftData(boxId = null) {
     query('billeteras', 'id, nombre, orden_num, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)'),
     query('plataformas', 'id, nombre, caja_id, color_id'),
     query('condiciones_bono', 'id, nombre, plataforma'),
+    query('tipos_cuenta', 'id, nombre, es_compartido, es_publicidad, cobros, retiros, ahorro'),
   ])
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
@@ -53,7 +54,7 @@ export async function loadCurrentShiftData(boxId = null) {
 
   const logisticsWithAccounts = logistics.map(line => ({ ...line, cuentas_x_turno: { cuentas: accountById.get(accountLinks.find(link => link.id === line.cuenta_x_turno_id)?.cuenta_id) || null } }))
 
-  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, bonusConditions }
+  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes }
 }
 
 export async function loadConfigurationData() {
@@ -379,6 +380,83 @@ export async function deleteAccountType(id) {
   requireSupabase()
   const { error } = await supabase.from('tipos_cuenta').delete().eq('id', id)
   if (error) throw error
+}
+
+export async function getDefaultAccountTypeId() {
+  requireSupabase()
+  const { data, error } = await supabase.from('tipos_cuenta').select('id').limit(1).maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('No hay tipos de cuenta configurados')
+  return data.id
+}
+
+export async function createAccount({ holderId, walletId, alias = null, cuil = null, notes = null, typeId = null }) {
+  requireSupabase()
+  const resolvedTypeId = typeId ?? await getDefaultAccountTypeId()
+  const { data, error } = await supabase.from('cuentas').upsert({
+    titular_id: holderId,
+    billetera_id: walletId,
+    alias: alias?.trim() || null,
+    cuil: cuil?.trim() || null,
+    notas: notes?.trim() || null,
+    tipo_cuenta_id: resolvedTypeId,
+  }, { onConflict: 'titular_id,billetera_id' }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateAccount(id, { alias = null, cuil = null, notes = null, typeId = null }) {
+  requireSupabase()
+  const payload = {
+    alias: alias?.trim() || null,
+    cuil: cuil?.trim() || null,
+    notas: notes?.trim() || null,
+  }
+  if (typeId !== null && typeId !== undefined) payload.tipo_cuenta_id = Number(typeId)
+
+  const { data, error } = await supabase.from('cuentas').update(payload).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteAccount(id) {
+  requireSupabase()
+  const { error } = await supabase.from('cuentas').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function ensureAccountBoxLink({ accountId, boxId }) {
+  requireSupabase()
+  if (!accountId || !boxId) return null
+  const { data, error } = await supabase.from('cuentas_x_caja').upsert({
+    cuenta_id: accountId,
+    caja_id: boxId,
+  }, { onConflict: 'cuenta_id,caja_id' }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function setAccountAvailability({ shiftId, boxId, accountId, enabled = true, value = 0, canCollect = true, canWithdraw = true }) {
+  requireSupabase()
+  if (!accountId || !shiftId || !boxId) return null
+
+  if (enabled) {
+    await ensureAccountBoxLink({ accountId, boxId })
+    const { data, error } = await supabase.from('cuentas_x_turno').upsert({
+      turno_id: shiftId,
+      cuenta_id: accountId,
+      caja_id: boxId,
+      valor: Number(value) || 0,
+      cobros: Boolean(canCollect),
+      retiros: Boolean(canWithdraw),
+    }, { onConflict: 'turno_id,cuenta_id,caja_id' }).select().single()
+    if (error) throw error
+    return data
+  }
+
+  const { error } = await supabase.from('cuentas_x_turno').delete().eq('turno_id', shiftId).eq('cuenta_id', accountId).eq('caja_id', boxId)
+  if (error) throw error
+  return null
 }
 
 export async function saveAppConfig({ name, icon, theme = false, showNotes = true, singleton = true }) {
