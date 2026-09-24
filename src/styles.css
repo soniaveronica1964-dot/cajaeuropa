@@ -268,8 +268,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: linear-gradient(90deg, rgba(11, 15, 18, 0.98) 0, rgba(11, 15, 18, 0.98) 72px, rgba(11, 16, 18, 0.85) 72px, rgba(11, 16, 18, 0.85) 100%);
 }
 .sidebar {
-  width: 72px;
-  flex: 0 0 72px;
+  width: 100px;
+  flex: 0 0 100px;
   min-height: calc(100vh - 58px);
   padding: 12px 8px;
   border-right: 1px solid var(--line);
@@ -278,6 +278,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex-direction: column;
   align-items: center;
   gap: 8px;
+  position: sticky;
+  top: 0;
+  align-self: flex-start;
 }
 .sidebar-label {
   width: 100%;
@@ -321,7 +324,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: center;
   justify-content: center;
 }
-.sidebar-bottom { margin-top: auto; width: 100%; }
+.sidebar-bottom {
+  margin-top: auto;
+  width: 100%;
+  position: sticky;
+  bottom: 0;
+}
 .operator {
   display: flex;
   align-items: center;
@@ -330,6 +338,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(18, 28, 30, 0.6);
+  min-width: 0;
+}
+.operator > div {
+  min-width: 0;
+  flex: 1;
 }
 .operator span {
   width: 28px;
@@ -340,10 +353,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: rgba(122, 215, 199, 0.16);
   color: var(--cyan);
   font: 700 10px 'DM Mono';
+  flex-shrink: 0;
 }
 .operator strong, .operator small { display: block; }
-.operator strong { font-size: 11px; }
-.operator small { color: var(--muted); font-size: 9px; }
+.operator strong {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.operator small {
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .main-content {
   flex: 1;
