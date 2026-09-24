@@ -140,7 +140,6 @@ function App() {
         <main className="main-content">
           <section className="page-heading">
             <div><span className="eyebrow">{shift ? `Turno iniciado · ${new Date(shift.fecha_hora_inicio).toLocaleString('es-AR')}` : 'Sin turno abierto'}</span><h1>{activeLabel === 'Caja' ? `${shiftName} / ${shiftTime}` : activeLabel}</h1><p>{shift ? new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Seleccioná una caja con un turno abierto'} · {activeBox}</p></div>
-            <div className="heading-actions">{navItems.slice(1, 6).map(([id, label, Icon]) => <button key={id} className={`icon-button ${view === id ? 'selected' : ''}`} title={label} onClick={() => setView(id)}><Icon size={17} /></button>)}</div>
           </section>
 
           {loadError && <div className="empty-state"><strong>Error al cargar Supabase</strong><p>{loadError}</p></div>}
