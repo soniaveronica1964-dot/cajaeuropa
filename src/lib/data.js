@@ -81,7 +81,7 @@ export async function loadBonusCatalog() {
 
 async function updateRow(table, id, values) {
   requireSupabase()
-  const { data, error } = await supabase.from(table).update(values).eq('id', id).select().single()
+  const { data, error } = await supabase.from(table).update(values).eq('id', id).select().maybeSingle()
   if (error) throw error
   return data
 }
@@ -404,7 +404,7 @@ export async function createAccount({ holderId, walletId, alias = null, cuil = n
     activa: Boolean(active),
   }
 
-  const { data, error } = await supabase.from('cuentas').upsert(payload, { onConflict: 'titular_id,billetera_id' }).select().single()
+  const { data, error } = await supabase.from('cuentas').upsert(payload, { onConflict: 'titular_id,billetera_id' }).select().maybeSingle()
   if (error) throw error
   return data
 }
@@ -420,7 +420,7 @@ export async function updateAccount(id, { alias = null, cuil = null, password = 
   if (typeId !== null && typeId !== undefined) payload.tipo_cuenta_id = Number(typeId)
   if (active !== null && active !== undefined) payload.activa = Boolean(active)
 
-  const { data, error } = await supabase.from('cuentas').update(payload).eq('id', id).select().single()
+  const { data, error } = await supabase.from('cuentas').update(payload).eq('id', id).select().maybeSingle()
   if (error) throw error
   return data
 }
@@ -500,7 +500,7 @@ async function findOrCreate(table, match, values) {
   if (findError) throw findError
   if (existing) return existing
 
-  const { data, error } = await supabase.from(table).insert(values).select().single()
+  const { data, error } = await supabase.from(table).insert(values).select().maybeSingle()
   if (error) throw error
   return data
 }
