@@ -265,11 +265,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workspace {
   display: flex;
   min-height: calc(100vh - 58px);
+  align-items: flex-start;
   background: linear-gradient(90deg, rgba(11, 15, 18, 0.98) 0, rgba(11, 15, 18, 0.98) 72px, rgba(11, 16, 18, 0.85) 72px, rgba(11, 16, 18, 0.85) 100%);
 }
 .sidebar {
   width: 100px;
   flex: 0 0 100px;
+  height: calc(100vh - 58px);
   min-height: calc(100vh - 58px);
   padding: 12px 8px;
   border-right: 1px solid var(--line);
@@ -279,8 +281,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: center;
   gap: 8px;
   position: sticky;
-  top: 0;
+  top: 58px;
   align-self: flex-start;
+  z-index: 2;
 }
 .sidebar-label {
   width: 100%;
@@ -290,6 +293,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   letter-spacing: 0.12em;
   text-transform: uppercase;
   padding: 0 8px;
+  text-align: center;
 }
 .side-link {
   width: 100%;
@@ -302,6 +306,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: center;
   justify-content: center;
   position: relative;
+  text-align: center;
 }
 .side-link.active {
   background: rgba(28, 41, 42, 0.96);
@@ -327,22 +332,31 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .sidebar-bottom {
   margin-top: auto;
   width: 100%;
-  position: sticky;
-  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 .operator {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  width: 100%;
   padding: 8px 6px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: rgba(18, 28, 30, 0.6);
   min-width: 0;
+  text-align: center;
 }
 .operator > div {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 .operator span {
   width: 28px;
@@ -358,9 +372,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .operator strong, .operator small { display: block; }
 .operator strong {
   font-size: 11px;
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  width: 100%;
 }
 .operator small {
   color: var(--muted);
@@ -368,6 +384,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  width: 100%;
 }
 
 .main-content {
