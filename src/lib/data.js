@@ -47,7 +47,7 @@ export async function loadCurrentShiftData(boxId = null) {
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
   const accounts = accountIds.length
-    ? await query('cuentas', 'id, alias, cuil, patron, notas, tipo_cuenta_id, titular_id, billetera_id, titulares(nombre), billeteras(nombre)', request => request.in('id', accountIds))
+    ? await query('cuentas', 'id, alias, cuil, patron, notas, tipo_cuenta_id, activa, titular_id, billetera_id, titulares(nombre), billeteras(nombre)', request => request.in('id', accountIds))
     : []
   const accountById = new Map(accounts.map(account => [account.id, account]))
   const linkedAccounts = accountLinks.map(link => ({ ...link, cuentas: accountById.get(link.cuenta_id) || null }))
@@ -390,10 +390,10 @@ export async function getDefaultAccountTypeId() {
   return data.id
 }
 
-export async function createAccount({ holderId, walletId, alias = null, cuil = null, password = null, notes = null, typeId = null }) {
+export async function createAccount({ holderId, walletId, alias = null, cuil = null, password = null, notes = null, typeId = null, active = true }) {
   requireSupabase()
   const resolvedTypeId = typeId ?? await getDefaultAccountTypeId()
-  const { data, error } = await supabase.from('cuentas').upsert({
+  const payload = {
     titular_id: holderId,
     billetera_id: walletId,
     alias: alias?.trim() || null,
@@ -401,12 +401,15 @@ export async function createAccount({ holderId, walletId, alias = null, cuil = n
     patron: password?.trim() || null,
     notas: notes?.trim() || null,
     tipo_cuenta_id: resolvedTypeId,
-  }, { onConflict: 'titular_id,billetera_id' }).select().single()
+    activa: Boolean(active),
+  }
+
+  const { data, error } = await supabase.from('cuentas').upsert(payload, { onConflict: 'titular_id,billetera_id' }).select().single()
   if (error) throw error
   return data
 }
 
-export async function updateAccount(id, { alias = null, cuil = null, password = null, notes = null, typeId = null }) {
+export async function updateAccount(id, { alias = null, cuil = null, password = null, notes = null, typeId = null, active = null }) {
   requireSupabase()
   const payload = {
     alias: alias?.trim() || null,
@@ -415,6 +418,7 @@ export async function updateAccount(id, { alias = null, cuil = null, password = 
     notas: notes?.trim() || null,
   }
   if (typeId !== null && typeId !== undefined) payload.tipo_cuenta_id = Number(typeId)
+  if (active !== null && active !== undefined) payload.activa = Boolean(active)
 
   const { data, error } = await supabase.from('cuentas').update(payload).eq('id', id).select().single()
   if (error) throw error
@@ -535,7 +539,7 @@ export async function createInitialSetup({ boxName, shiftName, startTime, endTim
   for (const holder of holders) {
     for (const wallet of wallets) {
       const account = await findOrCreate('cuentas', { titular_id: holder.id, billetera_id: wallet.id }, {
-        titular_id: holder.id, billetera_id: wallet.id, alias: `${holder.nombre} · ${wallet.nombre}`, tipo_cuenta_id: accountType.id,
+        titular_id: holder.id, billetera_id: wallet.id, alias: `${holder.nombre} · ${wallet.nombre}`, tipo_cuenta_id: accountType.id, activa: true,
       })
       await ensureLink('cuentas_x_caja', { cuenta_id: account.id, caja_id: box.id })
       await ensureLink('cuentas_x_turno', { turno_id: shift.id, cuenta_id: account.id, caja_id: box.id }, {

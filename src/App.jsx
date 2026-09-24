@@ -398,7 +398,7 @@ function LiveSettings({ data, setToast, onSaved }) {
     const holder = data.holders?.find((item) => item.nombre === holderName)
     const wallet = data.wallets?.find((item) => item.nombre === walletName)
 
-    if (!holder || !wallet || !data.shift?.id || !data.shift?.caja_id) {
+    if (!holder || !wallet) {
       return
     }
 
@@ -408,28 +408,55 @@ function LiveSettings({ data, setToast, onSaved }) {
       return accountHolder === holderName && accountWallet === walletName
     })
 
-    const nextValue = !Boolean(existingAccount)
+    const currentChecked = Boolean(existingAccount?.cuentas?.activa ?? existingAccount?.cuentas?.check ?? existingAccount?.cuentas?.activo ?? true)
+    const nextValue = !currentChecked
 
     try {
-      const accountRecord = existingAccount?.cuentas || await createAccount({
-        holderId: holder.id,
-        walletId: wallet.id,
-        alias: '',
-        cuil: '',
-        password: '',
-        notes: '',
-        typeId: data.accountTypes?.[0]?.id ?? undefined,
-      })
+      if (!existingAccount?.cuentas) {
+        const created = await createAccount({
+          holderId: holder.id,
+          walletId: wallet.id,
+          alias: '',
+          cuil: '',
+          password: '',
+          notes: '',
+          typeId: data.accountTypes?.[0]?.id ?? undefined,
+          active: nextValue,
+        })
 
-      await setAccountAvailability({
-        shiftId: data.shift.id,
-        boxId: data.shift.caja_id,
-        accountId: accountRecord.id,
-        enabled: nextValue,
-        value: existingAccount?.valor ?? 0,
-        canCollect: true,
-        canWithdraw: true,
-      })
+        if (data.shift?.id && data.shift?.caja_id) {
+          await setAccountAvailability({
+            shiftId: data.shift.id,
+            boxId: data.shift.caja_id,
+            accountId: created.id,
+            enabled: nextValue,
+            value: 0,
+            canCollect: true,
+            canWithdraw: true,
+          })
+        }
+      } else {
+        await updateAccount(existingAccount.cuentas.id, {
+          active: nextValue,
+          alias: existingAccount.cuentas.alias ?? '',
+          cuil: existingAccount.cuentas.cuil ?? '',
+          password: existingAccount.cuentas.patron ?? '',
+          notes: existingAccount.cuentas.notas ?? '',
+          typeId: existingAccount.cuentas.tipo_cuenta_id ?? null,
+        })
+
+        if (data.shift?.id && data.shift?.caja_id && !nextValue) {
+          await setAccountAvailability({
+            shiftId: data.shift.id,
+            boxId: data.shift.caja_id,
+            accountId: existingAccount.cuentas.id,
+            enabled: false,
+            value: existingAccount.valor ?? 0,
+            canCollect: true,
+            canWithdraw: true,
+          })
+        }
+      }
 
       await onSaved?.()
       setToast(nextValue ? 'Cuenta activada en la base de datos' : 'Cuenta desactivada en la base de datos')
@@ -517,11 +544,12 @@ function LiveSettings({ data, setToast, onSaved }) {
       <b>{holderName}</b>
       {draft.accounts.wallets.map((wallet) => {
         const walletName = wallet || 'Sin billetera'
-        const enabled = Boolean((data.accounts || []).find((account) => {
+        const match = (data.accounts || []).find((account) => {
           const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
           const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
           return accountHolder === holderName && accountWallet === walletName
-        }))
+        })
+        const enabled = Boolean(match?.cuentas?.activa ?? match?.cuentas?.check ?? match?.cuentas?.activo ?? true)
         return <div className="account-config-cell" key={`${holderName}-${walletName}`}>
           <label className="toggle-cell" aria-label={`Activar ${holderName} · ${walletName}`}>
             <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />
