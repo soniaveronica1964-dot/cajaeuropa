@@ -397,23 +397,8 @@ function LiveSettings({ data, setToast, onSaved }) {
   const toggleWallet = async (holderName, walletName) => {
     const holder = data.holders?.find((item) => item.nombre === holderName)
     const wallet = data.wallets?.find((item) => item.nombre === walletName)
-    const currentValue = draft.accounts.availability?.[holderName]?.[walletName] ?? true
-    const nextValue = !currentValue
 
     if (!holder || !wallet || !data.shift?.id || !data.shift?.caja_id) {
-      setDraft((current) => ({
-        ...current,
-        accounts: {
-          ...current.accounts,
-          availability: {
-            ...(current.accounts.availability || {}),
-            [holderName]: {
-              ...((current.accounts.availability || {})[holderName] || {}),
-              [walletName]: nextValue,
-            },
-          },
-        },
-      }))
       return
     }
 
@@ -422,6 +407,8 @@ function LiveSettings({ data, setToast, onSaved }) {
       const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
       return accountHolder === holderName && accountWallet === walletName
     })
+
+    const nextValue = !Boolean(existingAccount)
 
     try {
       const accountRecord = existingAccount?.cuentas || await createAccount({
@@ -434,32 +421,17 @@ function LiveSettings({ data, setToast, onSaved }) {
         typeId: data.accountTypes?.[0]?.id ?? undefined,
       })
 
-      const accountId = accountRecord.id
-
       await setAccountAvailability({
         shiftId: data.shift.id,
         boxId: data.shift.caja_id,
-        accountId,
+        accountId: accountRecord.id,
         enabled: nextValue,
         value: existingAccount?.valor ?? 0,
         canCollect: true,
         canWithdraw: true,
       })
 
-      setDraft((current) => ({
-        ...current,
-        accounts: {
-          ...current.accounts,
-          availability: {
-            ...(current.accounts.availability || {}),
-            [holderName]: {
-              ...((current.accounts.availability || {})[holderName] || {}),
-              [walletName]: nextValue,
-            },
-          },
-        },
-      }))
-      onSaved?.()
+      await onSaved?.()
       setToast(nextValue ? 'Cuenta activada en la base de datos' : 'Cuenta desactivada en la base de datos')
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
@@ -545,7 +517,11 @@ function LiveSettings({ data, setToast, onSaved }) {
       <b>{holderName}</b>
       {draft.accounts.wallets.map((wallet) => {
         const walletName = wallet || 'Sin billetera'
-        const enabled = draft.accounts.availability?.[holderName]?.[walletName] !== false
+        const enabled = Boolean((data.accounts || []).find((account) => {
+          const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
+          const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+          return accountHolder === holderName && accountWallet === walletName
+        }))
         return <div className="account-config-cell" key={`${holderName}-${walletName}`}>
           <label className="toggle-cell" aria-label={`Activar ${holderName} · ${walletName}`}>
             <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />
