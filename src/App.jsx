@@ -424,12 +424,17 @@ function LiveSettings({ data, setToast, onSaved }) {
     })
 
     try {
-      const accountId = existingAccount?.cuenta_id ?? (await createAccount({
+      const accountRecord = existingAccount?.cuentas || await createAccount({
         holderId: holder.id,
         walletId: wallet.id,
-        alias: `${holderName} · ${walletName}`,
+        alias: '',
+        cuil: '',
+        password: '',
+        notes: '',
         typeId: data.accountTypes?.[0]?.id ?? undefined,
-      })).id
+      })
+
+      const accountId = accountRecord.id
 
       await setAccountAvailability({
         shiftId: data.shift.id,
@@ -454,20 +459,81 @@ function LiveSettings({ data, setToast, onSaved }) {
           },
         },
       }))
+      onSaved?.()
+      setToast(nextValue ? 'Cuenta activada en la base de datos' : 'Cuenta desactivada en la base de datos')
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
     }
   }
 
-  const buildTargetSetting = (holderName, walletName) => ({
-    holder: holderName,
-    wallet: walletName,
-    category: 'Normal',
-    alias: `${holderName} · ${walletName}`,
-    cuil: '',
-    password: '',
-    note: '',
-  })
+  const buildTargetSetting = (holderName, walletName) => {
+    const existingAccount = (data.accounts || []).find((account) => {
+      const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
+      const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+      return accountHolder === holderName && accountWallet === walletName
+    })
+
+    const account = existingAccount?.cuentas || null
+    return {
+      holder: holderName,
+      wallet: walletName,
+      accountId: account?.id || existingAccount?.cuenta_id || null,
+      typeId: account?.tipo_cuenta_id || data.accountTypes?.[0]?.id || '',
+      alias: account?.alias || '',
+      cuil: account?.cuil || '',
+      password: account?.patron || '',
+      note: account?.notas || '',
+    }
+  }
+
+  const saveAccountSettings = async () => {
+    if (!selected) return
+    try {
+      const holder = data.holders?.find((item) => item.nombre === selected.holder)
+      const wallet = data.wallets?.find((item) => item.nombre === selected.wallet)
+
+      if (!holder || !wallet) {
+        setToast('No se encontró el titular o la billetera de esta cuenta')
+        return
+      }
+
+      const payload = {
+        alias: selected.alias || '',
+        cuil: selected.cuil || '',
+        password: selected.password || '',
+        notes: selected.note || '',
+        typeId: selected.typeId || data.accountTypes?.[0]?.id || null,
+      }
+
+      if (!selected.accountId) {
+        const account = await createAccount({
+          holderId: holder.id,
+          walletId: wallet.id,
+          ...payload,
+        })
+
+        if (data.shift?.id && data.shift?.caja_id) {
+          await setAccountAvailability({
+            shiftId: data.shift.id,
+            boxId: data.shift.caja_id,
+            accountId: account.id,
+            enabled: true,
+            value: 0,
+            canCollect: true,
+            canWithdraw: true,
+          })
+        }
+      } else {
+        await updateAccount(selected.accountId, payload)
+      }
+
+      setSelected(null)
+      onSaved?.()
+      setToast('Cuenta guardada en Supabase')
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar la cuenta')
+    }
+  }
 
   const renderTabButton = (id, label, Icon) => (
     <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon size={15} /> {label}</button>
@@ -512,7 +578,6 @@ function LiveSettings({ data, setToast, onSaved }) {
       <section className="settings-intro">
         <span className="eyebrow">Configuración</span>
         <h2>{tab === 'boxes' ? 'Cajas' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : 'Objetivos'}</h2>
-        <p>Completá la configuración del turno y dejá listo el entorno para operar con cajas, cuentas, plataformas y objetivos según la lógica de negocio del sistema.</p>
       </section>
 
       {tab === 'boxes' && <>
@@ -871,21 +936,25 @@ function LiveSettings({ data, setToast, onSaved }) {
             <h2>{selected.holder} · {selected.wallet}</h2>
             <p>Datos del titular y la billetera para esta cuenta operativa.</p>
             <div className="account-settings-fields">
-              <label><span>Alias</span><input value={selected.alias} onChange={(event) => setSelected((current) => ({ ...current, alias: event.target.value }))} /></label>
-              <label><span>CUIL</span><input value={selected.cuil} onChange={(event) => setSelected((current) => ({ ...current, cuil: event.target.value }))} /></label>
-              <label><span>Contraseña</span><input value={selected.password} onChange={(event) => setSelected((current) => ({ ...current, password: event.target.value }))} /></label>
-              <label><span>Tipo de billetera</span>
-                <select value={selected.category} onChange={(event) => setSelected((current) => ({ ...current, category: event.target.value }))}>
-                  <option>Normal</option>
-                  <option>Depósitos</option>
-                  <option>Compartidas</option>
-                  <option>Ahorro</option>
-                </select>
-              </label>
-              <label className="account-settings-note"><span>Nota</span><textarea rows="4" value={selected.note} onChange={(event) => setSelected((current) => ({ ...current, note: event.target.value }))} /></label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <label><span>Alias</span><input value={selected.alias || ''} onChange={(event) => setSelected((current) => ({ ...current, alias: event.target.value }))} /></label>
+                <label><span>CUIL</span><input value={selected.cuil || ''} onChange={(event) => setSelected((current) => ({ ...current, cuil: event.target.value }))} /></label>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <label><span>Contraseña</span><input value={selected.password || ''} onChange={(event) => setSelected((current) => ({ ...current, password: event.target.value }))} /></label>
+                <label><span>Tipo de cuenta</span>
+                  <select value={selected.typeId || ''} onChange={(event) => setSelected((current) => ({ ...current, typeId: event.target.value }))}>
+                    <option value="">Seleccionar</option>
+                    {(data.accountTypes || []).map((type) => (
+                      <option value={type.id} key={type.id}>{type.nombre}</option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label className="account-settings-note"><span>Nota</span><textarea rows="4" value={selected.note || ''} onChange={(event) => setSelected((current) => ({ ...current, note: event.target.value }))} /></label>
             </div>
             <div className="modal-actions">
-              <button type="button" className="close-button" onClick={() => setSelected(null)}>Listo <Check size={16} /></button>
+              <button type="button" className="close-button" onClick={saveAccountSettings}>Listo <Check size={16} /></button>
             </div>
           </div>
         </div>

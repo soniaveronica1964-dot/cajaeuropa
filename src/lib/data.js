@@ -47,7 +47,7 @@ export async function loadCurrentShiftData(boxId = null) {
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
   const accounts = accountIds.length
-    ? await query('cuentas', 'id, alias, titular_id, billetera_id, titulares(nombre), billeteras(nombre)', request => request.in('id', accountIds))
+    ? await query('cuentas', 'id, alias, cuil, patron, notas, tipo_cuenta_id, titular_id, billetera_id, titulares(nombre), billeteras(nombre)', request => request.in('id', accountIds))
     : []
   const accountById = new Map(accounts.map(account => [account.id, account]))
   const linkedAccounts = accountLinks.map(link => ({ ...link, cuentas: accountById.get(link.cuenta_id) || null }))
@@ -390,7 +390,7 @@ export async function getDefaultAccountTypeId() {
   return data.id
 }
 
-export async function createAccount({ holderId, walletId, alias = null, cuil = null, notes = null, typeId = null }) {
+export async function createAccount({ holderId, walletId, alias = null, cuil = null, password = null, notes = null, typeId = null }) {
   requireSupabase()
   const resolvedTypeId = typeId ?? await getDefaultAccountTypeId()
   const { data, error } = await supabase.from('cuentas').upsert({
@@ -398,6 +398,7 @@ export async function createAccount({ holderId, walletId, alias = null, cuil = n
     billetera_id: walletId,
     alias: alias?.trim() || null,
     cuil: cuil?.trim() || null,
+    patron: password?.trim() || null,
     notas: notes?.trim() || null,
     tipo_cuenta_id: resolvedTypeId,
   }, { onConflict: 'titular_id,billetera_id' }).select().single()
@@ -405,11 +406,12 @@ export async function createAccount({ holderId, walletId, alias = null, cuil = n
   return data
 }
 
-export async function updateAccount(id, { alias = null, cuil = null, notes = null, typeId = null }) {
+export async function updateAccount(id, { alias = null, cuil = null, password = null, notes = null, typeId = null }) {
   requireSupabase()
   const payload = {
     alias: alias?.trim() || null,
     cuil: cuil?.trim() || null,
+    patron: password?.trim() || null,
     notas: notes?.trim() || null,
   }
   if (typeId !== null && typeId !== undefined) payload.tipo_cuenta_id = Number(typeId)
