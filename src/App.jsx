@@ -602,6 +602,11 @@ function LiveSettings({ data, setToast, onSaved }) {
     }
   }
 
+  const addBlankConfigItem = (type) => {
+    const key = type === 'holders' ? 'holders' : 'wallets'
+    updateAccounts({ [key]: [...(draft.accounts?.[key] || []), ''] })
+  }
+
   const renderTabButton = (id, label, Icon) => (
     <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon size={15} /> {label}</button>
   )
@@ -770,6 +775,10 @@ function LiveSettings({ data, setToast, onSaved }) {
                   onBlur={async (event) => {
                     const value = event.target.value.trim()
                     if (!value) return
+                    if (value.toLowerCase() === 'nuevo titular') {
+                      setToast('Ingresá un nombre real para el titular')
+                      return
+                    }
                     const target = resolveBySnapshot('holders', index, holder)
                     if (!target) {
                       const created = await createHolder({ name: value })
@@ -794,12 +803,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                 }}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="config-add" onClick={async () => {
-              await persistUpdate(async () => {
-                const created = await createHolder({ name: 'Nuevo titular' })
-                updateAccounts({ holders: [...draft.accounts.holders, created.nombre] })
-              }, 'Titular creado')
-            }}><Plus size={15} /> Agregar titular</button>
+            <button type="button" className="config-add" onClick={() => addBlankConfigItem('holders')}><Plus size={15} /> Agregar titular</button>
           </div>
 
           <div className="config-list">
@@ -827,6 +831,10 @@ function LiveSettings({ data, setToast, onSaved }) {
                   onBlur={async (event) => {
                     const value = event.target.value.trim()
                     if (!value) return
+                    if (value.toLowerCase() === 'nueva billetera') {
+                      setToast('Ingresá un nombre real para la billetera')
+                      return
+                    }
                     const target = resolveBySnapshot('wallets', index, wallet)
                     if (!target) {
                       const created = await createWallet({ name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' })
@@ -863,12 +871,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                 }}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="config-add" onClick={async () => {
-              await persistUpdate(async () => {
-                const created = await createWallet({ name: 'Nueva billetera', typeName: 'Cobros y retiros' })
-                updateAccounts({ wallets: [...draft.accounts.wallets, created.nombre] })
-              }, 'Billetera creada')
-            }}><Plus size={15} /> Agregar billetera</button>
+            <button type="button" className="config-add" onClick={() => addBlankConfigItem('wallets')}><Plus size={15} /> Agregar billetera</button>
           </div>
         </div>
 

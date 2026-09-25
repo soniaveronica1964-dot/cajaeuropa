@@ -177,6 +177,11 @@ function normalizeEntityName(value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ')
 }
 
+function isReservedPlaceholderName(value) {
+  const normalized = normalizeEntityName(value).toLowerCase()
+  return normalized === 'nuevo titular' || normalized === 'nueva billetera'
+}
+
 function nextAvailableOrderNumber(rows = []) {
   const numbers = rows
     .map((row) => Number(row.orden_num))
@@ -232,6 +237,7 @@ export async function createHolder({ name }) {
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
   if (!trimmedName) throw new Error('El nombre del titular no puede estar vacío')
+  if (isReservedPlaceholderName(trimmedName)) throw new Error('Ingresá un nombre real para el titular')
 
   const { data: activeRows = [], error: listError } = await supabase
     .from('titulares')
@@ -268,6 +274,7 @@ export async function updateHolder(id, { name, orderNum = null }) {
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
   if (!trimmedName) throw new Error('El nombre del titular no puede estar vacío')
+  if (isReservedPlaceholderName(trimmedName)) throw new Error('Ingresá un nombre real para el titular')
 
   const { data: activeRows = [], error: listError } = await supabase
     .from('titulares')
@@ -322,6 +329,7 @@ export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
   if (!trimmedName) throw new Error('El nombre de la billetera no puede estar vacío')
+  if (isReservedPlaceholderName(trimmedName)) throw new Error('Ingresá un nombre real para la billetera')
 
   const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).limit(1).maybeSingle()
   if (typeError) throw typeError
@@ -367,6 +375,7 @@ export async function updateWallet(id, { name, typeName = 'Cobros y retiros', or
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
   if (!trimmedName) throw new Error('El nombre de la billetera no puede estar vacío')
+  if (isReservedPlaceholderName(trimmedName)) throw new Error('Ingresá un nombre real para la billetera')
 
   const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).limit(1).maybeSingle()
   if (typeError) throw typeError
