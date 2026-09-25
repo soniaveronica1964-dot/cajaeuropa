@@ -33,8 +33,11 @@ import {
   createAccount,
   createAccountType,
   createBonusCondition,
+  createColor,
   createBox,
+  createDayShifts,
   createDayShift,
+  createShift,
   createExpense,
   createExpenseType,
   createHolder,
@@ -46,6 +49,7 @@ import {
   createWallet,
   deleteAccountType,
   deleteBonusCondition,
+  deleteColor,
   deleteBox,
   deleteDayShift,
   deleteWalletType,
@@ -54,6 +58,7 @@ import {
   deletePlatform,
   deleteShiftType,
   deleteWallet,
+  closeShift,
   formatDatabase,
   loadCurrentShiftData,
   saveAppConfig,
@@ -62,6 +67,7 @@ import {
   updateAccountType,
   updateAccountValue,
   updateAdvertisingLine,
+  updateColor,
   updateWalletType,
   updateBonusCondition,
   updateBox,
@@ -335,6 +341,10 @@ function LiveSettings({ data, setToast, onSaved }) {
   const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
   const [localData, setLocalData] = useState(data)
   const [formatting, setFormatting] = useState(false)
+  const [selectedWeekdays, setSelectedWeekdays] = useState([])
+  const [dayDraft, setDayDraft] = useState({ typeId: '', name: '', start: '08:00', end: '18:00', crossesMidnight: false })
+  const [turnDraft, setTurnDraft] = useState({ dayId: '', initialAmount: '0' })
+  const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
 
   useEffect(() => {
     setLocalData(data)
@@ -345,6 +355,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       await action()
       const fresh = await refreshLocalData()
       setLocalData(fresh)
+      onSaved()
       setToast(successMessage)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la configuración')
@@ -793,42 +804,75 @@ function LiveSettings({ data, setToast, onSaved }) {
           <section className="config-card">
             <div className="config-list-head"><h3>Tipos de turno</h3><span>{(data.shiftTypes || []).length} registros</span></div>
             {(data.shiftTypes || []).map((type) => (
-              <div className="config-list-row" key={type.id}>
+              <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
                 <input value={type.nombre || ''} onChange={async (event) => {
                   const next = event.target.value.trim()
                   if (!next) return
-                  await persistUpdate(() => updateShiftType(type.id, { name: next, color: 'teal' }), 'Tipo de turno actualizado en Supabase')
+                  await persistUpdate(() => updateShiftType(type.id, { name: next, colorId: type.color_id }), 'Tipo de turno actualizado en Supabase')
                 }} placeholder="Nombre del tipo" />
+                <select value={type.color_id || ''} onChange={(event) => persistUpdate(() => updateShiftType(type.id, { name: type.nombre || 'Tipo de turno', colorId: event.target.value || null }), 'Color de tipo de turno actualizado')}>
+                  <option value="">Sin color</option>
+                  {(data.colors || []).map((color) => <option value={color.id} key={color.id}>{color.nombre}</option>)}
+                </select>
                 <button type="button" className="delete-button" title="Eliminar tipo de turno" onClick={() => persistUpdate(() => deleteShiftType(type.id), 'Tipo de turno eliminado de Supabase')}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="config-add" onClick={() => persistUpdate(() => createShiftType({ boxId: data.boxes?.[0]?.id || null, name: 'Nuevo turno', color: 'teal' }), 'Tipo de turno creado en Supabase')}><Plus size={15} /> Agregar tipo de turno</button>
+            <button type="button" className="config-add" onClick={() => persistUpdate(() => createShiftType({ boxId: data.boxes?.[0]?.id || null, name: 'Nuevo turno', colorId: data.colors?.[0]?.id || null }), 'Tipo de turno creado en Supabase')}><Plus size={15} /> Agregar tipo de turno</button>
           </section>
 
           <section className="config-card">
-            <div className="config-list-head"><h3>Días de turno</h3><span>{(data.shiftDays || []).length} registros</span></div>
-            {(data.shiftDays || []).map((day) => (
-              <div className="config-list-row" key={day.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr 1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
-                <input value={day.nombre || ''} onChange={async (event) => {
-                  const next = event.target.value.trim()
-                  if (!next) return
-                  await persistUpdate(() => updateDayShift(day.id, { name: next, weekday: day.dia_semana || 1, start: day.hora_inicio || '08:00', end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Día de turno actualizado en Supabase')
-                }} placeholder="Nombre del día" />
-                <input type="number" min="1" max="7" value={day.dia_semana || 1} onChange={async (event) => {
-                  await persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: Number(event.target.value), start: day.hora_inicio || '08:00', end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Orden del día actualizado en Supabase')
-                }} />
-                <input type="time" value={day.hora_inicio || '08:00'} onChange={async (event) => {
-                  await persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana || 1, start: event.target.value, end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de inicio actualizada en Supabase')
-                }} />
-                <input type="time" value={day.hora_fin || '18:00'} onChange={async (event) => {
-                  await persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana || 1, start: day.hora_inicio || '08:00', end: event.target.value, crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de fin actualizada en Supabase')
-                }} />
-                <button type="button" className="delete-button" title="Eliminar día" onClick={() => persistUpdate(() => deleteDayShift(day.id), 'Día de turno eliminado de Supabase')}><X size={14} /></button>
-              </div>
-            ))}
-            <button type="button" className="config-add" onClick={() => persistUpdate(() => createDayShift({ typeId: data.shiftTypes?.[0]?.id || null, name: 'Nuevo día', weekday: 1, start: '08:00', end: '18:00', crossesMidnight: false }), 'Día de turno creado en Supabase')}><Plus size={15} /> Agregar día</button>
+            <div className="config-list-head"><h3>Crear días de turno</h3><span>Un registro por cada día seleccionado</span></div>
+            <div className="setup-fields">
+              <label>Tipo de turno<select value={dayDraft.typeId} onChange={(event) => setDayDraft(current => ({ ...current, typeId: event.target.value }))}><option value="">Seleccionar tipo</option>{(data.shiftTypes || []).map(type => <option value={type.id} key={type.id}>{type.nombre}</option>)}</select></label>
+              <label>Nombre<input value={dayDraft.name} onChange={(event) => setDayDraft(current => ({ ...current, name: event.target.value }))} placeholder="Ej. Horario habitual" /></label>
+              <label>Inicio<input type="time" value={dayDraft.start} onChange={(event) => setDayDraft(current => ({ ...current, start: event.target.value }))} /></label>
+              <label>Fin<input type="time" value={dayDraft.end} onChange={(event) => setDayDraft(current => ({ ...current, end: event.target.value }))} /></label>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', margin: '12px 0', flexWrap: 'wrap' }}>{weekdayLabels.map((label, index) => <button type="button" key={label} className={selectedWeekdays.includes(index + 1) ? 'primary-button' : 'secondary-button'} onClick={() => setSelectedWeekdays(current => current.includes(index + 1) ? current.filter(day => day !== index + 1) : [...current, index + 1])}>{label}</button>)}</div>
+            <label className="toggle-cell"><span>Cruza medianoche</span><input type="checkbox" checked={dayDraft.crossesMidnight} onChange={(event) => setDayDraft(current => ({ ...current, crossesMidnight: event.target.checked }))} /></label>
+            <button type="button" className="config-add" onClick={() => persistUpdate(async () => {
+              if (!dayDraft.typeId || !dayDraft.name.trim() || !selectedWeekdays.length) throw new Error('Seleccioná tipo, nombre y al menos un día')
+              await createDayShifts({ typeId: dayDraft.typeId, name: dayDraft.name, weekdays: selectedWeekdays, start: dayDraft.start, end: dayDraft.end, crossesMidnight: dayDraft.crossesMidnight })
+              setSelectedWeekdays([])
+            }, 'Días de turno creados en Supabase')}><Plus size={15} /> Crear días seleccionados</button>
           </section>
         </div>
+
+        <section className="config-card">
+          <div className="config-list-head"><h3>Días configurados</h3><span>{(data.shiftDays || []).length} registros</span></div>
+          {(data.shiftDays || []).map((day) => <div className="config-list-row" key={day.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto auto auto auto', gap: '8px', alignItems: 'center' }}>
+            <span><strong>{(data.shiftTypes || []).find(type => type.id === day.tipo_turno_id)?.nombre || 'Tipo de turno'}</strong><br /><small>{day.nombre}</small></span>
+            <b>{weekdayLabels[(day.dia_semana || 1) - 1] || '?'}</b>
+            <input type="time" value={day.hora_inicio || '08:00'} onChange={(event) => persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: event.target.value, end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de inicio actualizada')} />
+            <input type="time" value={day.hora_fin || '18:00'} onChange={(event) => persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: day.hora_inicio || '08:00', end: event.target.value, crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de fin actualizada')} />
+            <label className="toggle-cell" title="Cruza medianoche"><input type="checkbox" checked={Boolean(day.cruza_medianoche)} onChange={(event) => persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: day.hora_inicio || '08:00', end: day.hora_fin || '18:00', crossesMidnight: event.target.checked }), 'Cruce de medianoche actualizado')} /><span /></label>
+            <button type="button" className="delete-button" title="Eliminar día" onClick={() => persistUpdate(() => deleteDayShift(day.id), 'Día de turno eliminado de Supabase')}><X size={14} /></button>
+          </div>)}
+          {!data.shiftDays?.length && <EmptyInline text="Todavía no hay días de turno configurados." />}
+        </section>
+
+        <section className="config-card" style={{ marginTop: '18px' }}>
+          <div className="config-list-head"><h3>Turnos activos</h3><span>{(data.activeTurns || []).length} abiertos</span></div>
+          <div className="setup-fields">
+            <label>Día configurado<select value={turnDraft.dayId} onChange={(event) => setTurnDraft(current => ({ ...current, dayId: event.target.value }))}><option value="">Seleccionar día</option>{(data.shiftDays || []).map(day => <option value={day.id} key={day.id}>{(data.shiftTypes || []).find(type => type.id === day.tipo_turno_id)?.nombre || 'Turno'} · {weekdayLabels[(day.dia_semana || 1) - 1]} · {day.nombre}</option>)}</select></label>
+            <label>Caja inicial<input type="number" min="0" step="0.01" value={turnDraft.initialAmount} onChange={(event) => setTurnDraft(current => ({ ...current, initialAmount: event.target.value }))} /></label>
+          </div>
+          <button type="button" className="config-add" onClick={() => persistUpdate(async () => {
+            if (!turnDraft.dayId) throw new Error('Seleccioná un día configurado')
+            await createShift({ dayId: turnDraft.dayId, initialAmount: turnDraft.initialAmount })
+            setTurnDraft({ dayId: '', initialAmount: '0' })
+          }, 'Turno abierto en Supabase')}><Plus size={15} /> Abrir turno</button>
+          {(data.activeTurns || []).map((turn) => <div className="config-list-row" key={turn.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px', alignItems: 'center' }}>
+            <span><strong>{turn.dias_turno?.tipos_turno?.nombre || 'Turno'}</strong><br /><small>{weekdayLabels[(turn.dias_turno?.dia_semana || 1) - 1]} · {turn.dias_turno?.nombre || 'Día'} · Caja inicial {money.format(turn.caja_inicial || 0)}</small></span>
+            <small>{new Date(turn.fecha_hora_inicio).toLocaleString('es-AR')}</small>
+            <button type="button" className="delete-button" title="Cerrar turno" onClick={() => {
+              const finalAmount = window.prompt('Caja final', String(turn.caja_inicial || 0))
+              if (finalAmount === null) return
+              persistUpdate(() => closeShift(turn.id, finalAmount), 'Turno cerrado')
+            }}><X size={14} /></button>
+          </div>)}
+          {!data.activeTurns?.length && <EmptyInline text="No hay turnos activos." />}
+        </section>
       </>}
 
       {tab === 'accounts' && <>
@@ -1187,6 +1231,15 @@ function LiveSettings({ data, setToast, onSaved }) {
             <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración visual guardada')} /></label>
             <label className="toggle-cell" aria-label="Singleton"><span>Singleton</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.singleton !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: !Boolean(data.appConfig?.[0]?.singleton !== false) }), 'Configuración singleton guardada')} /></label>
           </div>
+        </section>
+        <section className="config-card" style={{ marginTop: '18px' }}>
+          <div className="config-list-head"><h3>Colores</h3><span>{(data.colors || []).length} registros</span></div>
+          {(data.colors || []).map((color) => <div className="config-list-row" key={color.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+            <input value={color.nombre || ''} onChange={(event) => persistUpdate(() => updateColor(color.id, { name: event.target.value || 'Color', hex: color.hex || '#72D7CA' }), 'Nombre de color actualizado')} />
+            <input type="color" value={color.hex || '#72D7CA'} onChange={(event) => persistUpdate(() => updateColor(color.id, { name: color.nombre || 'Color', hex: event.target.value }), 'Color actualizado')} />
+            <button type="button" className="delete-button" title="Eliminar color" onClick={() => persistUpdate(() => deleteColor(color.id), 'Color eliminado')}><X size={14} /></button>
+          </div>)}
+          <button type="button" className="config-add" onClick={() => persistUpdate(() => createColor({ name: 'Nuevo color', hex: '#72D7CA' }), 'Color creado')}><Plus size={15} /> Agregar color</button>
         </section>
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(239, 136, 136, 0.5)' }}>
           <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Acción destructiva</span></div>
