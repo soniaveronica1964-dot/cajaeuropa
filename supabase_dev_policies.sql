@@ -41,6 +41,10 @@ ALTER TABLE objetivos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fichas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plataformas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cargas_fichas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE condiciones_bono ENABLE ROW LEVEL SECURITY;
+ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tipos_estado ENABLE ROW LEVEL SECURITY;
+ALTER TABLE estados ENABLE ROW LEVEL SECURITY;
 
 -- Lectura pública temporal para la app sin login.
 DO $$
@@ -77,17 +81,26 @@ BEGIN
 END $$;
 
 -- Escrituras mínimas usadas por los controles actuales.
-DROP POLICY IF EXISTS dev_update_turnos ON public.turnos;
-CREATE POLICY dev_update_turnos ON public.turnos
-  FOR UPDATE TO anon USING (true) WITH CHECK (true);
+DO $$
+DECLARE
+  table_name text;
+BEGIN
+  FOREACH table_name IN ARRAY ARRAY[
+    'cajas', 'turnos', 'dias_turno', 'tipos_turno', 'colores', 'tipos_billetera', 'tipos_cuenta',
+    'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja',
+    'cuentas_x_caja', 'lineas_publicidad', 'publicidad', 'lineas_bonos', 'bonos',
+    'propinas', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica', 'usuarios',
+    'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'paneles',
+    'subobjetivos_x_turno', 'subobjetivos', 'objetivos', 'fichas', 'plataformas', 'cargas_fichas',
+    'condiciones_bono', 'app_config', 'tipos_estado', 'estados', 'subplataformas'
+  ] LOOP
+    EXECUTE format('DROP POLICY IF EXISTS dev_update_%I ON public.%I', table_name, table_name);
+    EXECUTE format('CREATE POLICY dev_update_%I ON public.%I FOR UPDATE TO anon USING (true) WITH CHECK (true)', table_name, table_name);
 
-DROP POLICY IF EXISTS dev_update_cuentas_x_turno ON public.cuentas_x_turno;
-CREATE POLICY dev_update_cuentas_x_turno ON public.cuentas_x_turno
-  FOR UPDATE TO anon USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS dev_update_lineas_publicidad ON public.lineas_publicidad;
-CREATE POLICY dev_update_lineas_publicidad ON public.lineas_publicidad
-  FOR UPDATE TO anon USING (true) WITH CHECK (true);
+    EXECUTE format('DROP POLICY IF EXISTS dev_delete_%I ON public.%I', table_name, table_name);
+    EXECUTE format('CREATE POLICY dev_delete_%I ON public.%I FOR DELETE TO anon USING (true)', table_name, table_name);
+  END LOOP;
+END $$;
 
 COMMIT;
 

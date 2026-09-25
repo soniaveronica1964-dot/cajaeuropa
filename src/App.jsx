@@ -332,7 +332,6 @@ function LiveSettings({ data, setToast, onSaved }) {
     try {
       await action()
       setSaveNotice(successMessage)
-      onSaved?.()
       window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la configuración')
@@ -516,7 +515,6 @@ function LiveSettings({ data, setToast, onSaved }) {
       }
 
       setSaveNotice(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
-      onSaved?.()
       window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setDraft((current) => ({
@@ -599,7 +597,6 @@ function LiveSettings({ data, setToast, onSaved }) {
 
       setSelected(null)
       setSaveNotice('Cuenta guardada')
-      onSaved?.()
       window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
