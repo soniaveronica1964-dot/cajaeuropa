@@ -249,7 +249,7 @@ export async function createHolder({ name }) {
       .update({ nombre: trimmedName, is_off: false, orden_num: Number(existing.orden_num) || nextAvailableOrderNumber(activeRows) })
       .eq('id', existing.id)
       .select()
-      .single()
+      .maybeSingle()
     if (error) throw error
     return data
   }
@@ -258,7 +258,7 @@ export async function createHolder({ name }) {
     .from('titulares')
     .insert({ nombre: trimmedName, orden_num: nextAvailableOrderNumber(activeRows), is_off: false })
     .select()
-    .single()
+    .maybeSingle()
 
   if (error) throw error
   return data
@@ -289,7 +289,7 @@ export async function updateHolder(id, { name, orderNum = null }) {
     .update({ nombre: trimmedName, orden_num: nextOrder, is_off: false })
     .eq('id', id)
     .select()
-    .single()
+    .maybeSingle()
 
   if (error) throw error
   return data
@@ -311,7 +311,7 @@ export async function deleteHolder(id) {
     .update({ is_off: true })
     .eq('id', id)
     .select()
-    .single()
+    .maybeSingle()
 
   if (error) throw error
 
@@ -329,7 +329,7 @@ export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
   if (typeError) throw typeError
   let typeId = typeRow?.id
   if (!typeId) {
-    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true }).select('id').single()
+    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true }).select('id').maybeSingle()
     if (createdTypeError) throw createdTypeError
     typeId = createdType.id
   }
@@ -350,7 +350,7 @@ export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
       .update({ nombre: trimmedName, is_off: false, orden_num: Number(existing.orden_num) || nextAvailableOrderNumber(activeRows), tipo_billetera_id: typeId })
       .eq('id', existing.id)
       .select()
-      .single()
+      .maybeSingle()
     if (error) throw error
     return data
   }
@@ -359,7 +359,7 @@ export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
     .from('billeteras')
     .insert({ nombre: trimmedName, orden_num: nextAvailableOrderNumber(activeRows), tipo_billetera_id: typeId, is_off: false })
     .select()
-    .single()
+    .maybeSingle()
 
   if (error) throw error
   return data
@@ -374,7 +374,7 @@ export async function updateWallet(id, { name, typeName = 'Cobros y retiros', or
   if (typeError) throw typeError
   let typeId = typeRow?.id
   if (!typeId) {
-    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true }).select('id').single()
+    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true }).select('id').maybeSingle()
     if (createdTypeError) throw createdTypeError
     typeId = createdType.id
   }
@@ -399,7 +399,7 @@ export async function updateWallet(id, { name, typeName = 'Cobros y retiros', or
     .update({ nombre: trimmedName, orden_num: nextOrder, tipo_billetera_id: typeId, is_off: false })
     .eq('id', id)
     .select()
-    .single()
+    .maybeSingle()
 
   if (error) throw error
   return data
@@ -421,7 +421,7 @@ export async function deleteWallet(id) {
     .update({ is_off: true })
     .eq('id', id)
     .select()
-    .single()
+    .maybeSingle()
 
   if (error) throw error
 

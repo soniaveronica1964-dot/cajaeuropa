@@ -716,7 +716,7 @@ function LiveSettings({ data, setToast, onSaved }) {
           <div className="config-list">
             <div className="config-list-head"><h3>Titulares</h3><span>{draft.accounts.holders.length} elementos</span></div>
             {draft.accounts.holders.map((holder, index) => (
-              <div className="config-list-row" key={`${holder}-${index}`} draggable onDragStart={() => setDragState({ type: 'holders', index })} onDragOver={(event) => event.preventDefault()} onDrop={async () => { await reorderAccountEntries('holders', dragState.index, index); setDragState({ type: null, index: null }) }} onDragEnd={() => setDragState({ type: null, index: null })}>
+              <div className="config-list-row" key={`holder-row-${index}`} draggable onDragStart={() => setDragState({ type: 'holders', index })} onDragOver={(event) => event.preventDefault()} onDrop={async () => { await reorderAccountEntries('holders', dragState.index, index); setDragState({ type: null, index: null }) }} onDragEnd={() => setDragState({ type: null, index: null })}>
                 <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
                 <input value={holder} onChange={(event) => {
                   const next = [...draft.accounts.holders]
@@ -758,7 +758,7 @@ function LiveSettings({ data, setToast, onSaved }) {
           <div className="config-list">
             <div className="config-list-head"><h3>Billeteras</h3><span>{draft.accounts.wallets.length} elementos</span></div>
             {draft.accounts.wallets.map((wallet, index) => (
-              <div className="wallet-config-row" key={`${wallet}-${index}`} draggable onDragStart={() => setDragState({ type: 'wallets', index })} onDragOver={(event) => event.preventDefault()} onDrop={async () => { await reorderAccountEntries('wallets', dragState.index, index); setDragState({ type: null, index: null }) }} onDragEnd={() => setDragState({ type: null, index: null })}>
+              <div className="wallet-config-row" key={`wallet-row-${index}`} draggable onDragStart={() => setDragState({ type: 'wallets', index })} onDragOver={(event) => event.preventDefault()} onDrop={async () => { await reorderAccountEntries('wallets', dragState.index, index); setDragState({ type: null, index: null }) }} onDragEnd={() => setDragState({ type: null, index: null })}>
                 <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
                 <input value={wallet} onChange={(event) => {
                   const next = [...draft.accounts.wallets]
