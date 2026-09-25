@@ -186,50 +186,38 @@ function SetupWizard({ onCreated, setToast }) {
   const [wallets, setWallets] = useState('')
   const [saving, setSaving] = useState(false)
 
+  async function createSetup(values, successMessage, errorMessage) {
+    setSaving(true)
+    try {
+      await createInitialSetup(values)
+      setToast(successMessage)
+      onCreated()
+    } catch (error) {
+      setToast(error.message || errorMessage)
+    } finally {
+      setSaving(false)
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     const holderNames = holders.split(',').map(value => value.trim()).filter(Boolean)
     const walletNames = wallets.split(',').map(value => value.trim()).filter(Boolean)
-    if (!boxName.trim() || !shiftName.trim() || !holderNames.length || !walletNames.length) {
     if (!boxName.trim() || !holderNames.length || !walletNames.length) {
       setToast('Completá caja, titulares y billeteras')
       return
-      await createInitialSetup({ boxName: boxName.trim(), holderNames, walletNames, createShift: false })
     }
-    setSaving(true)
-    try {
-      await createInitialSetup({ boxName: boxName.trim(), shiftName: shiftName.trim(), startTime, endTime, holderNames, walletNames, initialAmount })
-      setToast('Configuración inicial creada en Supabase')
-      onCreated()
-    } catch (error) {
-      setToast(error.message || 'No se pudo crear la configuración inicial')
-    } finally {
-      setSaving(false)
-    }
+    await createSetup({ boxName: boxName.trim(), holderNames, walletNames, createShift: false }, 'Configuración inicial creada en Supabase', 'No se pudo crear la configuración inicial')
   }
 
-  async function handleBasicSetup() {
-    setSaving(true)
-    try {
-      await createInitialSetup({
-      await createInitialSetup({ boxName: 'Caja principal', holderNames: ['Titular inicial'], walletNames: ['Billetera principal'], createShift: false })
-      setToast('Configuración básica creada en Supabase')
-      onCreated()
-    } catch (error) {
-      setToast(error.message || 'No se pudo crear la configuración básica')
-    } finally {
-      setSaving(false)
-    }
-  }
+  const handleBasicSetup = () => createSetup({ boxName: 'Caja principal', holderNames: ['Titular inicial'], walletNames: ['Billetera principal'], createShift: false }, 'Configuración básica creada en Supabase', 'No se pudo crear la configuración básica')
 
   return <section className="setup-page">
-    <div className="setup-intro"><span className="eyebrow">Primer acceso</span><h2>Configurá tu primera caja</h2><p>Estos datos se van a guardar en Supabase y después vas a poder editarlos desde Configuración.</p></div>
+    <div className="setup-intro"><span className="eyebrow">Primer acceso</span><h2>Configurá la base de tu caja</h2><p>Los turnos, horarios y montos iniciales se configuran después.</p></div>
     <form className="panel setup-form" onSubmit={handleSubmit}>
-      <div className="setup-section"><h3>Turno y caja</h3><div className="setup-fields"><label>Nombre de la caja<input value={boxName} onChange={event => setBoxName(event.target.value)} placeholder="Ej. Noruega" /></label><label>Nombre del turno<input value={shiftName} onChange={event => setShiftName(event.target.value)} placeholder="Ej. Turno noche" /></label><label>Hora de inicio<input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} /></label><label>Hora de fin<input type="time" value={endTime} onChange={event => setEndTime(event.target.value)} /></label><label>Monto inicial<input type="number" min="0" step="0.01" value={initialAmount} onChange={event => setInitialAmount(event.target.value)} /></label></div></div>
-        <div className="setup-section"><h3>Caja</h3><div className="setup-fields"><label>Nombre de la caja<input value={boxName} onChange={event => setBoxName(event.target.value)} placeholder="Ej. Noruega" /></label></div></div>
+      <div className="setup-section"><h3>Caja</h3><div className="setup-fields"><label>Nombre de la caja<input value={boxName} onChange={event => setBoxName(event.target.value)} placeholder="Ej. Noruega" /></label></div></div>
       <div className="setup-section"><h3>Catálogos iniciales</h3><div className="setup-fields"><label className="full-field">Titulares, separados por coma<textarea value={holders} onChange={event => setHolders(event.target.value)} placeholder="Ej. Persona 1, Persona 2" /></label><label className="full-field">Billeteras, separadas por coma<textarea value={wallets} onChange={event => setWallets(event.target.value)} placeholder="Ej. Billetera 1, Billetera 2" /></label></div></div>
-      <div className="setup-actions"><small>Se crearán también las cuentas operativas y sus vínculos con el turno.</small><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="secondary-button" type="button" onClick={handleBasicSetup} disabled={saving}>Crear configuración básica</button><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando...' : 'Crear configuración'}</button></div></div>
-      <div className="setup-actions"><small>Se crearán los catálogos básicos, las cuentas y sus vínculos. Los turnos se configuran después.</small><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="secondary-button" type="button" onClick={handleBasicSetup} disabled={saving}>Crear configuración básica</button><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando...' : 'Crear configuración'}</button></div></div>
+      <div className="setup-actions"><small>Se crearán la app, los tipos básicos, las cuentas y sus vínculos con la caja.</small><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="secondary-button" type="button" onClick={handleBasicSetup} disabled={saving}>Crear configuración básica</button><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando...' : 'Crear configuración'}</button></div></div>
     </form>
   </section>
 }
