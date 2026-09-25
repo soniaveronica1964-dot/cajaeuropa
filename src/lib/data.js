@@ -38,8 +38,8 @@ export async function loadCurrentShiftData(boxId = null) {
     query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(nombre), telefonos_usuario(numero), titulares_usuario(nombre), paneles_x_usuario(paneles(nombre))', request => request.order('fecha_creacion', { ascending: false })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
     query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id)),
-    query('titulares', 'id, nombre, orden_num'),
-    query('billeteras', 'id, nombre, orden_num, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)'),
+    query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
+    query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('plataformas', 'id, nombre, caja_id, color_id'),
     query('condiciones_bono', 'id, nombre, plataforma'),
     query('tipos_cuenta', 'id, nombre, es_compartido, es_publicidad, cobros, retiros, ahorro'),
@@ -60,8 +60,8 @@ export async function loadCurrentShiftData(boxId = null) {
 export async function loadConfigurationData() {
   const [boxes, holders, wallets, walletTypes, accountTypes, expenses, platforms, bonusConditions, states, shiftTypes, shiftDays, appConfig] = await Promise.all([
     query('cajas', 'id, nombre, imagen, imagen_mini, color_id, es_publicidad'),
-    query('titulares', 'id, nombre, orden_num'),
-    query('billeteras', 'id, nombre, orden_num, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)'),
+    query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
+    query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('tipos_billetera', 'id, nombre, cobros, retiros'),
     query('tipos_cuenta', 'id, nombre, es_compartido, es_publicidad, cobros, retiros, ahorro'),
     query('tipos_gasto', 'id, nombre, invertir_signo'),
@@ -173,28 +173,158 @@ export async function deleteBox(id) {
   if (error) throw error
 }
 
+function normalizeEntityName(value) {
+  return String(value ?? '').trim().replace(/\s+/g, ' ')
+}
+
+function nextAvailableOrderNumber(rows = []) {
+  const numbers = rows
+    .map((row) => Number(row.orden_num))
+    .filter((value) => Number.isFinite(value) && value > 0)
+
+  const unique = new Set(numbers)
+  let index = 1
+  while (unique.has(index)) index += 1
+  return index
+}
+
+async function reindexEntityOrders(table, rows = []) {
+  requireSupabase()
+  const ordered = [...rows]
+    .filter((row) => !Boolean(row.is_off))
+    .sort((left, right) => {
+      const leftValue = Number(left.orden_num) || Number.MAX_SAFE_INTEGER
+      const rightValue = Number(right.orden_num) || Number.MAX_SAFE_INTEGER
+      return leftValue - rightValue || Number(left.id) - Number(right.id)
+    })
+    .map((row, index) => ({ id: row.id, orden_num: index + 1 }))
+
+  await Promise.all(ordered.map(({ id, orden_num }) => supabase
+    .from(table)
+    .update({ orden_num })
+    .eq('id', id)))
+
+  return ordered
+}
+
+export async function reorderEntityOrder(table, orderedIds = []) {
+  requireSupabase()
+  if (!orderedIds.length) return []
+
+  const { data: rows = [], error } = await supabase
+    .from(table)
+    .select('id, orden_num, is_off')
+    .in('id', orderedIds)
+    .eq('is_off', false)
+
+  if (error) throw error
+
+  const byId = new Map((rows || []).map((row) => [String(row.id), row]))
+  await Promise.all(orderedIds.map((id, index) => {
+    if (!byId.has(String(id))) return Promise.resolve(null)
+    return supabase.from(table).update({ orden_num: index + 1 }).eq('id', id)
+  }))
+
+  return orderedIds
+}
+
 export async function createHolder({ name }) {
   requireSupabase()
-  const { data, error } = await supabase.from('titulares').insert({ nombre: name.trim() }).select().single()
+  const trimmedName = normalizeEntityName(name)
+  if (!trimmedName) throw new Error('El nombre del titular no puede estar vacío')
+
+  const { data: activeRows = [], error: listError } = await supabase
+    .from('titulares')
+    .select('id, nombre, orden_num, is_off')
+    .eq('is_off', false)
+    .order('orden_num', { ascending: true })
+    .order('id', { ascending: true })
+
+  if (listError) throw listError
+
+  const existing = activeRows.find((row) => normalizeEntityName(row.nombre) === trimmedName)
+  if (existing) {
+    const { data, error } = await supabase
+      .from('titulares')
+      .update({ nombre: trimmedName, is_off: false, orden_num: Number(existing.orden_num) || nextAvailableOrderNumber(activeRows) })
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }
+
+  const { data, error } = await supabase
+    .from('titulares')
+    .insert({ nombre: trimmedName, orden_num: nextAvailableOrderNumber(activeRows), is_off: false })
+    .select()
+    .single()
+
   if (error) throw error
   return data
 }
 
-export async function updateHolder(id, { name }) {
+export async function updateHolder(id, { name, orderNum = null }) {
   requireSupabase()
-  const { data, error } = await supabase.from('titulares').update({ nombre: name.trim() }).eq('id', id).select().single()
+  const trimmedName = normalizeEntityName(name)
+  if (!trimmedName) throw new Error('El nombre del titular no puede estar vacío')
+
+  const { data: activeRows = [], error: listError } = await supabase
+    .from('titulares')
+    .select('id, nombre, orden_num, is_off')
+    .eq('is_off', false)
+
+  if (listError) throw listError
+
+  const duplicate = activeRows.find((row) => row.id !== id && normalizeEntityName(row.nombre) === trimmedName)
+  if (duplicate) {
+    const { error: disableError } = await supabase.from('titulares').update({ is_off: true }).eq('id', id)
+    if (disableError) throw disableError
+    return duplicate
+  }
+
+  const nextOrder = orderNum !== null && orderNum !== undefined ? Number(orderNum) : Number(activeRows.find((row) => row.id === id)?.orden_num || nextAvailableOrderNumber(activeRows))
+  const { data, error } = await supabase
+    .from('titulares')
+    .update({ nombre: trimmedName, orden_num: nextOrder, is_off: false })
+    .eq('id', id)
+    .select()
+    .single()
+
   if (error) throw error
   return data
 }
 
 export async function deleteHolder(id) {
   requireSupabase()
-  const { error } = await supabase.from('titulares').delete().eq('id', id)
+  const { data: activeRows = [], error: listError } = await supabase
+    .from('titulares')
+    .select('id, nombre, orden_num, is_off')
+    .eq('is_off', false)
+    .order('orden_num', { ascending: true })
+    .order('id', { ascending: true })
+
+  if (listError) throw listError
+
+  const { data, error } = await supabase
+    .from('titulares')
+    .update({ is_off: true })
+    .eq('id', id)
+    .select()
+    .single()
+
   if (error) throw error
+
+  const remaining = activeRows.filter((row) => row.id !== id)
+  await reindexEntityOrders('titulares', remaining)
+  return data
 }
 
 export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
   requireSupabase()
+  const trimmedName = normalizeEntityName(name)
+  if (!trimmedName) throw new Error('El nombre de la billetera no puede estar vacío')
+
   const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).limit(1).maybeSingle()
   if (typeError) throw typeError
   let typeId = typeRow?.id
@@ -203,13 +333,43 @@ export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
     if (createdTypeError) throw createdTypeError
     typeId = createdType.id
   }
-  const { data, error } = await supabase.from('billeteras').insert({ nombre: name.trim(), tipo_billetera_id: typeId }).select().single()
+
+  const { data: activeRows = [], error: listError } = await supabase
+    .from('billeteras')
+    .select('id, nombre, orden_num, is_off')
+    .eq('is_off', false)
+    .order('orden_num', { ascending: true })
+    .order('id', { ascending: true })
+
+  if (listError) throw listError
+
+  const existing = activeRows.find((row) => normalizeEntityName(row.nombre) === trimmedName)
+  if (existing) {
+    const { data, error } = await supabase
+      .from('billeteras')
+      .update({ nombre: trimmedName, is_off: false, orden_num: Number(existing.orden_num) || nextAvailableOrderNumber(activeRows), tipo_billetera_id: typeId })
+      .eq('id', existing.id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }
+
+  const { data, error } = await supabase
+    .from('billeteras')
+    .insert({ nombre: trimmedName, orden_num: nextAvailableOrderNumber(activeRows), tipo_billetera_id: typeId, is_off: false })
+    .select()
+    .single()
+
   if (error) throw error
   return data
 }
 
-export async function updateWallet(id, { name, typeName = 'Cobros y retiros' }) {
+export async function updateWallet(id, { name, typeName = 'Cobros y retiros', orderNum = null }) {
   requireSupabase()
+  const trimmedName = normalizeEntityName(name)
+  if (!trimmedName) throw new Error('El nombre de la billetera no puede estar vacío')
+
   const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).limit(1).maybeSingle()
   if (typeError) throw typeError
   let typeId = typeRow?.id
@@ -218,15 +378,56 @@ export async function updateWallet(id, { name, typeName = 'Cobros y retiros' }) 
     if (createdTypeError) throw createdTypeError
     typeId = createdType.id
   }
-  const { data, error } = await supabase.from('billeteras').update({ nombre: name.trim(), tipo_billetera_id: typeId }).eq('id', id).select().single()
+
+  const { data: activeRows = [], error: listError } = await supabase
+    .from('billeteras')
+    .select('id, nombre, orden_num, is_off')
+    .eq('is_off', false)
+
+  if (listError) throw listError
+
+  const duplicate = activeRows.find((row) => row.id !== id && normalizeEntityName(row.nombre) === trimmedName)
+  if (duplicate) {
+    const { error: disableError } = await supabase.from('billeteras').update({ is_off: true }).eq('id', id)
+    if (disableError) throw disableError
+    return duplicate
+  }
+
+  const nextOrder = orderNum !== null && orderNum !== undefined ? Number(orderNum) : Number(activeRows.find((row) => row.id === id)?.orden_num || nextAvailableOrderNumber(activeRows))
+  const { data, error } = await supabase
+    .from('billeteras')
+    .update({ nombre: trimmedName, orden_num: nextOrder, tipo_billetera_id: typeId, is_off: false })
+    .eq('id', id)
+    .select()
+    .single()
+
   if (error) throw error
   return data
 }
 
 export async function deleteWallet(id) {
   requireSupabase()
-  const { error } = await supabase.from('billeteras').delete().eq('id', id)
+  const { data: activeRows = [], error: listError } = await supabase
+    .from('billeteras')
+    .select('id, nombre, orden_num, is_off')
+    .eq('is_off', false)
+    .order('orden_num', { ascending: true })
+    .order('id', { ascending: true })
+
+  if (listError) throw listError
+
+  const { data, error } = await supabase
+    .from('billeteras')
+    .update({ is_off: true })
+    .eq('id', id)
+    .select()
+    .single()
+
   if (error) throw error
+
+  const remaining = activeRows.filter((row) => row.id !== id)
+  await reindexEntityOrders('billeteras', remaining)
+  return data
 }
 
 export async function createExpenseType({ name, inverted = false }) {
@@ -539,7 +740,7 @@ export async function createInitialSetup({ boxName, shiftName, startTime, endTim
   for (const holder of holders) {
     for (const wallet of wallets) {
       const account = await findOrCreate('cuentas', { titular_id: holder.id, billetera_id: wallet.id }, {
-        titular_id: holder.id, billetera_id: wallet.id, alias: `${holder.nombre} · ${wallet.nombre}`, tipo_cuenta_id: accountType.id, activa: true,
+        titular_id: holder.id, billetera_id: wallet.id, alias: null, tipo_cuenta_id: accountType.id, activa: true,
       })
       await ensureLink('cuentas_x_caja', { cuenta_id: account.id, caja_id: box.id })
       await ensureLink('cuentas_x_turno', { turno_id: shift.id, cuenta_id: account.id, caja_id: box.id }, {

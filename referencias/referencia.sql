@@ -86,17 +86,39 @@ CREATE TABLE condiciones_bono (
 CREATE TABLE titulares (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nombre VARCHAR(150) NOT NULL,
-    orden_num INTEGER
+    orden_num INTEGER,
+    is_off BOOLEAN NOT NULL DEFAULT FALSE,
+
+    CHECK (orden_num IS NULL OR orden_num > 0)
 );
 
 CREATE TABLE billeteras (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
     orden_num INTEGER,
+    is_off BOOLEAN NOT NULL DEFAULT FALSE,
     tipo_billetera_id BIGINT NOT NULL
         REFERENCES tipos_billetera(id)
-        ON DELETE RESTRICT
+        ON DELETE RESTRICT,
+
+    CHECK (orden_num IS NULL OR orden_num > 0)
 );
+
+CREATE UNIQUE INDEX idx_titulares_nombre_activo
+    ON titulares (LOWER(TRIM(nombre)))
+    WHERE is_off = FALSE;
+
+CREATE UNIQUE INDEX idx_billeteras_nombre_activo
+    ON billeteras (LOWER(TRIM(nombre)))
+    WHERE is_off = FALSE;
+
+CREATE UNIQUE INDEX idx_titulares_orden_activo
+    ON titulares (orden_num)
+    WHERE is_off = FALSE AND orden_num IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_billeteras_orden_activo
+    ON billeteras (orden_num)
+    WHERE is_off = FALSE AND orden_num IS NOT NULL;
 
 CREATE TABLE cajas (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

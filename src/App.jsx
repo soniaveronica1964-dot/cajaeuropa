@@ -134,7 +134,7 @@ function App() {
         <aside className="sidebar">
           <p className="sidebar-label">Operación</p>
           {navItems.map(([id, label, Icon]) => <button key={id} className={`side-link ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={16} /><span>{label}</span>{id === 'bonuses' && appData && <b className="nav-count">{appData.bonuses.length}</b>}</button>)}
-          <div className="sidebar-bottom"><p className="sidebar-label">Sesión activa</p><div className="operator"><span>MR</span><div><strong>Marina Ríos</strong><small>Operadora</small></div><ChevronDown size={14} /></div></div>
+          <div className="sidebar-bottom"><div className="operator"><span>MR</span><div><strong>Marina Ríos</strong><small>Operadora</small></div><ChevronDown size={14} /></div></div>
         </aside>
 
         <main className="main-content">
@@ -325,11 +325,14 @@ function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(nul
 function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
 
 function LiveSettings({ data, setToast, onSaved }) {
+  const [saveNotice, setSaveNotice] = useState('')
+  const [dragState, setDragState] = useState({ type: null, index: null })
+
   const persistUpdate = async (action, successMessage) => {
     try {
       await action()
-      setToast(successMessage)
-      onSaved?.()
+      setSaveNotice(successMessage)
+      window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la configuración')
     }
@@ -349,8 +352,15 @@ function LiveSettings({ data, setToast, onSaved }) {
   }
 
   const buildDefaultConfig = useMemo(() => {
-    const holdersFromData = buildUniqueItems(data.holders || data.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.titulares || { id: entry?.cuenta_id, nombre: 'Sin titular' })))
-    const walletsFromData = buildUniqueItems(data.wallets || data.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.billeteras || { id: entry?.cuenta_id, nombre: 'Sin billetera' })))
+    const sortByOrder = (items = []) => [...items].sort((left, right) => {
+      const leftValue = Number(left?.orden_num ?? Number.MAX_SAFE_INTEGER)
+      const rightValue = Number(right?.orden_num ?? Number.MAX_SAFE_INTEGER)
+      if (leftValue !== rightValue) return leftValue - rightValue
+      return String(left?.nombre || '').localeCompare(String(right?.nombre || ''))
+    })
+
+    const holdersFromData = sortByOrder(buildUniqueItems(data.holders || data.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.titulares || { id: entry?.cuenta_id, nombre: 'Sin titular' }))))
+    const walletsFromData = sortByOrder(buildUniqueItems(data.wallets || data.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.billeteras || { id: entry?.cuenta_id, nombre: 'Sin billetera' }))))
     const availability = {}
     holdersFromData.forEach((holder) => {
       const holderName = holder.nombre || 'Sin titular'
@@ -391,6 +401,32 @@ function LiveSettings({ data, setToast, onSaved }) {
 
   const updateAccounts = (patch) => {
     setDraft((current) => ({ ...current, accounts: { ...current.accounts, ...patch } }))
+  }
+
+  const reorderAccountEntries = async (type, fromIndex, toIndex) => {
+    if (fromIndex === toIndex || fromIndex === null || toIndex === null) return
+
+    const key = type === 'holders' ? 'holders' : 'wallets'
+    const next = [...draft.accounts[key]]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    updateAccounts({ [key]: next })
+
+    const source = type === 'holders' ? (data.holders || []) : (data.wallets || [])
+    const orderedIds = next
+      .map((label) => source.find((item) => item.nombre === label)?.id)
+      .filter(Boolean)
+
+    for (let index = 0; index < orderedIds.length; index += 1) {
+      const id = orderedIds[index]
+      const label = next[index]
+      if (type === 'holders') {
+        await updateHolder(id, { name: label, orderNum: index + 1 })
+      } else {
+        const walletMode = draft.accounts.walletModes?.[label] || 'Cobros y retiros'
+        await updateWallet(id, { name: label, typeName: walletMode === 'Cobros + Retiros' ? 'Cobros y retiros' : walletMode === 'Solo Cobros' ? 'Cobros' : 'Depósito', orderNum: index + 1 })
+      }
+    }
   }
 
   const toggleWallet = async (holderName, walletName) => {
@@ -457,8 +493,8 @@ function LiveSettings({ data, setToast, onSaved }) {
         }
       }
 
-      await onSaved?.()
-      setToast(nextValue ? 'Cuenta activada en la base de datos' : 'Cuenta desactivada en la base de datos')
+      setSaveNotice(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
+      window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
     }
@@ -526,8 +562,8 @@ function LiveSettings({ data, setToast, onSaved }) {
       }
 
       setSelected(null)
-      onSaved?.()
-      setToast('Cuenta guardada en Supabase')
+      setSaveNotice('Cuenta guardada')
+      window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
     }
@@ -581,6 +617,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       <section className="settings-intro">
         <span className="eyebrow">Configuración</span>
         <h2>{tab === 'boxes' ? 'Cajas' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : 'Objetivos'}</h2>
+        {saveNotice && <div className="inline-status" style={{ marginTop: '8px', fontSize: '12px', padding: '6px 10px', borderRadius: '999px', display: 'inline-flex', alignItems: 'center', background: '#dff7eb', color: '#1d6341', border: '1px solid rgba(29,99,65,0.18)' }}>{saveNotice}</div>}
       </section>
 
       {tab === 'boxes' && <>
@@ -679,33 +716,49 @@ function LiveSettings({ data, setToast, onSaved }) {
           <div className="config-list">
             <div className="config-list-head"><h3>Titulares</h3><span>{draft.accounts.holders.length} elementos</span></div>
             {draft.accounts.holders.map((holder, index) => (
-              <div className="config-list-row" key={`${holder}-${index}`}>
+              <div className="config-list-row" key={`${holder}-${index}`} draggable onDragStart={() => setDragState({ type: 'holders', index })} onDragOver={(event) => event.preventDefault()} onDrop={async () => { await reorderAccountEntries('holders', dragState.index, index); setDragState({ type: null, index: null }) }} onDragEnd={() => setDragState({ type: null, index: null })}>
+                <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
                 <input value={holder} onChange={(event) => {
                   const next = [...draft.accounts.holders]
                   next[index] = event.target.value
                   updateAccounts({ holders: next })
                 }} onBlur={async (event) => {
                   const value = event.target.value.trim()
-                  if (!value || !data.holders.find(item => item.nombre === holder)) return
+                  if (!value) return
                   const target = data.holders.find(item => item.nombre === holder)
-                  await persistUpdate(() => updateHolder(target.id, { name: value }), 'Titular actualizado en Supabase')
+                  if (!target) {
+                    const created = await createHolder({ name: value })
+                    if (created) {
+                      const next = [...draft.accounts.holders]
+                      next[index] = created.nombre
+                      updateAccounts({ holders: next })
+                    }
+                    return
+                  }
+                  await persistUpdate(() => updateHolder(target.id, { name: value, orderNum: index + 1 }), 'Titular actualizado')
                 }} placeholder="Nombre del titular" />
                 <button type="button" className="delete-button" title="Eliminar titular" onClick={async () => {
                   const current = data.holders.find(item => item.nombre === holder)
                   if (!current) return
-                  await persistUpdate(() => deleteHolder(current.id), 'Titular eliminado de Supabase')
+                  await persistUpdate(async () => {
+                    await deleteHolder(current.id)
+                    updateAccounts({ holders: draft.accounts.holders.filter((_, itemIndex) => itemIndex !== index) })
+                  }, 'Titular desactivado')
                 }}><X size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={async () => {
-              await persistUpdate(() => createHolder({ name: 'Nuevo titular' }), 'Titular creado en Supabase')
+              await persistUpdate(async () => {
+                const created = await createHolder({ name: 'Nuevo titular' })
+                updateAccounts({ holders: [...draft.accounts.holders, created.nombre] })
+              }, 'Titular creado')
             }}><Plus size={15} /> Agregar titular</button>
           </div>
 
           <div className="config-list">
             <div className="config-list-head"><h3>Billeteras</h3><span>{draft.accounts.wallets.length} elementos</span></div>
             {draft.accounts.wallets.map((wallet, index) => (
-              <div className="wallet-config-row" key={`${wallet}-${index}`}>
+              <div className="wallet-config-row" key={`${wallet}-${index}`} draggable onDragStart={() => setDragState({ type: 'wallets', index })} onDragOver={(event) => event.preventDefault()} onDrop={async () => { await reorderAccountEntries('wallets', dragState.index, index); setDragState({ type: null, index: null }) }} onDragEnd={() => setDragState({ type: null, index: null })}>
                 <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
                 <input value={wallet} onChange={(event) => {
                   const next = [...draft.accounts.wallets]
@@ -713,9 +766,18 @@ function LiveSettings({ data, setToast, onSaved }) {
                   updateAccounts({ wallets: next })
                 }} onBlur={async (event) => {
                   const value = event.target.value.trim()
-                  if (!value || !data.wallets.find(item => item.nombre === wallet)) return
+                  if (!value) return
                   const target = data.wallets.find(item => item.nombre === wallet)
-                  await persistUpdate(() => updateWallet(target.id, { name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' }), 'Billetera actualizada en Supabase')
+                  if (!target) {
+                    const created = await createWallet({ name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' })
+                    if (created) {
+                      const next = [...draft.accounts.wallets]
+                      next[index] = created.nombre
+                      updateAccounts({ wallets: next })
+                    }
+                    return
+                  }
+                  await persistUpdate(() => updateWallet(target.id, { name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros', orderNum: index + 1 }), 'Billetera actualizada')
                 }} placeholder="Nombre de billetera" />
                 <select value={draft.accounts.walletModes?.[wallet] || 'Cobros + Retiros'} onChange={async (event) => {
                   const nextMode = event.target.value
@@ -732,12 +794,18 @@ function LiveSettings({ data, setToast, onSaved }) {
                 <button type="button" className="delete-button" title="Eliminar billetera" onClick={async () => {
                   const current = data.wallets.find(item => item.nombre === wallet)
                   if (!current) return
-                  await persistUpdate(() => deleteWallet(current.id), 'Billetera eliminada de Supabase')
+                  await persistUpdate(async () => {
+                    await deleteWallet(current.id)
+                    updateAccounts({ wallets: draft.accounts.wallets.filter((_, itemIndex) => itemIndex !== index) })
+                  }, 'Billetera desactivada')
                 }}><X size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={async () => {
-              await persistUpdate(() => createWallet({ name: 'Nueva billetera', typeName: 'Cobros y retiros' }), 'Billetera creada en Supabase')
+              await persistUpdate(async () => {
+                const created = await createWallet({ name: 'Nueva billetera', typeName: 'Cobros y retiros' })
+                updateAccounts({ wallets: [...draft.accounts.wallets, created.nombre] })
+              }, 'Billetera creada')
             }}><Plus size={15} /> Agregar billetera</button>
           </div>
         </div>
