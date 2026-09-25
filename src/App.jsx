@@ -443,8 +443,22 @@ function LiveSettings({ data, setToast, onSaved }) {
       return accountHolder === holderName && accountWallet === walletName
     })
 
-    const currentChecked = Boolean(existingAccount?.cuentas?.activa ?? existingAccount?.cuentas?.check ?? existingAccount?.cuentas?.activo ?? true)
+    const currentChecked = Boolean(existingAccount?.cuentas?.activa ?? existingAccount?.cuentas?.check ?? existingAccount?.cuentas?.activo ?? draft.accounts.availability?.[holderName]?.[walletName] ?? true)
     const nextValue = !currentChecked
+
+    setDraft((current) => ({
+      ...current,
+      accounts: {
+        ...current.accounts,
+        availability: {
+          ...(current.accounts?.availability || {}),
+          [holderName]: {
+            ...((current.accounts?.availability || {})[holderName] || {}),
+            [walletName]: nextValue,
+          },
+        },
+      },
+    }))
 
     try {
       if (!existingAccount?.cuentas) {
@@ -496,6 +510,19 @@ function LiveSettings({ data, setToast, onSaved }) {
       setSaveNotice(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
       window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
+      setDraft((current) => ({
+        ...current,
+        accounts: {
+          ...current.accounts,
+          availability: {
+            ...(current.accounts?.availability || {}),
+            [holderName]: {
+              ...((current.accounts?.availability || {})[holderName] || {}),
+              [walletName]: currentChecked,
+            },
+          },
+        },
+      }))
       setToast(error.message || 'No se pudo guardar la cuenta')
     }
   }
@@ -573,19 +600,19 @@ function LiveSettings({ data, setToast, onSaved }) {
     <button key={id} type="button" className={tab === id ? 'active' : ''} onClick={() => setTab(id)}><Icon size={15} /> {label}</button>
   )
 
-  const accountEntryRows = draft.accounts.holders.map((holder) => {
+  const accountEntryRows = draft.accounts.holders.map((holder, holderIndex) => {
     const holderName = holder || 'Sin titular'
-    return <div key={holderName} className="availability-row" style={{ '--wallet-count': draft.accounts.wallets.length }}>
+    return <div key={`holder-row-${holderIndex}`} className="availability-row" style={{ '--wallet-count': draft.accounts.wallets.length }}>
       <b>{holderName}</b>
-      {draft.accounts.wallets.map((wallet) => {
+      {draft.accounts.wallets.map((wallet, walletIndex) => {
         const walletName = wallet || 'Sin billetera'
         const match = (data.accounts || []).find((account) => {
           const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
           const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
           return accountHolder === holderName && accountWallet === walletName
         })
-        const enabled = Boolean(match?.cuentas?.activa ?? match?.cuentas?.check ?? match?.cuentas?.activo ?? true)
-        return <div className="account-config-cell" key={`${holderName}-${walletName}`}>
+        const enabled = Boolean(draft.accounts.availability?.[holderName]?.[walletName] ?? match?.cuentas?.activa ?? match?.cuentas?.check ?? match?.cuentas?.activo ?? true)
+        return <div className="account-config-cell" key={`holder-${holderIndex}-wallet-${walletIndex}`}>
           <label className="toggle-cell" aria-label={`Activar ${holderName} · ${walletName}`}>
             <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />
             <span />
@@ -725,7 +752,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                 }} onBlur={async (event) => {
                   const value = event.target.value.trim()
                   if (!value) return
-                  const target = data.holders.find(item => item.nombre === holder)
+                  const target = (data.holders || [])[index] || data.holders.find((item) => item.nombre === holder)
                   if (!target) {
                     const created = await createHolder({ name: value })
                     if (created) {
@@ -767,7 +794,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                 }} onBlur={async (event) => {
                   const value = event.target.value.trim()
                   if (!value) return
-                  const target = data.wallets.find(item => item.nombre === wallet)
+                  const target = (data.wallets || [])[index] || data.wallets.find((item) => item.nombre === wallet)
                   if (!target) {
                     const created = await createWallet({ name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' })
                     if (created) {

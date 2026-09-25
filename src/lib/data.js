@@ -306,18 +306,16 @@ export async function deleteHolder(id) {
 
   if (listError) throw listError
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('titulares')
     .update({ is_off: true })
     .eq('id', id)
-    .select()
-    .maybeSingle()
 
   if (error) throw error
 
   const remaining = activeRows.filter((row) => row.id !== id)
   await reindexEntityOrders('titulares', remaining)
-  return data
+  return { id }
 }
 
 export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
@@ -416,18 +414,16 @@ export async function deleteWallet(id) {
 
   if (listError) throw listError
 
-  const { data, error } = await supabase
+  const { error } = await supabase
     .from('billeteras')
     .update({ is_off: true })
     .eq('id', id)
-    .select()
-    .maybeSingle()
 
   if (error) throw error
 
   const remaining = activeRows.filter((row) => row.id !== id)
   await reindexEntityOrders('billeteras', remaining)
-  return data
+  return { id }
 }
 
 export async function createExpenseType({ name, inverted = false }) {
