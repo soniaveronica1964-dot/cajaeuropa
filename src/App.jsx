@@ -54,6 +54,7 @@ import {
   deletePlatform,
   deleteShiftType,
   deleteWallet,
+  formatDatabase,
   loadCurrentShiftData,
   saveAppConfig,
   setAccountAvailability,
@@ -147,7 +148,8 @@ function App() {
 
           {loadError && <div className="empty-state"><strong>Error al cargar Supabase</strong><p>{loadError}</p></div>}
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
-          {!loadError && appData && view === 'dashboard' && !appData.shift && <SetupWizard onCreated={reloadData} setToast={setToast} />}
+          {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
+          {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
           {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
@@ -208,12 +210,33 @@ function SetupWizard({ onCreated, setToast }) {
     }
   }
 
+  async function handleBasicSetup() {
+    setSaving(true)
+    try {
+      await createInitialSetup({
+        boxName: 'Caja principal',
+        shiftName: 'Turno inicial',
+        startTime: '00:00',
+        endTime: '08:00',
+        holderNames: ['Titular inicial'],
+        walletNames: ['Billetera principal'],
+        initialAmount: 0,
+      })
+      setToast('Configuración básica creada en Supabase')
+      onCreated()
+    } catch (error) {
+      setToast(error.message || 'No se pudo crear la configuración básica')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   return <section className="setup-page">
     <div className="setup-intro"><span className="eyebrow">Primer acceso</span><h2>Configurá tu primera caja</h2><p>Estos datos se van a guardar en Supabase y después vas a poder editarlos desde Configuración.</p></div>
     <form className="panel setup-form" onSubmit={handleSubmit}>
       <div className="setup-section"><h3>Turno y caja</h3><div className="setup-fields"><label>Nombre de la caja<input value={boxName} onChange={event => setBoxName(event.target.value)} placeholder="Ej. Noruega" /></label><label>Nombre del turno<input value={shiftName} onChange={event => setShiftName(event.target.value)} placeholder="Ej. Turno noche" /></label><label>Hora de inicio<input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} /></label><label>Hora de fin<input type="time" value={endTime} onChange={event => setEndTime(event.target.value)} /></label><label>Monto inicial<input type="number" min="0" step="0.01" value={initialAmount} onChange={event => setInitialAmount(event.target.value)} /></label></div></div>
       <div className="setup-section"><h3>Catálogos iniciales</h3><div className="setup-fields"><label className="full-field">Titulares, separados por coma<textarea value={holders} onChange={event => setHolders(event.target.value)} placeholder="Ej. Persona 1, Persona 2" /></label><label className="full-field">Billeteras, separadas por coma<textarea value={wallets} onChange={event => setWallets(event.target.value)} placeholder="Ej. Billetera 1, Billetera 2" /></label></div></div>
-      <div className="setup-actions"><small>Se crearán también las cuentas operativas y sus vínculos con el turno.</small><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando...' : 'Crear configuración'}</button></div>
+      <div className="setup-actions"><small>Se crearán también las cuentas operativas y sus vínculos con el turno.</small><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="secondary-button" type="button" onClick={handleBasicSetup} disabled={saving}>Crear configuración básica</button><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando...' : 'Crear configuración'}</button></div></div>
     </form>
   </section>
 }
@@ -330,6 +353,7 @@ function LiveSettings({ data, setToast, onSaved }) {
   const [dragState, setDragState] = useState({ type: null, index: null })
   const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
   const [localData, setLocalData] = useState(data)
+  const [formatting, setFormatting] = useState(false)
 
   useEffect(() => {
     setLocalData(data)
@@ -350,6 +374,21 @@ function LiveSettings({ data, setToast, onSaved }) {
     const fresh = await loadCurrentShiftData(data?.shift?.caja_id ?? null)
     setLocalData(fresh)
     return fresh
+  }
+
+  const handleFormatDatabase = async () => {
+    if (!window.confirm('Esto eliminará todos los datos de la aplicación y reiniciará los IDs. ¿Continuar?')) return
+    if (!window.confirm('Confirmá nuevamente: esta acción no se puede deshacer.')) return
+    setFormatting(true)
+    try {
+      await formatDatabase()
+      setToast('Base de datos formateada e IDs reiniciados')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo formatear la base de datos')
+    } finally {
+      setFormatting(false)
+    }
   }
 
   const resolveBySnapshot = (type, index, fallbackName) => {
@@ -1167,6 +1206,11 @@ function LiveSettings({ data, setToast, onSaved }) {
             <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración visual guardada')} /></label>
             <label className="toggle-cell" aria-label="Singleton"><span>Singleton</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.singleton !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: !Boolean(data.appConfig?.[0]?.singleton !== false) }), 'Configuración singleton guardada')} /></label>
           </div>
+        </section>
+        <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(239, 136, 136, 0.5)' }}>
+          <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Acción destructiva</span></div>
+          <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
+          <button type="button" className="delete-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
         </section>
       </>}
 

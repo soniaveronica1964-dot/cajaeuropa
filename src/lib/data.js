@@ -826,6 +826,12 @@ export async function saveAppConfig({ name, icon, theme = false, showNotes = tru
   return data
 }
 
+export async function formatDatabase() {
+  requireSupabase()
+  const { error } = await supabase.rpc('format_caja_database')
+  if (error) throw error
+}
+
 async function findOrCreate(table, match, values) {
   requireSupabase()
   let request = supabase.from(table).select('*')
@@ -848,8 +854,9 @@ async function ensureLink(table, match, values = match) {
 export async function createInitialSetup({ boxName, shiftName, startTime, endTime, holderNames, walletNames, initialAmount }) {
   requireSupabase()
   const color = await findOrCreate('colores', { nombre: 'Tema inicial' }, { nombre: 'Tema inicial', hex: '#C7A0FF' })
-  const walletType = await findOrCreate('tipos_billetera', { nombre: 'Cobros y retiros' }, { nombre: 'Cobros y retiros', cobros: true, retiros: true })
-  const accountType = await findOrCreate('tipos_cuenta', { nombre: 'Cuenta operativa' }, { nombre: 'Cuenta operativa', cobros: true, retiros: true, ahorro: false })
+  await findOrCreate('app_config', { singleton: true }, { nombre: 'Caja Europa', icono: 'banknote', tema: false, ver_notas: true, singleton: true })
+  const walletType = await findOrCreate('tipos_billetera', { nombre: 'Cobros y retiros' }, { nombre: 'Cobros y retiros', cobros: true, retiros: true, is_off: false })
+  const accountType = await findOrCreate('tipos_cuenta', { nombre: 'Cuenta operativa' }, { nombre: 'Cuenta operativa', cobros: true, retiros: true, ahorro: false, es_deposito: false, is_off: false })
   const box = await findOrCreate('cajas', { nombre: boxName }, { nombre: boxName, color_id: color.id, es_publicidad: false })
 
   const wallets = []
