@@ -851,7 +851,7 @@ async function ensureLink(table, match, values = match) {
   await findOrCreate(table, match, values)
 }
 
-export async function createInitialSetup({ boxName, shiftName, startTime, endTime, holderNames, walletNames, initialAmount }) {
+export async function createInitialSetup({ boxName, shiftName = null, startTime = '00:00', endTime = '08:00', holderNames, walletNames, initialAmount = 0, createShift = true }) {
   requireSupabase()
   const color = await findOrCreate('colores', { nombre: 'Tema inicial' }, { nombre: 'Tema inicial', hex: '#C7A0FF' })
   await findOrCreate('app_config', { singleton: true }, { nombre: 'Caja Europa', icono: 'banknote', tema: false, ver_notas: true, singleton: true })
@@ -870,6 +870,18 @@ export async function createInitialSetup({ boxName, shiftName, startTime, endTim
   for (const holder of holders) await ensureLink('titulares_x_caja', { titular_id: holder.id, caja_id: box.id })
   for (const wallet of wallets) await ensureLink('billeteras_x_caja', { billetera_id: wallet.id, caja_id: box.id })
 
+  for (const holder of holders) {
+    for (const wallet of wallets) {
+      const account = await findOrCreate('cuentas', { titular_id: holder.id, billetera_id: wallet.id }, {
+        titular_id: holder.id, billetera_id: wallet.id, alias: null, tipo_cuenta_id: accountType.id, activa: true,
+      })
+      await ensureLink('cuentas_x_caja', { cuenta_id: account.id, caja_id: box.id })
+    }
+  }
+
+  if (!createShift) return null
+  if (!shiftName?.trim()) throw new Error('El nombre del turno es obligatorio')
+
   const shiftType = await findOrCreate('tipos_turno', { caja_id: box.id, nombre: shiftName }, { caja_id: box.id, nombre: shiftName, color_id: color.id })
   const day = await findOrCreate('dias_turno', { tipo_turno_id: shiftType.id, nombre: `${shiftName} inicial` }, {
     nombre: `${shiftName} inicial`, dia_semana: new Date().getDay() || 7, hora_inicio: startTime, hora_fin: endTime, cruza_medianoche: false, tipo_turno_id: shiftType.id,
@@ -884,7 +896,6 @@ export async function createInitialSetup({ boxName, shiftName, startTime, endTim
       const account = await findOrCreate('cuentas', { titular_id: holder.id, billetera_id: wallet.id }, {
         titular_id: holder.id, billetera_id: wallet.id, alias: null, tipo_cuenta_id: accountType.id, activa: true,
       })
-      await ensureLink('cuentas_x_caja', { cuenta_id: account.id, caja_id: box.id })
       await ensureLink('cuentas_x_turno', { turno_id: shift.id, cuenta_id: account.id, caja_id: box.id }, {
         turno_id: shift.id, cuenta_id: account.id, caja_id: box.id, valor: 0, cobros: true, retiros: true,
       })

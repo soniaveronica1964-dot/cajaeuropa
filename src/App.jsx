@@ -182,10 +182,6 @@ function BoxSelector({ boxes, selectedId, onChange }) {
 
 function SetupWizard({ onCreated, setToast }) {
   const [boxName, setBoxName] = useState('')
-  const [shiftName, setShiftName] = useState('')
-  const [startTime, setStartTime] = useState('00:00')
-  const [endTime, setEndTime] = useState('08:00')
-  const [initialAmount, setInitialAmount] = useState('0')
   const [holders, setHolders] = useState('')
   const [wallets, setWallets] = useState('')
   const [saving, setSaving] = useState(false)
@@ -195,8 +191,10 @@ function SetupWizard({ onCreated, setToast }) {
     const holderNames = holders.split(',').map(value => value.trim()).filter(Boolean)
     const walletNames = wallets.split(',').map(value => value.trim()).filter(Boolean)
     if (!boxName.trim() || !shiftName.trim() || !holderNames.length || !walletNames.length) {
-      setToast('Completá caja, turno, titulares y billeteras')
+    if (!boxName.trim() || !holderNames.length || !walletNames.length) {
+      setToast('Completá caja, titulares y billeteras')
       return
+      await createInitialSetup({ boxName: boxName.trim(), holderNames, walletNames, createShift: false })
     }
     setSaving(true)
     try {
@@ -214,14 +212,7 @@ function SetupWizard({ onCreated, setToast }) {
     setSaving(true)
     try {
       await createInitialSetup({
-        boxName: 'Caja principal',
-        shiftName: 'Turno inicial',
-        startTime: '00:00',
-        endTime: '08:00',
-        holderNames: ['Titular inicial'],
-        walletNames: ['Billetera principal'],
-        initialAmount: 0,
-      })
+      await createInitialSetup({ boxName: 'Caja principal', holderNames: ['Titular inicial'], walletNames: ['Billetera principal'], createShift: false })
       setToast('Configuración básica creada en Supabase')
       onCreated()
     } catch (error) {
@@ -235,8 +226,10 @@ function SetupWizard({ onCreated, setToast }) {
     <div className="setup-intro"><span className="eyebrow">Primer acceso</span><h2>Configurá tu primera caja</h2><p>Estos datos se van a guardar en Supabase y después vas a poder editarlos desde Configuración.</p></div>
     <form className="panel setup-form" onSubmit={handleSubmit}>
       <div className="setup-section"><h3>Turno y caja</h3><div className="setup-fields"><label>Nombre de la caja<input value={boxName} onChange={event => setBoxName(event.target.value)} placeholder="Ej. Noruega" /></label><label>Nombre del turno<input value={shiftName} onChange={event => setShiftName(event.target.value)} placeholder="Ej. Turno noche" /></label><label>Hora de inicio<input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} /></label><label>Hora de fin<input type="time" value={endTime} onChange={event => setEndTime(event.target.value)} /></label><label>Monto inicial<input type="number" min="0" step="0.01" value={initialAmount} onChange={event => setInitialAmount(event.target.value)} /></label></div></div>
+        <div className="setup-section"><h3>Caja</h3><div className="setup-fields"><label>Nombre de la caja<input value={boxName} onChange={event => setBoxName(event.target.value)} placeholder="Ej. Noruega" /></label></div></div>
       <div className="setup-section"><h3>Catálogos iniciales</h3><div className="setup-fields"><label className="full-field">Titulares, separados por coma<textarea value={holders} onChange={event => setHolders(event.target.value)} placeholder="Ej. Persona 1, Persona 2" /></label><label className="full-field">Billeteras, separadas por coma<textarea value={wallets} onChange={event => setWallets(event.target.value)} placeholder="Ej. Billetera 1, Billetera 2" /></label></div></div>
       <div className="setup-actions"><small>Se crearán también las cuentas operativas y sus vínculos con el turno.</small><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="secondary-button" type="button" onClick={handleBasicSetup} disabled={saving}>Crear configuración básica</button><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando...' : 'Crear configuración'}</button></div></div>
+      <div className="setup-actions"><small>Se crearán los catálogos básicos, las cuentas y sus vínculos. Los turnos se configuran después.</small><div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}><button className="secondary-button" type="button" onClick={handleBasicSetup} disabled={saving}>Crear configuración básica</button><button className="primary-button" type="submit" disabled={saving}>{saving ? 'Creando...' : 'Crear configuración'}</button></div></div>
     </form>
   </section>
 }
