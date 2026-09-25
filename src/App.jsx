@@ -437,17 +437,23 @@ function LiveSettings({ data, setToast, onSaved }) {
     }
   }
 
+  const getLatestAccountData = async () => {
+    const latest = await loadCurrentShiftData(data?.shift?.caja_id ?? null)
+    return latest
+  }
+
   const toggleWallet = async (holderName, walletName) => {
-    const holder = data.holders?.find((item) => item.nombre === holderName)
-    const wallet = data.wallets?.find((item) => item.nombre === walletName)
+    const latest = await getLatestAccountData()
+    const holder = latest.holders?.find((item) => item.nombre === holderName)
+    const wallet = latest.wallets?.find((item) => item.nombre === walletName)
 
     if (!holder || !wallet) {
       return
     }
 
-    const existingAccount = (data.accounts || []).find((account) => {
-      const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
-      const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+    const existingAccount = (latest.accounts || []).find((account) => {
+      const accountHolder = account?.cuentas?.titulares?.nombre || latest.holders?.find((item) => item.id === account?.titular_id)?.nombre
+      const accountWallet = account?.cuentas?.billeteras?.nombre || latest.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
       return accountHolder === holderName && accountWallet === walletName
     })
 
@@ -477,14 +483,14 @@ function LiveSettings({ data, setToast, onSaved }) {
           cuil: '',
           password: '',
           notes: '',
-          typeId: data.accountTypes?.[0]?.id ?? undefined,
+          typeId: latest.accountTypes?.[0]?.id ?? data.accountTypes?.[0]?.id ?? undefined,
           active: nextValue,
         })
 
-        if (data.shift?.id && data.shift?.caja_id) {
+        if (latest.shift?.id && latest.shift?.caja_id) {
           await setAccountAvailability({
-            shiftId: data.shift.id,
-            boxId: data.shift.caja_id,
+            shiftId: latest.shift.id,
+            boxId: latest.shift.caja_id,
             accountId: created.id,
             enabled: nextValue,
             value: 0,
@@ -502,10 +508,10 @@ function LiveSettings({ data, setToast, onSaved }) {
           typeId: existingAccount.cuentas.tipo_cuenta_id ?? null,
         })
 
-        if (data.shift?.id && data.shift?.caja_id && !nextValue) {
+        if (latest.shift?.id && latest.shift?.caja_id && !nextValue) {
           await setAccountAvailability({
-            shiftId: data.shift.id,
-            boxId: data.shift.caja_id,
+            shiftId: latest.shift.id,
+            boxId: latest.shift.caja_id,
             accountId: existingAccount.cuentas.id,
             enabled: false,
             value: existingAccount.valor ?? 0,
@@ -516,6 +522,28 @@ function LiveSettings({ data, setToast, onSaved }) {
       }
 
       setToast(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
+      const refreshed = await getLatestAccountData()
+      if (refreshed?.accounts) {
+        setDraft((current) => ({
+          ...current,
+          accounts: {
+            ...current.accounts,
+            availability: {
+              ...(current.accounts?.availability || {}),
+              [holderName]: {
+                ...((current.accounts?.availability || {})[holderName] || {}),
+                [walletName]: Boolean(
+                  (refreshed.accounts || []).find((account) => {
+                    const accountHolder = account?.cuentas?.titulares?.nombre || refreshed.holders?.find((item) => item.id === account?.titular_id)?.nombre
+                    const accountWallet = account?.cuentas?.billeteras?.nombre || refreshed.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+                    return accountHolder === holderName && accountWallet === walletName
+                  })?.cuentas?.activa ?? nextValue
+                ),
+              },
+            },
+          },
+        }))
+      }
     } catch (error) {
       setDraft((current) => ({
         ...current,
@@ -534,10 +562,10 @@ function LiveSettings({ data, setToast, onSaved }) {
     }
   }
 
-  const buildTargetSetting = (holderName, walletName) => {
-    const existingAccount = (data.accounts || []).find((account) => {
-      const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
-      const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+  const buildTargetSetting = (holderName, walletName, sourceData = data) => {
+    const existingAccount = (sourceData?.accounts || []).find((account) => {
+      const accountHolder = account?.cuentas?.titulares?.nombre || sourceData?.holders?.find((item) => item.id === account?.titular_id)?.nombre
+      const accountWallet = account?.cuentas?.billeteras?.nombre || sourceData?.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
       return accountHolder === holderName && accountWallet === walletName
     })
 
@@ -557,8 +585,9 @@ function LiveSettings({ data, setToast, onSaved }) {
   const saveAccountSettings = async () => {
     if (!selected) return
     try {
-      const holder = data.holders?.find((item) => item.nombre === selected.holder)
-      const wallet = data.wallets?.find((item) => item.nombre === selected.wallet)
+      const latest = await getLatestAccountData()
+      const holder = latest.holders?.find((item) => item.nombre === selected.holder)
+      const wallet = latest.wallets?.find((item) => item.nombre === selected.wallet)
 
       if (!holder || !wallet) {
         setToast('No se encontró el titular o la billetera de esta cuenta')
@@ -570,7 +599,7 @@ function LiveSettings({ data, setToast, onSaved }) {
         cuil: selected.cuil || '',
         password: selected.password || '',
         notes: selected.note || '',
-        typeId: selected.typeId || data.accountTypes?.[0]?.id || null,
+        typeId: selected.typeId || latest.accountTypes?.[0]?.id || data.accountTypes?.[0]?.id || null,
       }
 
       if (!selected.accountId) {
@@ -580,10 +609,10 @@ function LiveSettings({ data, setToast, onSaved }) {
           ...payload,
         })
 
-        if (data.shift?.id && data.shift?.caja_id) {
+        if (latest.shift?.id && latest.shift?.caja_id) {
           await setAccountAvailability({
-            shiftId: data.shift.id,
-            boxId: data.shift.caja_id,
+            shiftId: latest.shift.id,
+            boxId: latest.shift.caja_id,
             accountId: account.id,
             enabled: true,
             value: 0,
@@ -597,6 +626,24 @@ function LiveSettings({ data, setToast, onSaved }) {
 
       setSelected(null)
       setToast('Cuenta guardada')
+      const refreshed = await getLatestAccountData()
+      setDraft((current) => ({
+        ...current,
+        accounts: {
+          ...current.accounts,
+          availability: {
+            ...(current.accounts?.availability || {}),
+            [selected.holder]: {
+              ...((current.accounts?.availability || {})[selected.holder] || {}),
+              [selected.wallet]: Boolean((refreshed.accounts || []).find((account) => {
+                const accountHolder = account?.cuentas?.titulares?.nombre || refreshed.holders?.find((item) => item.id === account?.titular_id)?.nombre
+                const accountWallet = account?.cuentas?.billeteras?.nombre || refreshed.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+                return accountHolder === selected.holder && accountWallet === selected.wallet
+              })?.cuentas?.activa ?? true),
+            },
+          },
+        },
+      }))
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
     }
@@ -628,7 +675,10 @@ function LiveSettings({ data, setToast, onSaved }) {
             <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />
             <span />
           </label>
-          <button type="button" className="account-settings-button" title={`Configurar ${holderName} · ${walletName}`} onClick={() => setSelected(buildTargetSetting(holderName, walletName))}>
+          <button type="button" className="account-settings-button" title={`Configurar ${holderName} · ${walletName}`} onClick={async () => {
+            const latest = await getLatestAccountData()
+            setSelected(buildTargetSetting(holderName, walletName, latest))
+          }}>
             <Settings2 size={14} />
           </button>
         </div>
