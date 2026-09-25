@@ -233,7 +233,20 @@ export async function reorderEntityOrder(table, orderedIds = []) {
   return orderedIds
 }
 
-export async function createHolder({ name }) {
+async function ensureHolderWalletCombination({ holderId, walletId, boxId = null, shiftId = null, active = true }) {
+  requireSupabase()
+  if (!holderId || !walletId) return null
+  const account = await createAccount({ holderId, walletId, active })
+  if (boxId) {
+    await ensureAccountBoxLink({ accountId: account.id, boxId })
+  }
+  if (boxId && shiftId) {
+    await setAccountAvailability({ shiftId, boxId, accountId: account.id, enabled: Boolean(active), value: 0, canCollect: true, canWithdraw: true })
+  }
+  return account
+}
+
+export async function createHolder({ name, boxId = null, shiftId = null }) {
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
   if (!trimmedName) throw new Error('El nombre del titular no puede estar vacío')
@@ -257,6 +270,9 @@ export async function createHolder({ name }) {
       .select()
       .maybeSingle()
     if (error) throw error
+    if (boxId) {
+      await supabase.from('titulares_x_caja').upsert({ titular_id: data.id, caja_id: boxId }, { onConflict: 'titular_id,caja_id' }).select().maybeSingle()
+    }
     return data
   }
 
@@ -267,6 +283,15 @@ export async function createHolder({ name }) {
     .maybeSingle()
 
   if (error) throw error
+
+  if (boxId) {
+    await supabase.from('titulares_x_caja').upsert({ titular_id: data.id, caja_id: boxId }, { onConflict: 'titular_id,caja_id' }).select().maybeSingle()
+    const { data: walletRows = [] } = await supabase.from('billeteras').select('id').eq('is_off', false)
+    for (const wallet of walletRows) {
+      await ensureHolderWalletCombination({ holderId: data.id, walletId: wallet.id, boxId, shiftId, active: true })
+    }
+  }
+
   return data
 }
 
@@ -325,7 +350,7 @@ export async function deleteHolder(id) {
   return { id }
 }
 
-export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
+export async function createWallet({ name, typeName = 'Cobros y retiros', boxId = null, shiftId = null }) {
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
   if (!trimmedName) throw new Error('El nombre de la billetera no puede estar vacío')
@@ -358,6 +383,9 @@ export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
       .select()
       .maybeSingle()
     if (error) throw error
+    if (boxId) {
+      await supabase.from('billeteras_x_caja').upsert({ billetera_id: data.id, caja_id: boxId }, { onConflict: 'billetera_id,caja_id' }).select().maybeSingle()
+    }
     return data
   }
 
@@ -368,6 +396,15 @@ export async function createWallet({ name, typeName = 'Cobros y retiros' }) {
     .maybeSingle()
 
   if (error) throw error
+
+  if (boxId) {
+    await supabase.from('billeteras_x_caja').upsert({ billetera_id: data.id, caja_id: boxId }, { onConflict: 'billetera_id,caja_id' }).select().maybeSingle()
+    const { data: holderRows = [] } = await supabase.from('titulares').select('id').eq('is_off', false)
+    for (const holder of holderRows) {
+      await ensureHolderWalletCombination({ holderId: holder.id, walletId: data.id, boxId, shiftId, active: true })
+    }
+  }
+
   return data
 }
 

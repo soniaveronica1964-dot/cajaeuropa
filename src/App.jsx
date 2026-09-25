@@ -781,7 +781,11 @@ function LiveSettings({ data, setToast, onSaved }) {
                     }
                     const target = resolveBySnapshot('holders', index, holder)
                     if (!target) {
-                      const created = await createHolder({ name: value })
+                      const created = await createHolder({
+                        name: value,
+                        boxId: data.shift?.caja_id ?? data.boxes?.[0]?.id ?? null,
+                        shiftId: data.shift?.id ?? null,
+                      })
                       if (created) {
                         const next = [...draft.accounts.holders]
                         next[index] = created.nombre
@@ -837,7 +841,12 @@ function LiveSettings({ data, setToast, onSaved }) {
                     }
                     const target = resolveBySnapshot('wallets', index, wallet)
                     if (!target) {
-                      const created = await createWallet({ name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' })
+                      const created = await createWallet({
+                        name: value,
+                        typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros',
+                        boxId: data.shift?.caja_id ?? data.boxes?.[0]?.id ?? null,
+                        shiftId: data.shift?.id ?? null,
+                      })
                       if (created) {
                         const next = [...draft.accounts.wallets]
                         next[index] = created.nombre
