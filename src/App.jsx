@@ -956,53 +956,76 @@ function LiveSettings({ data, setToast, onSaved }) {
           </div>
         </section>
 
-        <section className="config-card">
-          <div className="config-list-head"><h3>Tipo de cuenta</h3><span>{(data.accountTypes || []).length} registros</span></div>
-          {(data.accountTypes || []).map((type) => (
-            <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto auto auto auto', gap: '8px', alignItems: 'center' }}>
-              <input value={type.nombre || ''} onChange={async (event) => {
-                const next = event.target.value.trim()
-                if (!next) return
-                await persistUpdate(() => updateAccountType(type.id, {
-                  name: next,
-                  shared: Boolean(type.es_compartido),
-                  advertising: Boolean(type.es_publicidad),
-                  saving: Boolean(type.ahorro),
-                  canCollect: Boolean(type.cobros),
-                  canWithdraw: Boolean(type.retiros),
-                }), 'Tipo de cuenta actualizado en Supabase')
-              }} placeholder="Nombre del tipo" />
-              <label className="toggle-cell" title="Compartida"><input type="checkbox" checked={Boolean(type.es_compartido)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: !Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <label className="toggle-cell" title="Publicidad"><input type="checkbox" checked={Boolean(type.es_publicidad)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: !Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <label className="toggle-cell" title="Ahorro"><input type="checkbox" checked={Boolean(type.ahorro)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: !Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <label className="toggle-cell" title="Cobros"><input type="checkbox" checked={Boolean(type.cobros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: !Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <button type="button" className="delete-button" title="Eliminar tipo de cuenta" onClick={() => persistUpdate(() => deleteAccountType(type.id), 'Tipo de cuenta eliminado de Supabase')}><X size={14} /></button>
-            </div>
-          ))}
-          <button type="button" className="config-add" onClick={() => persistUpdate(() => createAccountType({ name: 'Nuevo tipo de cuenta', shared: false, advertising: false, saving: false, canCollect: true, canWithdraw: true }), 'Tipo de cuenta creado en Supabase')}><Plus size={15} /> Agregar tipo de cuenta</button>
-        </section>
+        <div className="config-two-columns">
+          <section className="config-card">
+            <div className="config-list-head"><h3>Tipo de cuenta</h3><span>{(data.accountTypes || []).length} registros</span></div>
+            {(data.accountTypes || []).map((type) => (
+              <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto auto auto auto', gap: '8px', alignItems: 'center' }}>
+                <input value={type.nombre || ''} onChange={async (event) => {
+                  const next = event.target.value.trim()
+                  if (!next) return
+                  await persistUpdate(() => updateAccountType(type.id, {
+                    name: next,
+                    shared: Boolean(type.es_compartido),
+                    advertising: Boolean(type.es_publicidad),
+                    saving: Boolean(type.ahorro),
+                    canCollect: Boolean(type.cobros),
+                    canWithdraw: Boolean(type.retiros),
+                  }), 'Tipo de cuenta actualizado en Supabase')
+                }} placeholder="Nombre del tipo" />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <small style={{ fontSize: '10px', opacity: 0.7 }}>Compartida</small>
+                  <label className="toggle-cell" title="Compartida"><input type="checkbox" checked={Boolean(type.es_compartido)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: !Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <small style={{ fontSize: '10px', opacity: 0.7 }}>Publicidad</small>
+                  <label className="toggle-cell" title="Publicidad"><input type="checkbox" checked={Boolean(type.es_publicidad)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: !Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <small style={{ fontSize: '10px', opacity: 0.7 }}>Ahorro</small>
+                  <label className="toggle-cell" title="Ahorro"><input type="checkbox" checked={Boolean(type.ahorro)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: !Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <small style={{ fontSize: '10px', opacity: 0.7 }}>Cobros</small>
+                  <label className="toggle-cell" title="Cobros"><input type="checkbox" checked={Boolean(type.cobros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: !Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <small style={{ fontSize: '10px', opacity: 0.7 }}>Retiros</small>
+                  <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+                </div>
+                <button type="button" className="delete-button" title="Eliminar tipo de cuenta" onClick={() => persistUpdate(() => deleteAccountType(type.id), 'Tipo de cuenta eliminado de Supabase')}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => persistUpdate(() => createAccountType({ name: 'Nuevo tipo de cuenta', shared: false, advertising: false, saving: false, canCollect: true, canWithdraw: true }), 'Tipo de cuenta creado en Supabase')}><Plus size={15} /> Agregar tipo de cuenta</button>
+          </section>
 
-        <section className="config-card">
-          <div className="config-list-head"><h3>Tipo de billetera</h3><span>{(data.walletTypes || []).length} registros</span></div>
-          {(data.walletTypes || []).map((type) => (
-            <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto', gap: '8px', alignItems: 'center' }}>
-              <input value={type.nombre || ''} onChange={async (event) => {
-                const next = event.target.value.trim()
-                if (!next) return
-                await persistUpdate(() => updateWalletType(type.id, {
-                  name: next,
-                  canCollect: Boolean(type.cobros),
-                  canWithdraw: Boolean(type.retiros),
-                }), 'Tipo de billetera actualizado en Supabase')
-              }} placeholder="Nombre del tipo" />
-              <label className="toggle-cell" title="Cobros"><input type="checkbox" checked={Boolean(type.cobros)} onChange={async () => persistUpdate(() => updateWalletType(type.id, { name: type.nombre || 'Tipo', canCollect: !Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de billetera guardada')} /><span /></label>
-              <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateWalletType(type.id, { name: type.nombre || 'Tipo', canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de billetera guardada')} /><span /></label>
-              <button type="button" className="delete-button" title="Eliminar tipo de billetera" onClick={() => persistUpdate(() => deleteWalletType(type.id), 'Tipo de billetera eliminado de Supabase')}><X size={14} /></button>
-            </div>
-          ))}
-          <button type="button" className="config-add" onClick={() => persistUpdate(() => createWalletType({ name: 'Nuevo tipo de billetera', canCollect: true, canWithdraw: true }), 'Tipo de billetera creado en Supabase')}><Plus size={15} /> Agregar tipo de billetera</button>
-        </section>
+          <section className="config-card">
+            <div className="config-list-head"><h3>Tipo de billetera</h3><span>{(data.walletTypes || []).length} registros</span></div>
+            {(data.walletTypes || []).map((type) => (
+              <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto', gap: '8px', alignItems: 'center' }}>
+                <input value={type.nombre || ''} onChange={async (event) => {
+                  const next = event.target.value.trim()
+                  if (!next) return
+                  await persistUpdate(() => updateWalletType(type.id, {
+                    name: next,
+                    canCollect: Boolean(type.cobros),
+                    canWithdraw: Boolean(type.retiros),
+                  }), 'Tipo de billetera actualizado en Supabase')
+                }} placeholder="Nombre del tipo" />
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <small style={{ fontSize: '10px', opacity: 0.7 }}>Cobros</small>
+                  <label className="toggle-cell" title="Cobros"><input type="checkbox" checked={Boolean(type.cobros)} onChange={async () => persistUpdate(() => updateWalletType(type.id, { name: type.nombre || 'Tipo', canCollect: !Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de billetera guardada')} /><span /></label>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <small style={{ fontSize: '10px', opacity: 0.7 }}>Retiros</small>
+                  <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateWalletType(type.id, { name: type.nombre || 'Tipo', canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de billetera guardada')} /><span /></label>
+                </div>
+                <button type="button" className="delete-button" title="Eliminar tipo de billetera" onClick={() => persistUpdate(() => deleteWalletType(type.id), 'Tipo de billetera eliminado de Supabase')}><X size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => persistUpdate(() => createWalletType({ name: 'Nuevo tipo de billetera', canCollect: true, canWithdraw: true }), 'Tipo de billetera creado en Supabase')}><Plus size={15} /> Agregar tipo de billetera</button>
+          </section>
+        </div>
       </>}
 
       {tab === 'expenses' && <section className="config-card">
