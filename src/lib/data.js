@@ -42,8 +42,8 @@ export async function loadCurrentShiftData(boxId = null) {
     query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('plataformas', 'id, nombre, caja_id, color_id'),
     query('condiciones_bono', 'id, nombre, plataforma'),
-    query('tipos_cuenta', 'id, nombre, es_compartido, es_publicidad, cobros, retiros, ahorro'),
-    query('tipos_billetera', 'id, nombre, cobros, retiros'),
+    query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
+    query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
   ])
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
@@ -63,8 +63,8 @@ export async function loadConfigurationData() {
     query('cajas', 'id, nombre, imagen, imagen_mini, color_id, es_publicidad'),
     query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
-    query('tipos_billetera', 'id, nombre, cobros, retiros'),
-    query('tipos_cuenta', 'id, nombre, es_compartido, es_publicidad, cobros, retiros, ahorro'),
+    query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
+    query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
     query('tipos_gasto', 'id, nombre, invertir_signo'),
     query('plataformas', 'id, nombre, caja_id, color_id'),
     query('condiciones_bono', 'id, nombre, plataforma'),
@@ -357,11 +357,11 @@ export async function createWallet({ name, typeName = 'Cobros y retiros', boxId 
   if (!trimmedName) throw new Error('El nombre de la billetera no puede estar vacío')
   if (isReservedPlaceholderName(trimmedName)) throw new Error('Ingresá un nombre real para la billetera')
 
-  const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).limit(1).maybeSingle()
+  const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).eq('is_off', false).limit(1).maybeSingle()
   if (typeError) throw typeError
   let typeId = typeRow?.id
   if (!typeId) {
-    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true }).select('id').maybeSingle()
+    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true, is_off: false }).select('id').maybeSingle()
     if (createdTypeError) throw createdTypeError
     typeId = createdType.id
   }
@@ -415,11 +415,11 @@ export async function updateWallet(id, { name, typeName = 'Cobros y retiros', or
   if (!trimmedName) throw new Error('El nombre de la billetera no puede estar vacío')
   if (isReservedPlaceholderName(trimmedName)) throw new Error('Ingresá un nombre real para la billetera')
 
-  const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).limit(1).maybeSingle()
+  const { data: typeRow, error: typeError } = await supabase.from('tipos_billetera').select('id').eq('nombre', typeName).eq('is_off', false).limit(1).maybeSingle()
   if (typeError) throw typeError
   let typeId = typeRow?.id
   if (!typeId) {
-    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true }).select('id').maybeSingle()
+    const { data: createdType, error: createdTypeError } = await supabase.from('tipos_billetera').insert({ nombre: typeName, cobros: true, retiros: true, is_off: false }).select('id').maybeSingle()
     if (createdTypeError) throw createdTypeError
     typeId = createdType.id
   }
@@ -592,29 +592,62 @@ export async function deleteDayShift(id) {
   if (error) throw error
 }
 
-export async function createAccountType({ name, shared = false, advertising = false, saving = false, canCollect = false, canWithdraw = false }) {
+export async function createAccountType({ name, shared = false, deposit = false, advertising = false, saving = false, canCollect = false, canWithdraw = false }) {
   requireSupabase()
-  const { data, error } = await supabase.from('tipos_cuenta').insert({
-    nombre: name.trim(),
+  const trimmedName = normalizeEntityName(name)
+  if (!trimmedName) throw new Error('El nombre del tipo de cuenta no puede estar vacío')
+  const { data: existing, error: existingError } = await supabase
+    .from('tipos_cuenta')
+    .select('id')
+    .eq('nombre', trimmedName)
+    .eq('is_off', true)
+    .limit(1)
+    .maybeSingle()
+  if (existingError) throw existingError
+
+  const payload = {
+    nombre: trimmedName,
     es_compartido: Boolean(shared),
+    es_deposito: Boolean(deposit),
     es_publicidad: Boolean(advertising),
     ahorro: Boolean(saving),
     cobros: Boolean(canCollect),
     retiros: Boolean(canWithdraw),
-  }).select().single()
+    is_off: false,
+  }
+  const { data, error } = existing
+    ? await supabase.from('tipos_cuenta').update(payload).eq('id', existing.id).select().single()
+    : await supabase.from('tipos_cuenta').insert(payload).select().single()
   if (error) throw error
   return data
 }
 
-export async function updateAccountType(id, { name, shared = false, advertising = false, saving = false, canCollect = false, canWithdraw = false }) {
+export async function updateAccountType(id, { name, shared = false, deposit = false, advertising = false, saving = false, canCollect = false, canWithdraw = false }) {
   requireSupabase()
+  const trimmedName = normalizeEntityName(name)
+  if (!trimmedName) throw new Error('El nombre del tipo de cuenta no puede estar vacío')
+  const { data: activeRows = [], error: listError } = await supabase
+    .from('tipos_cuenta')
+    .select('id, nombre, is_off')
+    .eq('is_off', false)
+  if (listError) throw listError
+
+  const duplicate = activeRows.find((row) => row.id !== id && normalizeEntityName(row.nombre) === trimmedName)
+  if (duplicate) {
+    const { error: disableError } = await supabase.from('tipos_cuenta').update({ is_off: true }).eq('id', id)
+    if (disableError) throw disableError
+    return duplicate
+  }
+
   const { data, error } = await supabase.from('tipos_cuenta').update({
-    nombre: name.trim(),
+    nombre: trimmedName,
     es_compartido: Boolean(shared),
+    es_deposito: Boolean(deposit),
     es_publicidad: Boolean(advertising),
     ahorro: Boolean(saving),
     cobros: Boolean(canCollect),
     retiros: Boolean(canWithdraw),
+    is_off: false,
   }).eq('id', id).select().single()
   if (error) throw error
   return data
@@ -622,27 +655,58 @@ export async function updateAccountType(id, { name, shared = false, advertising 
 
 export async function deleteAccountType(id) {
   requireSupabase()
-  const { error } = await supabase.from('tipos_cuenta').delete().eq('id', id)
+  const { error } = await supabase.from('tipos_cuenta').update({ is_off: true }).eq('id', id)
   if (error) throw error
 }
 
 export async function createWalletType({ name, canCollect = true, canWithdraw = true }) {
   requireSupabase()
-  const { data, error } = await supabase.from('tipos_billetera').insert({
-    nombre: name.trim(),
+  const trimmedName = normalizeEntityName(name)
+  if (!trimmedName) throw new Error('El nombre del tipo de billetera no puede estar vacío')
+  const { data: existing, error: existingError } = await supabase
+    .from('tipos_billetera')
+    .select('id')
+    .eq('nombre', trimmedName)
+    .eq('is_off', true)
+    .limit(1)
+    .maybeSingle()
+  if (existingError) throw existingError
+
+  const payload = {
+    nombre: trimmedName,
     cobros: Boolean(canCollect),
     retiros: Boolean(canWithdraw),
-  }).select().single()
+    is_off: false,
+  }
+  const { data, error } = existing
+    ? await supabase.from('tipos_billetera').update(payload).eq('id', existing.id).select().single()
+    : await supabase.from('tipos_billetera').insert(payload).select().single()
   if (error) throw error
   return data
 }
 
 export async function updateWalletType(id, { name, canCollect = true, canWithdraw = true }) {
   requireSupabase()
+  const trimmedName = normalizeEntityName(name)
+  if (!trimmedName) throw new Error('El nombre del tipo de billetera no puede estar vacío')
+  const { data: activeRows = [], error: listError } = await supabase
+    .from('tipos_billetera')
+    .select('id, nombre, is_off')
+    .eq('is_off', false)
+  if (listError) throw listError
+
+  const duplicate = activeRows.find((row) => row.id !== id && normalizeEntityName(row.nombre) === trimmedName)
+  if (duplicate) {
+    const { error: disableError } = await supabase.from('tipos_billetera').update({ is_off: true }).eq('id', id)
+    if (disableError) throw disableError
+    return duplicate
+  }
+
   const { data, error } = await supabase.from('tipos_billetera').update({
-    nombre: name.trim(),
+    nombre: trimmedName,
     cobros: Boolean(canCollect),
     retiros: Boolean(canWithdraw),
+    is_off: false,
   }).eq('id', id).select().single()
   if (error) throw error
   return data
@@ -650,13 +714,13 @@ export async function updateWalletType(id, { name, canCollect = true, canWithdra
 
 export async function deleteWalletType(id) {
   requireSupabase()
-  const { error } = await supabase.from('tipos_billetera').delete().eq('id', id)
+  const { error } = await supabase.from('tipos_billetera').update({ is_off: true }).eq('id', id)
   if (error) throw error
 }
 
 export async function getDefaultAccountTypeId() {
   requireSupabase()
-  const { data, error } = await supabase.from('tipos_cuenta').select('id').limit(1).maybeSingle()
+  const { data, error } = await supabase.from('tipos_cuenta').select('id').eq('is_off', false).limit(1).maybeSingle()
   if (error) throw error
   if (!data) throw new Error('No hay tipos de cuenta configurados')
   return data.id

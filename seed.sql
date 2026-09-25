@@ -13,8 +13,8 @@ INSERT INTO tipos_billetera (nombre, cobros, retiros)
 SELECT 'Cobros y retiros', TRUE, TRUE
 WHERE NOT EXISTS (SELECT 1 FROM tipos_billetera WHERE nombre = 'Cobros y retiros');
 
-INSERT INTO tipos_cuenta (nombre, cobros, retiros, ahorro)
-SELECT 'Cuenta operativa', TRUE, TRUE, FALSE
+INSERT INTO tipos_cuenta (nombre, cobros, retiros, es_deposito, ahorro)
+SELECT 'Cuenta operativa', TRUE, TRUE, FALSE, FALSE
 WHERE NOT EXISTS (SELECT 1 FROM tipos_cuenta WHERE nombre = 'Cuenta operativa');
 
 INSERT INTO tipos_gasto (nombre, invertir_signo)
