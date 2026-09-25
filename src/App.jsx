@@ -38,6 +38,7 @@ import {
   createExpense,
   createExpenseType,
   createHolder,
+  createWalletType,
   createInitialSetup,
   createPlatform,
   createShiftType,
@@ -47,6 +48,7 @@ import {
   deleteBonusCondition,
   deleteBox,
   deleteDayShift,
+  deleteWalletType,
   deleteExpenseType,
   deleteHolder,
   deletePlatform,
@@ -59,6 +61,7 @@ import {
   updateAccountType,
   updateAccountValue,
   updateAdvertisingLine,
+  updateWalletType,
   updateBonusCondition,
   updateBox,
   updateDayShift,
@@ -292,7 +295,7 @@ function LiveStatistics({ data }) {
   const tips = data.tips.reduce((sum, row) => sum + Number(row.monto || 0), 0)
   const expenses = data.expenses.reduce((sum, row) => sum + Number(row.monto || 0), 0)
   const bonuses = data.bonuses.reduce((sum, row) => sum + (row.recuperado ? -Number(row.valor || 0) : Number(row.valor || 0)), 0)
-  return <><GoalStrip open={false} onToggle={() => {}} goals={mapGoals(data.goals)} /><section className="panel stats-toolbar"><div><span className="eyebrow">Turno actual</span><h2>{data.shift ? new Date(data.shift.fecha_hora_inicio).toLocaleString('es-AR') : 'Sin turno abierto'}</h2></div><div className="stats-filters"><span className="muted-copy">Las estadísticas históricas estarán disponibles cuando existan turnos cerrados.</span></div></section><div className="stats-grid"><section className="panel stat-card featured"><div className="stat-head"><h2>Turno actual</h2><small>1 turno</small></div><h3>GENERAL</h3><div className="stat-line"><span>Caja inicial</span><b>{money.format(data.shift?.caja_inicial || 0)}</b></div><div className="stat-line"><span>Propinas</span><b>{money.format(tips)}</b></div><div className="stat-line"><span>Gastos</span><b>{money.format(expenses)}</b></div><h3>BONOS</h3><div className="stat-line"><span>Bonos netos</span><b>{money.format(bonuses)}</b></div><h3>DATOS</h3><div className="stat-line"><span>Cuentas activas</span><b>{data.accounts.length}</b></div><div className="stat-line"><span>Movimientos</span><b>{data.tips.length + data.expenses.length + data.bonuses.length}</b></div></section><section className="panel stat-card"><EmptyInline text="No hay otros turnos cerrados en el rango cargado." /></section></div></>
+  return <><section className="panel stats-toolbar"><div><span className="eyebrow">Turno actual</span><h2>{data.shift ? new Date(data.shift.fecha_hora_inicio).toLocaleString('es-AR') : 'Sin turno abierto'}</h2></div><div className="stats-filters"><span className="muted-copy">Las estadísticas históricas estarán disponibles cuando existan turnos cerrados.</span></div></section><div className="stats-grid"><section className="panel stat-card featured"><div className="stat-head"><h2>Turno actual</h2><small>1 turno</small></div><h3>GENERAL</h3><div className="stat-line"><span>Caja inicial</span><b>{money.format(data.shift?.caja_inicial || 0)}</b></div><div className="stat-line"><span>Propinas</span><b>{money.format(tips)}</b></div><div className="stat-line"><span>Gastos</span><b>{money.format(expenses)}</b></div><h3>BONOS</h3><div className="stat-line"><span>Bonos netos</span><b>{money.format(bonuses)}</b></div><h3>DATOS</h3><div className="stat-line"><span>Cuentas activas</span><b>{data.accounts.length}</b></div><div className="stat-line"><span>Movimientos</span><b>{data.tips.length + data.expenses.length + data.bonuses.length}</b></div></section><section className="panel stat-card"><EmptyInline text="No hay otros turnos cerrados en el rango cargado." /></section></div></>
 }
 
 function LiveLogistics({ data, setToast }) {
@@ -304,7 +307,6 @@ function LiveLogistics({ data, setToast }) {
   })
 
   return <>
-    <GoalStrip open={false} onToggle={() => {}} goals={mapGoals(data.goals)} />
     <section className="panel logistics-page">
       <PanelTitle icon={WalletCards} title="Ruta de cuentas" meta={`${rows.length} registros del turno`} action={<button className="primary-button" onClick={() => setToast('La creación de logística se conectará a la tabla lineas_logistica')}><Plus size={14} /> Agregar billetera</button>} />
       <div className="search-line wide"><Search size={14} /><input placeholder="Filtrar cliente o billetera" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
@@ -320,9 +322,9 @@ function LiveLogistics({ data, setToast }) {
   </>
 }
 
-function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(null); return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel directory"><PanelTitle icon={Users} title="Usuarios" meta={`${users.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo usuario</button>} />{users.map(user => { const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`; return <div className={`directory-row ${expanded === user.id ? 'expanded' : ''}`} key={user.id}><button className="expand-button" onClick={() => setExpanded(expanded === user.id ? null : user.id)}>{expanded === user.id ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button><b>{name}</b><div className="tags">{user.titulares_usuario?.map(holder => <span key={holder.id}>{holder.nombre}</span>)}</div><button className="icon-button"><Settings2 size={15} /></button>{expanded === user.id && <div className="user-detail"><label>Nombre<input defaultValue={name} /></label><label>Teléfono<input defaultValue={user.telefonos_usuario?.[0]?.numero || ''} /></label><label>Titular<input defaultValue={user.titulares_usuario?.[0]?.nombre || ''} /></label><label>Estado<input defaultValue={user.bloqueado ? 'Bloqueado' : 'Activo'} readOnly /></label></div>}</div> })}{!users.length && <EmptyInline text="No hay usuarios registrados en Supabase." />}</section></> }
+function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(null); return <><section className="panel directory"><PanelTitle icon={Users} title="Usuarios" meta={`${users.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo usuario</button>} />{users.map(user => { const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`; return <div className={`directory-row ${expanded === user.id ? 'expanded' : ''}`} key={user.id}><button className="expand-button" onClick={() => setExpanded(expanded === user.id ? null : user.id)}>{expanded === user.id ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button><b>{name}</b><div className="tags">{user.titulares_usuario?.map(holder => <span key={holder.id}>{holder.nombre}</span>)}</div><button className="icon-button"><Settings2 size={15} /></button>{expanded === user.id && <div className="user-detail"><label>Nombre<input defaultValue={name} /></label><label>Teléfono<input defaultValue={user.telefonos_usuario?.[0]?.numero || ''} /></label><label>Titular<input defaultValue={user.titulares_usuario?.[0]?.nombre || ''} /></label><label>Estado<input defaultValue={user.bloqueado ? 'Bloqueado' : 'Activo'} readOnly /></label></div>}</div> })}{!users.length && <EmptyInline text="No hay usuarios registrados en Supabase." />}</section></> }
 
-function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
+function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
 
 function LiveSettings({ data, setToast, onSaved }) {
   const [dragState, setDragState] = useState({ type: null, index: null })
@@ -698,7 +700,6 @@ function LiveSettings({ data, setToast, onSaved }) {
   })
 
   return <>
-    <GoalStrip open={false} onToggle={() => {}} />
     <div className="settings-page">
       <div className="settings-tabs">
         {renderTabButton('boxes', 'Cajas', Banknote)}
@@ -708,14 +709,13 @@ function LiveSettings({ data, setToast, onSaved }) {
         {renderTabButton('platforms', 'Control de fichas', Boxes)}
         {renderTabButton('users', 'Usuarios', Users)}
         {renderTabButton('bonuses', 'Bonos', Gift)}
-        {renderTabButton('account-types', 'Tipos de cuenta', CircleDollarSign)}
         {renderTabButton('goals', 'Objetivos', Target)}
         {renderTabButton('app', 'App', Settings2)}
       </div>
 
       <section className="settings-intro">
         <span className="eyebrow">Configuración</span>
-        <h2>{tab === 'boxes' ? 'Cajas' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : 'Objetivos'}</h2>
+        <h2>{tab === 'boxes' ? 'Cajas' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : tab === 'goals' ? 'Objetivos' : 'App'}</h2>
       </section>
 
       {tab === 'boxes' && <>
@@ -955,6 +955,54 @@ function LiveSettings({ data, setToast, onSaved }) {
             {accountEntryRows}
           </div>
         </section>
+
+        <section className="config-card">
+          <div className="config-list-head"><h3>Tipo de cuenta</h3><span>{(data.accountTypes || []).length} registros</span></div>
+          {(data.accountTypes || []).map((type) => (
+            <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto auto auto auto', gap: '8px', alignItems: 'center' }}>
+              <input value={type.nombre || ''} onChange={async (event) => {
+                const next = event.target.value.trim()
+                if (!next) return
+                await persistUpdate(() => updateAccountType(type.id, {
+                  name: next,
+                  shared: Boolean(type.es_compartido),
+                  advertising: Boolean(type.es_publicidad),
+                  saving: Boolean(type.ahorro),
+                  canCollect: Boolean(type.cobros),
+                  canWithdraw: Boolean(type.retiros),
+                }), 'Tipo de cuenta actualizado en Supabase')
+              }} placeholder="Nombre del tipo" />
+              <label className="toggle-cell" title="Compartida"><input type="checkbox" checked={Boolean(type.es_compartido)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: !Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <label className="toggle-cell" title="Publicidad"><input type="checkbox" checked={Boolean(type.es_publicidad)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: !Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <label className="toggle-cell" title="Ahorro"><input type="checkbox" checked={Boolean(type.ahorro)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: !Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <label className="toggle-cell" title="Cobros"><input type="checkbox" checked={Boolean(type.cobros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: !Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+              <button type="button" className="delete-button" title="Eliminar tipo de cuenta" onClick={() => persistUpdate(() => deleteAccountType(type.id), 'Tipo de cuenta eliminado de Supabase')}><X size={14} /></button>
+            </div>
+          ))}
+          <button type="button" className="config-add" onClick={() => persistUpdate(() => createAccountType({ name: 'Nuevo tipo de cuenta', shared: false, advertising: false, saving: false, canCollect: true, canWithdraw: true }), 'Tipo de cuenta creado en Supabase')}><Plus size={15} /> Agregar tipo de cuenta</button>
+        </section>
+
+        <section className="config-card">
+          <div className="config-list-head"><h3>Tipo de billetera</h3><span>{(data.walletTypes || []).length} registros</span></div>
+          {(data.walletTypes || []).map((type) => (
+            <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto', gap: '8px', alignItems: 'center' }}>
+              <input value={type.nombre || ''} onChange={async (event) => {
+                const next = event.target.value.trim()
+                if (!next) return
+                await persistUpdate(() => updateWalletType(type.id, {
+                  name: next,
+                  canCollect: Boolean(type.cobros),
+                  canWithdraw: Boolean(type.retiros),
+                }), 'Tipo de billetera actualizado en Supabase')
+              }} placeholder="Nombre del tipo" />
+              <label className="toggle-cell" title="Cobros"><input type="checkbox" checked={Boolean(type.cobros)} onChange={async () => persistUpdate(() => updateWalletType(type.id, { name: type.nombre || 'Tipo', canCollect: !Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de billetera guardada')} /><span /></label>
+              <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateWalletType(type.id, { name: type.nombre || 'Tipo', canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de billetera guardada')} /><span /></label>
+              <button type="button" className="delete-button" title="Eliminar tipo de billetera" onClick={() => persistUpdate(() => deleteWalletType(type.id), 'Tipo de billetera eliminado de Supabase')}><X size={14} /></button>
+            </div>
+          ))}
+          <button type="button" className="config-add" onClick={() => persistUpdate(() => createWalletType({ name: 'Nuevo tipo de billetera', canCollect: true, canWithdraw: true }), 'Tipo de billetera creado en Supabase')}><Plus size={15} /> Agregar tipo de billetera</button>
+        </section>
       </>}
 
       {tab === 'expenses' && <section className="config-card">
@@ -1026,35 +1074,6 @@ function LiveSettings({ data, setToast, onSaved }) {
           await persistUpdate(() => createPlatform({ name: 'Nueva plataforma', color: 'teal', boxId }), 'Plataforma creada en Supabase')
         }}><Plus size={15} /> Agregar plataforma</button>
       </section>}
-
-      {tab === 'account-types' && <>
-        <section className="config-card">
-          <div className="config-list-head"><h3>Tipos de cuenta</h3><span>{(data.accountTypes || []).length} registros</span></div>
-          {(data.accountTypes || []).map((type) => (
-            <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto auto auto auto', gap: '8px', alignItems: 'center' }}>
-              <input value={type.nombre || ''} onChange={async (event) => {
-                const next = event.target.value.trim()
-                if (!next) return
-                await persistUpdate(() => updateAccountType(type.id, {
-                  name: next,
-                  shared: Boolean(type.es_compartido),
-                  advertising: Boolean(type.es_publicidad),
-                  saving: Boolean(type.ahorro),
-                  canCollect: Boolean(type.cobros),
-                  canWithdraw: Boolean(type.retiros),
-                }), 'Tipo de cuenta actualizado en Supabase')
-              }} placeholder="Nombre del tipo" />
-              <label className="toggle-cell" title="Compartida"><input type="checkbox" checked={Boolean(type.es_compartido)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: !Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <label className="toggle-cell" title="Publicidad"><input type="checkbox" checked={Boolean(type.es_publicidad)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: !Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <label className="toggle-cell" title="Ahorro"><input type="checkbox" checked={Boolean(type.ahorro)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: !Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <label className="toggle-cell" title="Cobros"><input type="checkbox" checked={Boolean(type.cobros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: !Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
-              <button type="button" className="delete-button" title="Eliminar tipo de cuenta" onClick={() => persistUpdate(() => deleteAccountType(type.id), 'Tipo de cuenta eliminado de Supabase')}><X size={14} /></button>
-            </div>
-          ))}
-          <button type="button" className="config-add" onClick={() => persistUpdate(() => createAccountType({ name: 'Nuevo tipo de cuenta', shared: false, advertising: false, saving: false, canCollect: true, canWithdraw: true }), 'Tipo de cuenta creado en Supabase')}><Plus size={15} /> Agregar tipo de cuenta</button>
-        </section>
-      </>}
 
       {tab === 'users' && <>
         <section className="config-card">

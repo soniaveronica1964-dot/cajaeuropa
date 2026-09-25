@@ -25,9 +25,9 @@ export async function loadCurrentShiftData(boxId = null) {
   if (boxId) shiftRequest = shiftRequest.eq('caja_id', boxId)
   const { data: shift, error: shiftError } = await shiftRequest.maybeSingle()
   if (shiftError) throw shiftError
-  if (!shift) return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes: [], logistics: [], users: [], goals: [], chips: [] }
+  if (!shift) return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes: [], logistics: [], users: [], goals: [], chips: [], walletTypes: [], accountTypes: [] }
 
-  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes] = await Promise.all([
+  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id)),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
@@ -43,6 +43,7 @@ export async function loadCurrentShiftData(boxId = null) {
     query('plataformas', 'id, nombre, caja_id, color_id'),
     query('condiciones_bono', 'id, nombre, plataforma'),
     query('tipos_cuenta', 'id, nombre, es_compartido, es_publicidad, cobros, retiros, ahorro'),
+    query('tipos_billetera', 'id, nombre, cobros, retiros'),
   ])
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
@@ -54,7 +55,7 @@ export async function loadCurrentShiftData(boxId = null) {
 
   const logisticsWithAccounts = logistics.map(line => ({ ...line, cuentas_x_turno: { cuentas: accountById.get(accountLinks.find(link => link.id === line.cuenta_x_turno_id)?.cuenta_id) || null } }))
 
-  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes }
+  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes }
 }
 
 export async function loadConfigurationData() {
@@ -622,6 +623,34 @@ export async function updateAccountType(id, { name, shared = false, advertising 
 export async function deleteAccountType(id) {
   requireSupabase()
   const { error } = await supabase.from('tipos_cuenta').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createWalletType({ name, canCollect = true, canWithdraw = true }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('tipos_billetera').insert({
+    nombre: name.trim(),
+    cobros: Boolean(canCollect),
+    retiros: Boolean(canWithdraw),
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateWalletType(id, { name, canCollect = true, canWithdraw = true }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('tipos_billetera').update({
+    nombre: name.trim(),
+    cobros: Boolean(canCollect),
+    retiros: Boolean(canWithdraw),
+  }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteWalletType(id) {
+  requireSupabase()
+  const { error } = await supabase.from('tipos_billetera').delete().eq('id', id)
   if (error) throw error
 }
 
