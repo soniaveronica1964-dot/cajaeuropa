@@ -332,6 +332,7 @@ function LiveSettings({ data, setToast, onSaved }) {
     try {
       await action()
       setSaveNotice(successMessage)
+      onSaved?.()
       window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la configuración')
@@ -394,6 +395,13 @@ function LiveSettings({ data, setToast, onSaved }) {
   const [tab, setTab] = useState('accounts')
   const [draft, setDraft] = useState(buildDefaultConfig)
   const [selected, setSelected] = useState(null)
+  const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
+
+  const resolveBySnapshot = (type, index, currentValue) => {
+    const source = type === 'holders' ? (data.holders || []) : (data.wallets || [])
+    const originalValue = editingSnapshot[type]?.[index] ?? currentValue
+    return source.find((item) => item.nombre === originalValue) || source[index] || source.find((item) => item.nombre === currentValue) || null
+  }
 
   useEffect(() => {
     setDraft(buildDefaultConfig)
@@ -508,6 +516,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       }
 
       setSaveNotice(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
+      onSaved?.()
       window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setDraft((current) => ({
@@ -590,6 +599,7 @@ function LiveSettings({ data, setToast, onSaved }) {
 
       setSelected(null)
       setSaveNotice('Cuenta guardada')
+      onSaved?.()
       window.setTimeout(() => setSaveNotice(''), 1800)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
@@ -745,27 +755,34 @@ function LiveSettings({ data, setToast, onSaved }) {
             {draft.accounts.holders.map((holder, index) => (
               <div className="config-list-row" key={`holder-row-${index}`} draggable onDragStart={() => setDragState({ type: 'holders', index })} onDragOver={(event) => event.preventDefault()} onDrop={async () => { await reorderAccountEntries('holders', dragState.index, index); setDragState({ type: null, index: null }) }} onDragEnd={() => setDragState({ type: null, index: null })}>
                 <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
-                <input value={holder} onChange={(event) => {
-                  const next = [...draft.accounts.holders]
-                  next[index] = event.target.value
-                  updateAccounts({ holders: next })
-                }} onBlur={async (event) => {
-                  const value = event.target.value.trim()
-                  if (!value) return
-                  const target = (data.holders || [])[index] || data.holders.find((item) => item.nombre === holder)
-                  if (!target) {
-                    const created = await createHolder({ name: value })
-                    if (created) {
-                      const next = [...draft.accounts.holders]
-                      next[index] = created.nombre
-                      updateAccounts({ holders: next })
+                <input
+                  value={holder}
+                  onFocus={() => setEditingSnapshot((current) => ({ ...current, holders: { ...current.holders, [index]: holder } }))}
+                  onChange={(event) => {
+                    const next = [...draft.accounts.holders]
+                    next[index] = event.target.value
+                    updateAccounts({ holders: next })
+                  }}
+                  onBlur={async (event) => {
+                    const value = event.target.value.trim()
+                    if (!value) return
+                    const originalValue = editingSnapshot.holders[index] ?? holder
+                    const target = resolveBySnapshot('holders', index, originalValue)
+                    if (!target) {
+                      const created = await createHolder({ name: value })
+                      if (created) {
+                        const next = [...draft.accounts.holders]
+                        next[index] = created.nombre
+                        updateAccounts({ holders: next })
+                      }
+                      return
                     }
-                    return
-                  }
-                  await persistUpdate(() => updateHolder(target.id, { name: value, orderNum: index + 1 }), 'Titular actualizado')
-                }} placeholder="Nombre del titular" />
+                    await persistUpdate(() => updateHolder(target.id, { name: value, orderNum: index + 1 }), 'Titular actualizado')
+                  }}
+                  placeholder="Nombre del titular"
+                />
                 <button type="button" className="delete-button" title="Eliminar titular" onClick={async () => {
-                  const current = data.holders.find(item => item.nombre === holder)
+                  const current = resolveBySnapshot('holders', index, holder)
                   if (!current) return
                   await persistUpdate(async () => {
                     await deleteHolder(current.id)
@@ -787,29 +804,36 @@ function LiveSettings({ data, setToast, onSaved }) {
             {draft.accounts.wallets.map((wallet, index) => (
               <div className="wallet-config-row" key={`wallet-row-${index}`} draggable onDragStart={() => setDragState({ type: 'wallets', index })} onDragOver={(event) => event.preventDefault()} onDrop={async () => { await reorderAccountEntries('wallets', dragState.index, index); setDragState({ type: null, index: null }) }} onDragEnd={() => setDragState({ type: null, index: null })}>
                 <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
-                <input value={wallet} onChange={(event) => {
-                  const next = [...draft.accounts.wallets]
-                  next[index] = event.target.value
-                  updateAccounts({ wallets: next })
-                }} onBlur={async (event) => {
-                  const value = event.target.value.trim()
-                  if (!value) return
-                  const target = (data.wallets || [])[index] || data.wallets.find((item) => item.nombre === wallet)
-                  if (!target) {
-                    const created = await createWallet({ name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' })
-                    if (created) {
-                      const next = [...draft.accounts.wallets]
-                      next[index] = created.nombre
-                      updateAccounts({ wallets: next })
+                <input
+                  value={wallet}
+                  onFocus={() => setEditingSnapshot((current) => ({ ...current, wallets: { ...current.wallets, [index]: wallet } }))}
+                  onChange={(event) => {
+                    const next = [...draft.accounts.wallets]
+                    next[index] = event.target.value
+                    updateAccounts({ wallets: next })
+                  }}
+                  onBlur={async (event) => {
+                    const value = event.target.value.trim()
+                    if (!value) return
+                    const originalValue = editingSnapshot.wallets[index] ?? wallet
+                    const target = resolveBySnapshot('wallets', index, originalValue)
+                    if (!target) {
+                      const created = await createWallet({ name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' })
+                      if (created) {
+                        const next = [...draft.accounts.wallets]
+                        next[index] = created.nombre
+                        updateAccounts({ wallets: next })
+                      }
+                      return
                     }
-                    return
-                  }
-                  await persistUpdate(() => updateWallet(target.id, { name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros', orderNum: index + 1 }), 'Billetera actualizada')
-                }} placeholder="Nombre de billetera" />
+                    await persistUpdate(() => updateWallet(target.id, { name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros', orderNum: index + 1 }), 'Billetera actualizada')
+                  }}
+                  placeholder="Nombre de billetera"
+                />
                 <select value={draft.accounts.walletModes?.[wallet] || 'Cobros + Retiros'} onChange={async (event) => {
                   const nextMode = event.target.value
                   updateAccounts({ walletModes: { ...(draft.accounts.walletModes || {}), [wallet]: nextMode } })
-                  const target = data.wallets.find(item => item.nombre === wallet)
+                  const target = resolveBySnapshot('wallets', index, wallet)
                   if (target) {
                     await persistUpdate(() => updateWallet(target.id, { name: wallet, typeName: nextMode === 'Cobros + Retiros' ? 'Cobros y retiros' : nextMode === 'Solo Cobros' ? 'Cobros' : 'Depósito' }), 'Modo de billetera actualizado en Supabase')
                   }
@@ -819,7 +843,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                   <option>Solo Depósito</option>
                 </select>
                 <button type="button" className="delete-button" title="Eliminar billetera" onClick={async () => {
-                  const current = data.wallets.find(item => item.nombre === wallet)
+                  const current = resolveBySnapshot('wallets', index, wallet)
                   if (!current) return
                   await persistUpdate(async () => {
                     await deleteWallet(current.id)
