@@ -958,8 +958,8 @@ function LiveSettings({ data, setToast, onSaved }) {
           </div>
         </section>
 
-        <div className="config-two-columns">
-          <section className="config-card" style={{ borderTop: '1px solid rgba(148, 163, 184, 0.25)', paddingTop: '18px' }}>
+        <div className="config-two-columns" style={{ marginTop: '18px', borderTop: '1px solid rgba(148, 163, 184, 0.25)', paddingTop: '18px' }}>
+          <section className="config-card">
             <div className="config-list-head"><h3>Tipo de cuenta</h3><span>{(localData.accountTypes || []).length} registros</span></div>
             {(localData.accountTypes || []).map((type) => (
               <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto auto auto auto', gap: '8px', alignItems: 'center' }}>
@@ -1001,7 +1001,7 @@ function LiveSettings({ data, setToast, onSaved }) {
             <button type="button" className="config-add" onClick={() => persistUpdate(() => createAccountType({ name: 'Nuevo tipo de cuenta', shared: false, advertising: false, saving: false, canCollect: true, canWithdraw: true }), 'Tipo de cuenta creado en Supabase')}><Plus size={15} /> Agregar tipo de cuenta</button>
           </section>
 
-          <section className="config-card" style={{ borderTop: '1px solid rgba(148, 163, 184, 0.25)', paddingTop: '18px' }}>
+          <section className="config-card">
             <div className="config-list-head"><h3>Tipo de billetera</h3><span>{(localData.walletTypes || []).length} registros</span></div>
             {(localData.walletTypes || []).map((type) => (
               <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto', gap: '8px', alignItems: 'center' }}>
