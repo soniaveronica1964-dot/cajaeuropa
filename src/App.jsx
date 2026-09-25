@@ -405,14 +405,14 @@ function LiveSettings({ data, setToast, onSaved }) {
         holders: holdersFromData.map((holder) => holder.nombre || 'Sin titular'),
         wallets: walletsFromData.map((wallet) => wallet.nombre || 'Sin billetera'),
         availability,
-        walletModes: Object.fromEntries((walletsFromData.map((wallet) => [wallet.nombre || 'Sin billetera', 'Cobros y retiros']))),
+        walletModes: Object.fromEntries((walletsFromData.map((wallet) => [wallet.nombre || 'Sin billetera', wallet.tipos_billetera?.nombre || localData.walletTypes?.[0]?.nombre || 'Cobros y retiros']))),
       },
       expenses: (localData.expenseTypes || []).map((expense) => ({ id: expense.id, name: expense.nombre || 'Gasto', inverted: Boolean(expense.invertir_signo) })),
       platforms: (localData.platforms || []).map((platform) => platform.nombre || 'Plataforma'),
       platformColors: Object.fromEntries((localData.platforms || []).map((platform) => [platform.nombre || 'Plataforma', platform.color_id ? 'teal' : 'teal'])),
       bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
     }
-  }, [localData.accounts, localData.boxes, localData.holders, localData.wallets, localData.platforms, localData.expenseTypes, localData.bonusConditions])
+  }, [localData.accounts, localData.boxes, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions])
 
   const [tab, setTab] = useState('accounts')
   const [draft, setDraft] = useState(buildDefaultConfig)
@@ -446,8 +446,8 @@ function LiveSettings({ data, setToast, onSaved }) {
       if (type === 'holders') {
         await updateHolder(id, { name: label, orderNum: index + 1 })
       } else {
-        const walletMode = draft.accounts.walletModes?.[label] || 'Cobros y retiros'
-        await updateWallet(id, { name: label, typeName: walletMode === 'Cobros + Retiros' ? 'Cobros y retiros' : walletMode === 'Solo Cobros' ? 'Cobros' : 'Depósito', orderNum: index + 1 })
+        const walletMode = draft.accounts.walletModes?.[label] || localData.walletTypes?.[0]?.nombre || 'Cobros y retiros'
+        await updateWallet(id, { name: label, typeName: walletMode, orderNum: index + 1 })
       }
     }
   }
@@ -906,7 +906,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                     if (!target) {
                       const created = await createWallet({
                         name: value,
-                        typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros',
+                        typeName: draft.accounts.walletModes?.[wallet] || localData.walletTypes?.[0]?.nombre || 'Cobros y retiros',
                         boxId: data.shift?.caja_id ?? data.boxes?.[0]?.id ?? null,
                         shiftId: data.shift?.id ?? null,
                       })
@@ -917,21 +917,19 @@ function LiveSettings({ data, setToast, onSaved }) {
                       }
                       return
                     }
-                    await persistUpdate(() => updateWallet(target.id, { name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros', orderNum: index + 1 }), 'Billetera actualizada')
+                    await persistUpdate(() => updateWallet(target.id, { name: value, typeName: draft.accounts.walletModes?.[wallet] || localData.walletTypes?.[0]?.nombre || 'Cobros y retiros', orderNum: index + 1 }), 'Billetera actualizada')
                   }}
                   placeholder="Nombre de billetera"
                 />
-                <select value={draft.accounts.walletModes?.[wallet] || 'Cobros + Retiros'} onChange={async (event) => {
+                <select value={draft.accounts.walletModes?.[wallet] || localData.walletTypes?.[0]?.nombre || ''} onChange={async (event) => {
                   const nextMode = event.target.value
                   updateAccounts({ walletModes: { ...(draft.accounts.walletModes || {}), [wallet]: nextMode } })
                   const target = resolveBySnapshot('wallets', index, wallet)
                   if (target) {
-                    await persistUpdate(() => updateWallet(target.id, { name: wallet, typeName: nextMode === 'Cobros + Retiros' ? 'Cobros y retiros' : nextMode === 'Solo Cobros' ? 'Cobros' : 'Depósito' }), 'Modo de billetera actualizado en Supabase')
+                    await persistUpdate(() => updateWallet(target.id, { name: wallet, typeName: nextMode }), 'Tipo de billetera actualizado en Supabase')
                   }
                 }}>
-                  <option>Cobros + Retiros</option>
-                  <option>Solo Cobros</option>
-                  <option>Solo Depósito</option>
+                  {(localData.walletTypes || []).map((type) => <option key={type.id} value={type.nombre}>{type.nombre}</option>)}
                 </select>
                 <button type="button" className="delete-button" title="Eliminar billetera" onClick={async () => {
                   const current = resolveBySnapshot('wallets', index, wallet)
