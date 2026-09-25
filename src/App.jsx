@@ -325,17 +325,25 @@ function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(nul
 function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><GoalStrip open={false} onToggle={() => {}} /><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
 
 function LiveSettings({ data, setToast, onSaved }) {
-  const [saveNotice, setSaveNotice] = useState('')
   const [dragState, setDragState] = useState({ type: null, index: null })
+  const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
 
   const persistUpdate = async (action, successMessage) => {
     try {
       await action()
-      setSaveNotice(successMessage)
-      window.setTimeout(() => setSaveNotice(''), 1800)
+      setToast(successMessage)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la configuración')
     }
+  }
+
+  const resolveBySnapshot = (type, index, fallbackName) => {
+    const source = type === 'holders' ? (data.holders || []) : (data.wallets || [])
+    const snapshot = editingSnapshot[type]?.[index]
+    if (snapshot?.id) {
+      return source.find((item) => String(item.id) === String(snapshot.id)) || source.find((item) => item.nombre === snapshot.name) || null
+    }
+    return source.find((item) => item.nombre === fallbackName) || null
   }
 
   const buildUniqueItems = (items, getItem) => {
@@ -394,13 +402,6 @@ function LiveSettings({ data, setToast, onSaved }) {
   const [tab, setTab] = useState('accounts')
   const [draft, setDraft] = useState(buildDefaultConfig)
   const [selected, setSelected] = useState(null)
-  const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
-
-  const resolveBySnapshot = (type, index, currentValue) => {
-    const source = type === 'holders' ? (data.holders || []) : (data.wallets || [])
-    const originalValue = editingSnapshot[type]?.[index] ?? currentValue
-    return source.find((item) => item.nombre === originalValue) || source[index] || source.find((item) => item.nombre === currentValue) || null
-  }
 
   useEffect(() => {
     setDraft(buildDefaultConfig)
@@ -514,8 +515,7 @@ function LiveSettings({ data, setToast, onSaved }) {
         }
       }
 
-      setSaveNotice(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
-      window.setTimeout(() => setSaveNotice(''), 1800)
+      setToast(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
     } catch (error) {
       setDraft((current) => ({
         ...current,
@@ -596,8 +596,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       }
 
       setSelected(null)
-      setSaveNotice('Cuenta guardada')
-      window.setTimeout(() => setSaveNotice(''), 1800)
+      setToast('Cuenta guardada')
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
     }
@@ -651,7 +650,6 @@ function LiveSettings({ data, setToast, onSaved }) {
       <section className="settings-intro">
         <span className="eyebrow">Configuración</span>
         <h2>{tab === 'boxes' ? 'Cajas' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : 'Objetivos'}</h2>
-        {saveNotice && <div className="inline-status" style={{ marginTop: '8px', fontSize: '12px', padding: '6px 10px', borderRadius: '999px', display: 'inline-flex', alignItems: 'center', background: '#dff7eb', color: '#1d6341', border: '1px solid rgba(29,99,65,0.18)' }}>{saveNotice}</div>}
       </section>
 
       {tab === 'boxes' && <>
@@ -754,7 +752,16 @@ function LiveSettings({ data, setToast, onSaved }) {
                 <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
                 <input
                   value={holder}
-                  onFocus={() => setEditingSnapshot((current) => ({ ...current, holders: { ...current.holders, [index]: holder } }))}
+                  onFocus={() => setEditingSnapshot((current) => ({
+                    ...current,
+                    holders: {
+                      ...current.holders,
+                      [index]: {
+                        id: (data.holders || [])[index]?.id ?? (data.holders || []).find((item) => item.nombre === holder)?.id ?? null,
+                        name: holder,
+                      },
+                    },
+                  }))}
                   onChange={(event) => {
                     const next = [...draft.accounts.holders]
                     next[index] = event.target.value
@@ -763,8 +770,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                   onBlur={async (event) => {
                     const value = event.target.value.trim()
                     if (!value) return
-                    const originalValue = editingSnapshot.holders[index] ?? holder
-                    const target = resolveBySnapshot('holders', index, originalValue)
+                    const target = resolveBySnapshot('holders', index, holder)
                     if (!target) {
                       const created = await createHolder({ name: value })
                       if (created) {
@@ -803,7 +809,16 @@ function LiveSettings({ data, setToast, onSaved }) {
                 <span className="drag-handle" title="Reordenar"><GripVertical size={14} /></span>
                 <input
                   value={wallet}
-                  onFocus={() => setEditingSnapshot((current) => ({ ...current, wallets: { ...current.wallets, [index]: wallet } }))}
+                  onFocus={() => setEditingSnapshot((current) => ({
+                    ...current,
+                    wallets: {
+                      ...current.wallets,
+                      [index]: {
+                        id: (data.wallets || [])[index]?.id ?? (data.wallets || []).find((item) => item.nombre === wallet)?.id ?? null,
+                        name: wallet,
+                      },
+                    },
+                  }))}
                   onChange={(event) => {
                     const next = [...draft.accounts.wallets]
                     next[index] = event.target.value
@@ -812,8 +827,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                   onBlur={async (event) => {
                     const value = event.target.value.trim()
                     if (!value) return
-                    const originalValue = editingSnapshot.wallets[index] ?? wallet
-                    const target = resolveBySnapshot('wallets', index, originalValue)
+                    const target = resolveBySnapshot('wallets', index, wallet)
                     if (!target) {
                       const created = await createWallet({ name: value, typeName: draft.accounts.walletModes?.[wallet] || 'Cobros y retiros' })
                       if (created) {
