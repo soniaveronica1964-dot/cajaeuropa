@@ -25,7 +25,15 @@ export async function loadCurrentShiftData(boxId = null) {
   if (boxId) shiftRequest = shiftRequest.eq('caja_id', boxId)
   const { data: shift, error: shiftError } = await shiftRequest.maybeSingle()
   if (shiftError) throw shiftError
-  if (!shift) return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes: [], logistics: [], users: [], goals: [], chips: [], walletTypes: [], accountTypes: [] }
+  if (!shift) {
+    const [holders, wallets, walletTypes, accountTypes] = await Promise.all([
+      query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
+      query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
+      query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
+      query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
+    ])
+    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes: [], logistics: [], users: [], goals: [], chips: [], holders, wallets, walletTypes, accountTypes }
+  }
 
   const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),

@@ -58,7 +58,7 @@ BEGIN
     'propinas', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario',
     'paneles_x_usuario', 'paneles', 'subobjetivos_x_turno', 'subobjetivos',
-    'objetivos', 'fichas', 'plataformas', 'cargas_fichas'
+    'objetivos', 'fichas', 'plataformas', 'cargas_fichas', 'app_config'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_read_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_read_%I ON public.%I FOR SELECT TO anon USING (true)', table_name, table_name);

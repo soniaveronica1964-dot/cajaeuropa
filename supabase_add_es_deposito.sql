@@ -10,6 +10,26 @@ ALTER TABLE tipos_cuenta
 ALTER TABLE tipos_billetera
     ADD COLUMN IF NOT EXISTS is_off BOOLEAN NOT NULL DEFAULT FALSE;
 
+-- Permisos temporales para que el asistente de alta pueda crear app_config
+-- cuando se usa el rol anon en el entorno de desarrollo.
+ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS dev_read_app_config ON public.app_config;
+CREATE POLICY dev_read_app_config ON public.app_config
+    FOR SELECT TO anon, authenticated USING (true);
+
+DROP POLICY IF EXISTS dev_insert_app_config ON public.app_config;
+CREATE POLICY dev_insert_app_config ON public.app_config
+    FOR INSERT TO anon, authenticated WITH CHECK (true);
+
+DROP POLICY IF EXISTS dev_update_app_config ON public.app_config;
+CREATE POLICY dev_update_app_config ON public.app_config
+    FOR UPDATE TO anon, authenticated USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS dev_delete_app_config ON public.app_config;
+CREATE POLICY dev_delete_app_config ON public.app_config
+    FOR DELETE TO anon, authenticated USING (true);
+
 -- Solo para el entorno de desarrollo. Elimina todos los datos de la app
 -- y reinicia las identidades para que los nuevos IDs vuelvan a comenzar en 1.
 CREATE OR REPLACE FUNCTION public.format_caja_database()
