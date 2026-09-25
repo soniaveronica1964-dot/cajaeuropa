@@ -332,7 +332,6 @@ function LiveSettings({ data, setToast, onSaved }) {
     try {
       await action()
       setToast(successMessage)
-      onSaved?.()
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la configuración')
     }
@@ -517,7 +516,6 @@ function LiveSettings({ data, setToast, onSaved }) {
       }
 
       setToast(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
-      onSaved?.()
     } catch (error) {
       setDraft((current) => ({
         ...current,
@@ -599,7 +597,6 @@ function LiveSettings({ data, setToast, onSaved }) {
 
       setSelected(null)
       setToast('Cuenta guardada')
-      onSaved?.()
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la cuenta')
     }
