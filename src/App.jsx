@@ -327,6 +327,11 @@ function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonu
 function LiveSettings({ data, setToast, onSaved }) {
   const [dragState, setDragState] = useState({ type: null, index: null })
   const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
+  const [localData, setLocalData] = useState(data)
+
+  useEffect(() => {
+    setLocalData(data)
+  }, [data])
 
   const persistUpdate = async (action, successMessage) => {
     try {
@@ -337,8 +342,14 @@ function LiveSettings({ data, setToast, onSaved }) {
     }
   }
 
+  const refreshLocalData = async () => {
+    const fresh = await loadCurrentShiftData(data?.shift?.caja_id ?? null)
+    setLocalData(fresh)
+    return fresh
+  }
+
   const resolveBySnapshot = (type, index, fallbackName) => {
-    const source = type === 'holders' ? (data.holders || []) : (data.wallets || [])
+    const source = type === 'holders' ? (localData.holders || []) : (localData.wallets || [])
     const snapshot = editingSnapshot[type]?.[index]
     if (snapshot?.id) {
       return source.find((item) => String(item.id) === String(snapshot.id)) || source.find((item) => item.nombre === snapshot.name) || null
@@ -367,17 +378,17 @@ function LiveSettings({ data, setToast, onSaved }) {
       return String(left?.nombre || '').localeCompare(String(right?.nombre || ''))
     })
 
-    const holdersFromData = sortByOrder(buildUniqueItems(data.holders || data.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.titulares || { id: entry?.cuenta_id, nombre: 'Sin titular' }))))
-    const walletsFromData = sortByOrder(buildUniqueItems(data.wallets || data.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.billeteras || { id: entry?.cuenta_id, nombre: 'Sin billetera' }))))
+    const holdersFromData = sortByOrder(buildUniqueItems(localData.holders || localData.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.titulares || { id: entry?.cuenta_id, nombre: 'Sin titular' }))))
+    const walletsFromData = sortByOrder(buildUniqueItems(localData.wallets || localData.accounts || [], (entry) => (entry?.nombre ? entry : (entry?.cuentas?.billeteras || { id: entry?.cuenta_id, nombre: 'Sin billetera' }))))
     const availability = {}
     holdersFromData.forEach((holder) => {
       const holderName = holder.nombre || 'Sin titular'
       availability[holderName] = {}
       walletsFromData.forEach((wallet) => {
         const walletName = wallet.nombre || 'Sin billetera'
-        const isAvailable = (data.accounts || []).some((account) => {
-          const accountHolder = account?.cuentas?.titulares?.nombre || data.holders?.find((item) => item.id === account?.titular_id)?.nombre
-          const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+        const isAvailable = (localData.accounts || []).some((account) => {
+          const accountHolder = account?.cuentas?.titulares?.nombre || localData.holders?.find((item) => item.id === account?.titular_id)?.nombre
+          const accountWallet = account?.cuentas?.billeteras?.nombre || localData.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
           return accountHolder === holderName && accountWallet === walletName
         })
         availability[holderName][walletName] = isAvailable
@@ -385,19 +396,19 @@ function LiveSettings({ data, setToast, onSaved }) {
     })
 
     return {
-      boxes: (data.boxes || []).map((box) => ({ id: box.id, title: box.nombre || 'Caja', color: box.color_id || 'teal' })),
+      boxes: (localData.boxes || []).map((box) => ({ id: box.id, title: box.nombre || 'Caja', color: box.color_id || 'teal' })),
       accounts: {
         holders: holdersFromData.map((holder) => holder.nombre || 'Sin titular'),
         wallets: walletsFromData.map((wallet) => wallet.nombre || 'Sin billetera'),
         availability,
         walletModes: Object.fromEntries((walletsFromData.map((wallet) => [wallet.nombre || 'Sin billetera', 'Cobros y retiros']))),
       },
-      expenses: (data.expenseTypes || []).map((expense) => ({ id: expense.id, name: expense.nombre || 'Gasto', inverted: Boolean(expense.invertir_signo) })),
-      platforms: (data.platforms || []).map((platform) => platform.nombre || 'Plataforma'),
-      platformColors: Object.fromEntries((data.platforms || []).map((platform) => [platform.nombre || 'Plataforma', platform.color_id ? 'teal' : 'teal'])),
-      bonusConditions: (data.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
+      expenses: (localData.expenseTypes || []).map((expense) => ({ id: expense.id, name: expense.nombre || 'Gasto', inverted: Boolean(expense.invertir_signo) })),
+      platforms: (localData.platforms || []).map((platform) => platform.nombre || 'Plataforma'),
+      platformColors: Object.fromEntries((localData.platforms || []).map((platform) => [platform.nombre || 'Plataforma', platform.color_id ? 'teal' : 'teal'])),
+      bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
     }
-  }, [data.accounts, data.boxes, data.holders, data.wallets, data.platforms, data.expenseTypes, data.bonusConditions])
+  }, [localData.accounts, localData.boxes, localData.holders, localData.wallets, localData.platforms, localData.expenseTypes, localData.bonusConditions])
 
   const [tab, setTab] = useState('accounts')
   const [draft, setDraft] = useState(buildDefaultConfig)
@@ -420,7 +431,7 @@ function LiveSettings({ data, setToast, onSaved }) {
     next.splice(toIndex, 0, moved)
     updateAccounts({ [key]: next })
 
-    const source = type === 'holders' ? (data.holders || []) : (data.wallets || [])
+    const source = type === 'holders' ? (localData.holders || []) : (localData.wallets || [])
     const orderedIds = next
       .map((label) => source.find((item) => item.nombre === label)?.id)
       .filter(Boolean)
@@ -522,7 +533,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       }
 
       setToast(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
-      const refreshed = await getLatestAccountData()
+      const refreshed = await refreshLocalData()
       if (refreshed?.accounts) {
         setDraft((current) => ({
           ...current,
@@ -562,7 +573,7 @@ function LiveSettings({ data, setToast, onSaved }) {
     }
   }
 
-  const buildTargetSetting = (holderName, walletName, sourceData = data) => {
+  const buildTargetSetting = (holderName, walletName, sourceData = localData) => {
     const existingAccount = (sourceData?.accounts || []).find((account) => {
       const accountHolder = account?.cuentas?.titulares?.nombre || sourceData?.holders?.find((item) => item.id === account?.titular_id)?.nombre
       const accountWallet = account?.cuentas?.billeteras?.nombre || sourceData?.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
@@ -574,7 +585,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       holder: holderName,
       wallet: walletName,
       accountId: account?.id || existingAccount?.cuenta_id || null,
-      typeId: account?.tipo_cuenta_id || data.accountTypes?.[0]?.id || '',
+      typeId: account?.tipo_cuenta_id || localData.accountTypes?.[0]?.id || '',
       alias: account?.alias || '',
       cuil: account?.cuil || '',
       password: account?.patron || '',
@@ -585,7 +596,7 @@ function LiveSettings({ data, setToast, onSaved }) {
   const saveAccountSettings = async () => {
     if (!selected) return
     try {
-      const latest = await getLatestAccountData()
+      const latest = await refreshLocalData()
       const holder = latest.holders?.find((item) => item.nombre === selected.holder)
       const wallet = latest.wallets?.find((item) => item.nombre === selected.wallet)
 
@@ -626,7 +637,7 @@ function LiveSettings({ data, setToast, onSaved }) {
 
       setSelected(null)
       setToast('Cuenta guardada')
-      const refreshed = await getLatestAccountData()
+      const refreshed = await refreshLocalData()
       setDraft((current) => ({
         ...current,
         accounts: {
@@ -676,7 +687,7 @@ function LiveSettings({ data, setToast, onSaved }) {
             <span />
           </label>
           <button type="button" className="account-settings-button" title={`Configurar ${holderName} · ${walletName}`} onClick={async () => {
-            const latest = await getLatestAccountData()
+            const latest = await refreshLocalData()
             setSelected(buildTargetSetting(holderName, walletName, latest))
           }}>
             <Settings2 size={14} />
@@ -837,8 +848,8 @@ function LiveSettings({ data, setToast, onSaved }) {
                         shiftId: data.shift?.id ?? null,
                       })
                       if (created) {
-                        const next = [...draft.accounts.holders]
-                        next[index] = created.nombre
+                        const refreshed = await refreshLocalData()
+                        const next = [...(refreshed.holders || []).map((item) => item.nombre)]
                         updateAccounts({ holders: next })
                       }
                       return
@@ -898,8 +909,8 @@ function LiveSettings({ data, setToast, onSaved }) {
                         shiftId: data.shift?.id ?? null,
                       })
                       if (created) {
-                        const next = [...draft.accounts.wallets]
-                        next[index] = created.nombre
+                        const refreshed = await refreshLocalData()
+                        const next = [...(refreshed.wallets || []).map((item) => item.nombre)]
                         updateAccounts({ wallets: next })
                       }
                       return
