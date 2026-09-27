@@ -119,6 +119,13 @@ function App() {
     setAppData(null)
     loadCurrentShiftData(boxId).then(setAppData).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
   }
+  const updateSettingsData = (freshData) => {
+    if (freshData) {
+      setAppData(freshData)
+      return
+    }
+    reloadData()
+  }
 
   return (
     <div className="app-shell">
@@ -161,7 +168,7 @@ function App() {
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
           {!loadError && appData && view === 'bonuses' && <LiveBonuses bonuses={appData.bonuses} />}
-          {!loadError && appData && view === 'settings' && <LiveSettings data={appData} setToast={setToast} onSaved={reloadData} />}
+          {!loadError && appData && view === 'settings' && <LiveSettings data={appData} setToast={setToast} onSaved={updateSettingsData} />}
         </main>
       </div>
       {toast && <div className="toast"><Sparkles size={16} />{toast}</div>}
@@ -355,7 +362,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       await action()
       const fresh = await refreshLocalData()
       setLocalData(fresh)
-      onSaved()
+      onSaved(fresh)
       setToast(successMessage)
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la configuración')
@@ -805,9 +812,9 @@ function LiveSettings({ data, setToast, onSaved }) {
             <div className="config-list-head"><h3>Tipos de turno</h3><span>{(data.shiftTypes || []).length} registros</span></div>
             {(data.shiftTypes || []).map((type) => (
               <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
-                <input value={type.nombre || ''} onChange={async (event) => {
+                <input defaultValue={type.nombre || ''} onBlur={async (event) => {
                   const next = event.target.value.trim()
-                  if (!next) return
+                  if (!next || next === type.nombre) return
                   await persistUpdate(() => updateShiftType(type.id, { name: next, colorId: type.color_id }), 'Tipo de turno actualizado en Supabase')
                 }} placeholder="Nombre del tipo" />
                 <select value={type.color_id || ''} onChange={(event) => persistUpdate(() => updateShiftType(type.id, { name: type.nombre || 'Tipo de turno', colorId: event.target.value || null }), 'Color de tipo de turno actualizado')}>
@@ -843,8 +850,14 @@ function LiveSettings({ data, setToast, onSaved }) {
           {(data.shiftDays || []).map((day) => <div className="config-list-row" key={day.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto auto auto auto', gap: '8px', alignItems: 'center' }}>
             <span><strong>{(data.shiftTypes || []).find(type => type.id === day.tipo_turno_id)?.nombre || 'Tipo de turno'}</strong><br /><small>{day.nombre}</small></span>
             <b>{weekdayLabels[(day.dia_semana || 1) - 1] || '?'}</b>
-            <input type="time" value={day.hora_inicio || '08:00'} onChange={(event) => persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: event.target.value, end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de inicio actualizada')} />
-            <input type="time" value={day.hora_fin || '18:00'} onChange={(event) => persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: day.hora_inicio || '08:00', end: event.target.value, crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de fin actualizada')} />
+            <input type="time" defaultValue={day.hora_inicio || '08:00'} onBlur={(event) => {
+              if (event.target.value === (day.hora_inicio || '08:00')) return
+              persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: event.target.value, end: day.hora_fin || '18:00', crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de inicio actualizada')
+            }} />
+            <input type="time" defaultValue={day.hora_fin || '18:00'} onBlur={(event) => {
+              if (event.target.value === (day.hora_fin || '18:00')) return
+              persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: day.hora_inicio || '08:00', end: event.target.value, crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de fin actualizada')
+            }} />
             <label className="toggle-cell" title="Cruza medianoche"><input type="checkbox" checked={Boolean(day.cruza_medianoche)} onChange={(event) => persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: day.hora_inicio || '08:00', end: day.hora_fin || '18:00', crossesMidnight: event.target.checked }), 'Cruce de medianoche actualizado')} /><span /></label>
             <button type="button" className="delete-button" title="Eliminar día" onClick={() => persistUpdate(() => deleteDayShift(day.id), 'Día de turno eliminado de Supabase')}><X size={14} /></button>
           </div>)}
@@ -1025,9 +1038,9 @@ function LiveSettings({ data, setToast, onSaved }) {
             <div className="config-list-head"><h3>Tipo de cuenta</h3><span>{(localData.accountTypes || []).length} registros</span></div>
             {(localData.accountTypes || []).map((type) => (
               <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto auto auto auto auto', gap: '8px', alignItems: 'center' }}>
-                <input value={type.nombre || ''} onChange={async (event) => {
+                <input defaultValue={type.nombre || ''} onBlur={async (event) => {
                   const next = event.target.value.trim()
-                  if (!next) return
+                  if (!next || next === type.nombre) return
                   await persistUpdate(() => updateAccountType(type.id, {
                     name: next,
                     shared: Boolean(type.es_compartido),
@@ -1072,9 +1085,9 @@ function LiveSettings({ data, setToast, onSaved }) {
             <div className="config-list-head"><h3>Tipo de billetera</h3><span>{(localData.walletTypes || []).length} registros</span></div>
             {(localData.walletTypes || []).map((type) => (
               <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1.3fr auto auto auto', gap: '8px', alignItems: 'center' }}>
-                <input value={type.nombre || ''} onChange={async (event) => {
+                <input defaultValue={type.nombre || ''} onBlur={async (event) => {
                   const next = event.target.value.trim()
-                  if (!next) return
+                  if (!next || next === type.nombre) return
                   await persistUpdate(() => updateWalletType(type.id, {
                     name: next,
                     canCollect: Boolean(type.cobros),
@@ -1217,14 +1230,14 @@ function LiveSettings({ data, setToast, onSaved }) {
         <section className="config-card">
           <div className="config-list-head"><h3>Configuración de la aplicación</h3><span>Único registro activo</span></div>
           <div className="account-settings-fields app-config-fields">
-            <label><span>Nombre</span><input value={(data.appConfig?.[0]?.nombre) || 'Caja Europa'} onChange={async (event) => {
+            <label><span>Nombre</span><input defaultValue={(data.appConfig?.[0]?.nombre) || 'Caja Europa'} onBlur={async (event) => {
               const next = event.target.value.trim()
-              if (!next) return
+              if (!next || next === (data.appConfig?.[0]?.nombre || 'Caja Europa')) return
               await persistUpdate(() => saveAppConfig({ name: next, icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración de la app guardada en Supabase')
             }} /></label>
-            <label><span>Ícono</span><input value={(data.appConfig?.[0]?.icono) || 'banknote'} onChange={async (event) => {
+            <label><span>Ícono</span><input defaultValue={(data.appConfig?.[0]?.icono) || 'banknote'} onBlur={async (event) => {
               const next = event.target.value.trim()
-              if (!next) return
+              if (!next || next === (data.appConfig?.[0]?.icono || 'banknote')) return
               await persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: next, theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Ícono actualizado en Supabase')
             }} /></label>
             <div className="app-config-toggles">
@@ -1237,8 +1250,16 @@ function LiveSettings({ data, setToast, onSaved }) {
         <section className="config-card" style={{ marginTop: '18px' }}>
           <div className="config-list-head"><h3>Colores</h3><span>{(data.colors || []).length} registros</span></div>
           {(data.colors || []).map((color) => <div className="config-list-row app-color-row" key={color.id}>
-            <input value={color.nombre || ''} onChange={(event) => persistUpdate(() => updateColor(color.id, { name: event.target.value || 'Color', hex: color.hex || '#72D7CA' }), 'Nombre de color actualizado')} />
-            <input type="color" value={color.hex || '#72D7CA'} onChange={(event) => persistUpdate(() => updateColor(color.id, { name: color.nombre || 'Color', hex: event.target.value }), 'Color actualizado')} />
+            <input defaultValue={color.nombre || ''} onBlur={(event) => {
+              const name = event.target.value.trim()
+              if (!name || name === color.nombre) return
+              persistUpdate(() => updateColor(color.id, { name, hex: color.hex || '#72D7CA' }), 'Nombre de color actualizado')
+            }} />
+            <input type="color" defaultValue={color.hex || '#72D7CA'} onBlur={(event) => {
+              const hex = event.target.value
+              if (hex === (color.hex || '#72D7CA')) return
+              persistUpdate(() => updateColor(color.id, { name: color.nombre || 'Color', hex }), 'Color actualizado')
+            }} />
             <button type="button" className="delete-button" title="Eliminar color" onClick={() => persistUpdate(() => deleteColor(color.id), 'Color eliminado')}><X size={14} /></button>
           </div>)}
           <button type="button" className="config-add" onClick={() => persistUpdate(() => createColor({ name: 'Nuevo color', hex: '#72D7CA' }), 'Color creado')}><Plus size={15} /> Agregar color</button>
