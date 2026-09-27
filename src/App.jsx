@@ -86,21 +86,6 @@ import {
 } from './lib/data'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
-const boxColorOptions = [
-  { value: 'teal', label: 'Turquesa', hex: '#72d7ca' },
-  { value: 'blue', label: 'Azul', hex: '#82b8ff' },
-  { value: 'green', label: 'Verde', hex: '#83d5a2' },
-  { value: 'orange', label: 'Naranja', hex: '#f5ad69' },
-  { value: 'pink', label: 'Rosa', hex: '#ed9fc1' },
-  { value: 'red', label: 'Rojo', hex: '#ef8888' },
-  { value: 'yellow', label: 'Amarillo', hex: '#e8d477' },
-  { value: 'violet', label: 'Violeta', hex: '#c2a0ed' },
-  { value: 'slate', label: 'Pizarra', hex: '#aebdca' },
-]
-
-function boxColorKey(hex) {
-  return boxColorOptions.find((option) => option.hex.toLowerCase() === hex?.toLowerCase())?.value || 'teal'
-}
 
 async function createAppImagePayload(file) {
   const image = await new Promise((resolve, reject) => {
@@ -492,7 +477,10 @@ function LiveSettings({ data, setToast, onSaved }) {
     })
 
     return {
-      boxes: (localData.boxes || []).map((box) => ({ id: box.id, title: box.nombre || 'Caja', color: boxColorKey(box.colores?.hex), colorHex: box.colores?.hex || '#72d7ca' })),
+      boxes: (localData.boxes || []).map((box) => {
+        const color = localData.colors?.find((item) => item.id === box.color_id) || box.colores
+        return { id: box.id, title: box.nombre || 'Caja', colorId: box.color_id, colorHex: color?.hex || null }
+      }),
       accounts: {
         holders: holdersFromData.map((holder) => holder.nombre || 'Sin titular'),
         wallets: walletsFromData.map((wallet) => wallet.nombre || 'Sin billetera'),
@@ -504,7 +492,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       platformColors: Object.fromEntries((localData.platforms || []).map((platform) => [platform.nombre || 'Plataforma', platform.color_id ? 'teal' : 'teal'])),
       bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
     }
-  }, [localData.accounts, localData.boxes, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions])
+  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions])
 
   const [tab, setTab] = useState('accounts')
   const [draft, setDraft] = useState(buildDefaultConfig)
@@ -817,18 +805,21 @@ function LiveSettings({ data, setToast, onSaved }) {
             <div className="config-list-head"><h3>Mis cajas</h3><span>{draft.boxes.length} espacios</span></div>
             {draft.boxes.map((box, index) => (
               <div className="config-list-row box-config-row" key={box.id || index}>
-                <span className="box-config-dot" style={{ backgroundColor: box.colorHex || boxColorOptions.find((option) => option.value === box.color)?.hex }} />
+                <span className="box-config-dot" style={{ backgroundColor: box.colorHex || '#879598' }} />
                 <input value={box.title} onChange={(event) => setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) }))} onBlur={async (event) => {
                   const value = event.target.value.trim()
                   if (!box.id || !value) return
-                  await persistUpdate(() => updateBox(box.id, { name: value, color: box.color || 'teal' }), 'Caja actualizada en Supabase')
+                  if (value === box.title) return
+                  await persistUpdate(() => updateBox(box.id, { name: value, colorId: box.colorId }), 'Caja actualizada en Supabase')
                 }} placeholder="Nombre" />
-                <select value={box.color} onChange={(event) => {
-                  const nextColor = event.target.value
-                  const nextHex = boxColorOptions.find((option) => option.value === nextColor)?.hex
-                  setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, color: nextColor, colorHex: nextHex } : item) }))
-                  if (box.id) persistUpdate(() => updateBox(box.id, { name: box.title, color: nextColor }), 'Color de caja actualizado en Supabase')
-                }} aria-label="Color">{boxColorOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>
+                <select value={box.colorId == null ? '' : String(box.colorId)} onChange={(event) => {
+                  const nextColorId = event.target.value || null
+                  const selectedColor = localData.colors?.find((color) => String(color.id) === nextColorId)
+                  setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || null } : item) }))
+                  if (box.id) persistUpdate(() => updateBox(box.id, { name: box.title, colorId: nextColorId }), 'Color de caja actualizado en Supabase')
+                }} aria-label="Color">
+                  {localData.colors?.length ? localData.colors.map((color) => <option value={String(color.id)} key={color.id}>{color.nombre}</option>) : <option value="">Sin colores disponibles</option>}
+                </select>
                 <button type="button" className="delete-button" title="Eliminar caja" onClick={() => {
                   if (!box.id) return
                   persistUpdate(() => deleteBox(box.id), 'Caja eliminada de Supabase')
@@ -837,7 +828,7 @@ function LiveSettings({ data, setToast, onSaved }) {
             ))}
             <button type="button" className="config-add" onClick={async () => {
               const name = 'Nueva caja'
-              await persistUpdate(() => createBox({ name, color: 'teal' }), 'Caja creada en Supabase')
+              await persistUpdate(() => createBox({ name, colorId: localData.colors?.[0]?.id ?? null }), 'Caja creada en Supabase')
             }}><Plus size={15} /> Agregar caja</button>
         </section>
       </>}

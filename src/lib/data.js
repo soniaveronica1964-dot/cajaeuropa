@@ -182,17 +182,15 @@ async function ensureColor(name, color = 'teal') {
   return data.id
 }
 
-export async function createBox({ name, color = 'teal' }) {
+export async function createBox({ name, colorId = null }) {
   requireSupabase()
-  const colorId = await ensureColor(name, color)
   const { data, error } = await supabase.from('cajas').insert({ nombre: name.trim(), color_id: colorId, es_publicidad: false }).select().single()
   if (error) throw error
   return data
 }
 
-export async function updateBox(id, { name, color = 'teal' }) {
+export async function updateBox(id, { name, colorId = null }) {
   requireSupabase()
-  const colorId = await ensureColor(name || 'Caja', color)
   const { data, error } = await supabase.from('cajas').update({ nombre: name.trim(), color_id: colorId }).eq('id', id).select().single()
   if (error) throw error
   return data
