@@ -1153,7 +1153,7 @@ function LiveSettings({ data, setToast, onSaved }) {
         </div>
       </>}
 
-      {tab === 'expenses' && <section className="config-card">
+      {tab === 'expenses' && <section className="config-card expense-settings-card">
         <div className="config-list-head"><h3>Opciones del selector</h3><span>{draft.expenses.length} categorías</span></div>
         {draft.expenses.map((expense, index) => (
           <div className="config-list-row expense-config-row" key={expense.id || `expense-${index}`}>

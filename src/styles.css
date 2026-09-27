@@ -1241,6 +1241,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: 10px;
   background: rgba(22, 31, 32, 0.82);
 }
+.expense-settings-card {
+  width: fit-content;
+  max-width: 100%;
+}
 .config-list-head {
   display: flex;
   align-items: baseline;
