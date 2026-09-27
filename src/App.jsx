@@ -168,7 +168,7 @@ function App() {
       <header className="topbar">
         <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
           <div className="brand-mark">{appImagePreview ? <img className="brand-image" src={appImagePreview} alt="" /> : <Banknote size={21} />}</div>
-          <div><strong>{appName}</strong><small>Control operativo</small></div>
+          <div><strong>Caja<span>{appName}</span></strong><small>Control operativo</small></div>
         </div>
         <div className="shift-nav">
           <button className="icon-button" title="Turno anterior"><ChevronRight size={17} className="flip-x" /></button>
@@ -1291,13 +1291,13 @@ function LiveSettings({ data, setToast, onSaved }) {
                       event.target.value = ''
                     }
                   }} />
-                  <button type="button" className="secondary-button" onClick={() => appImageInputRef.current?.click()}><Upload size={14} /> Reemplazar archivo</button>
+                  <button type="button" className="secondary-button app-image-action" onClick={() => appImageInputRef.current?.click()}><Upload size={14} /> {appImageReference ? 'Reemplazar archivo' : 'Subir archivo'}</button>
                   <button type="button" className="delete-button app-image-delete" disabled={!appImageReference} onClick={() => persistUpdate(() => deleteAppImage(), 'Imagen de la aplicación eliminada')}><Trash2 size={14} /> Eliminar imagen</button>
                 </div>
               </div>
             </div>
             <div className="app-config-toggles">
-              <label className="toggle-cell" aria-label="Tema claro"><span>Claro</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ theme: !Boolean(data.appConfig?.[0]?.tema) }), 'Tema actualizado')} /><span aria-hidden="true" /></label>
+              <label className="toggle-cell" aria-label={data.appConfig?.[0]?.tema ? 'Tema claro' : 'Tema oscuro'}><span>{data.appConfig?.[0]?.tema ? 'Tema claro' : 'Tema oscuro'}</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ theme: !Boolean(data.appConfig?.[0]?.tema) }), 'Tema actualizado')} /><span aria-hidden="true" /></label>
               <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false) }), 'Configuración visual guardada')} /><span aria-hidden="true" /></label>
             </div>
           </div>
