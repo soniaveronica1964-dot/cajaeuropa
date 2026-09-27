@@ -1270,6 +1270,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       </>}
 
       {tab === 'app' && <>
+        <div className="app-settings-columns">
         <section className="config-card">
           <div className="config-list-head"><h3>Configuración de la aplicación</h3><span>Único registro activo</span></div>
           <div className="account-settings-fields app-config-fields">
@@ -1306,7 +1307,7 @@ function LiveSettings({ data, setToast, onSaved }) {
             </div>
           </div>
         </section>
-        <section className="config-card" style={{ marginTop: '18px' }}>
+        <section className="config-card">
           <div className="config-list-head"><h3>Colores</h3><span>{(data.colors || []).length} registros</span></div>
           {(data.colors || []).map((color) => <div className="config-list-row app-color-row" key={color.id}>
             <input defaultValue={color.nombre || ''} onBlur={(event) => {
@@ -1323,6 +1324,7 @@ function LiveSettings({ data, setToast, onSaved }) {
           </div>)}
           <button type="button" className="config-add" onClick={() => persistUpdate(() => createColor({ name: 'Nuevo color', hex: '#72D7CA' }), 'Color creado')}><Plus size={15} /> Agregar color</button>
         </section>
+        </div>
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(239, 136, 136, 0.5)' }}>
           <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Acción destructiva</span></div>
           <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
