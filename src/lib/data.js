@@ -1,5 +1,9 @@
 import { supabase } from './supabase'
 
+const APP_CONFIG_BUCKET = 'app-assets'
+const APP_IMAGE_PATH = 'app-config/application-original'
+const APP_IMAGE_MINI_PATH = 'app-config/application-mini.webp'
+
 function requireSupabase() {
   if (!supabase) throw new Error('Supabase no está configurado')
 }
@@ -899,6 +903,33 @@ export async function saveAppConfig({ name, image, imageMini, theme, showNotes }
   const { data, error } = await promise
   if (error) throw error
   return data
+}
+
+export function getStoragePublicUrl(path) {
+  if (!path) return null
+  if (/^(data:|https?:\/\/)/i.test(path)) return path
+  requireSupabase()
+  return supabase.storage.from(APP_CONFIG_BUCKET).getPublicUrl(path).data.publicUrl
+}
+
+export async function replaceAppImage(original, imageMini) {
+  requireSupabase()
+  const storage = supabase.storage.from(APP_CONFIG_BUCKET)
+  const uploads = [
+    storage.upload(APP_IMAGE_PATH, original, { contentType: original.type || 'application/octet-stream', upsert: true, cacheControl: '0' }),
+    storage.upload(APP_IMAGE_MINI_PATH, imageMini, { contentType: 'image/webp', upsert: true, cacheControl: '0' }),
+  ]
+  const results = await Promise.all(uploads)
+  const failedUpload = results.find(({ error }) => error)
+  if (failedUpload) throw failedUpload.error
+  return saveAppConfig({ image: APP_IMAGE_PATH, imageMini: APP_IMAGE_MINI_PATH })
+}
+
+export async function deleteAppImage() {
+  requireSupabase()
+  const { error } = await supabase.storage.from(APP_CONFIG_BUCKET).remove([APP_IMAGE_PATH, APP_IMAGE_MINI_PATH])
+  if (error) throw error
+  return saveAppConfig({ image: null, imageMini: null })
 }
 
 export async function formatDatabase() {

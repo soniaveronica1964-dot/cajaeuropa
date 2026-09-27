@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeftRight,
   BarChart3,
@@ -24,6 +24,8 @@ import {
   SlidersHorizontal,
   Sparkles,
   Target,
+  Trash2,
+  Upload,
   UserRound,
   Users,
   WalletCards,
@@ -61,6 +63,9 @@ import {
   closeShift,
   formatDatabase,
   loadCurrentShiftData,
+  deleteAppImage,
+  getStoragePublicUrl,
+  replaceAppImage,
   saveAppConfig,
   setAccountAvailability,
   updateAccount,
@@ -99,7 +104,14 @@ async function createAppImagePayload(file) {
   canvas.height = Math.max(1, Math.round(preview.naturalHeight * scale))
   canvas.getContext('2d').drawImage(preview, 0, 0, canvas.width, canvas.height)
 
-  return { image, imageMini: canvas.toDataURL('image/webp', 0.88) }
+  const imageMini = await new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob)
+      else reject(new Error('No se pudo generar la imagen miniatura'))
+    }, 'image/webp', 0.88)
+  })
+
+  return { original: file, imageMini }
 }
 
 const navItems = [
@@ -149,12 +161,13 @@ function App() {
   const appConfig = appData?.appConfig?.[0]
   const appName = appConfig?.nombre || 'Caja Europa'
   const isLightTheme = Boolean(appConfig?.tema)
+  const appImagePreview = getStoragePublicUrl(appConfig?.imagen_mini || appConfig?.imagen)
 
   return (
     <div className="app-shell" data-theme={isLightTheme ? 'light' : 'dark'}>
       <header className="topbar">
         <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
-          <div className="brand-mark">{appConfig?.imagen_mini ? <img className="brand-image" src={appConfig.imagen_mini} alt="" /> : <Banknote size={21} />}</div>
+          <div className="brand-mark">{appImagePreview ? <img className="brand-image" src={appImagePreview} alt="" /> : <Banknote size={21} />}</div>
           <div><strong>{appName}</strong><small>Control operativo</small></div>
         </div>
         <div className="shift-nav">
@@ -367,6 +380,7 @@ function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(nul
 function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
 
 function LiveSettings({ data, setToast, onSaved }) {
+  const appImageInputRef = useRef(null)
   const [dragState, setDragState] = useState({ type: null, index: null })
   const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
   const [localData, setLocalData] = useState(data)
@@ -375,6 +389,8 @@ function LiveSettings({ data, setToast, onSaved }) {
   const [dayDraft, setDayDraft] = useState({ typeId: '', name: '', start: '08:00', end: '18:00', crossesMidnight: false })
   const [turnDraft, setTurnDraft] = useState({ dayId: '', initialAmount: '0' })
   const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+  const appImageReference = data.appConfig?.[0]?.imagen_mini || data.appConfig?.[0]?.imagen
+  const appImagePreview = getStoragePublicUrl(appImageReference)
 
   useEffect(() => {
     setLocalData(data)
@@ -1258,18 +1274,28 @@ function LiveSettings({ data, setToast, onSaved }) {
               if (!next || next === (data.appConfig?.[0]?.nombre || 'Caja Europa')) return
               await persistUpdate(() => saveAppConfig({ name: next }), 'Configuración de la app guardada en Supabase')
             }} /></label>
-            <label className="app-image-upload"><span>Imagen</span><input type="file" accept="image/*" onChange={async (event) => {
-              const file = event.target.files?.[0]
-              if (!file) return
-              try {
-                const imagePayload = await createAppImagePayload(file)
-                await persistUpdate(() => saveAppConfig(imagePayload), 'Imagen de la aplicación actualizada')
-              } catch (error) {
-                setToast(error.message || 'No se pudo procesar la imagen')
-              } finally {
-                event.target.value = ''
-              }
-            }} /></label>
+            <div className="app-image-upload">
+              <span>Imagen</span>
+              <div className="app-image-controls">
+                {appImagePreview && <img src={appImagePreview} alt="Vista previa de la imagen de la aplicación" />}
+                <div>
+                  <input ref={appImageInputRef} type="file" accept="image/*" hidden onChange={async (event) => {
+                    const file = event.target.files?.[0]
+                    if (!file) return
+                    try {
+                      const imagePayload = await createAppImagePayload(file)
+                      await persistUpdate(() => replaceAppImage(imagePayload.original, imagePayload.imageMini), 'Imagen de la aplicación actualizada')
+                    } catch (error) {
+                      setToast(error.message || 'No se pudo procesar la imagen')
+                    } finally {
+                      event.target.value = ''
+                    }
+                  }} />
+                  <button type="button" className="secondary-button" onClick={() => appImageInputRef.current?.click()}><Upload size={14} /> Reemplazar archivo</button>
+                  <button type="button" className="delete-button app-image-delete" disabled={!appImageReference} onClick={() => persistUpdate(() => deleteAppImage(), 'Imagen de la aplicación eliminada')}><Trash2 size={14} /> Eliminar imagen</button>
+                </div>
+              </div>
+            </div>
             <div className="app-config-toggles">
               <label className="toggle-cell" aria-label="Tema claro"><span>Claro</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ theme: !Boolean(data.appConfig?.[0]?.tema) }), 'Tema actualizado')} /><span aria-hidden="true" /></label>
               <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false) }), 'Configuración visual guardada')} /><span aria-hidden="true" /></label>

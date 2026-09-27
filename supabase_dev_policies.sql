@@ -102,6 +102,56 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Bucket público para la imagen original y la miniatura de la aplicación.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'app-assets',
+  'app-assets',
+  TRUE,
+  52428800,
+  ARRAY['image/png', 'image/jpeg', 'image/webp', 'image/gif', 'image/svg+xml', 'image/avif', 'image/bmp', 'image/tiff']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+DROP POLICY IF EXISTS dev_app_assets_read ON storage.objects;
+CREATE POLICY dev_app_assets_read ON storage.objects
+  FOR SELECT TO anon
+  USING (
+    bucket_id = 'app-assets'
+    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+  );
+
+DROP POLICY IF EXISTS dev_app_assets_insert ON storage.objects;
+CREATE POLICY dev_app_assets_insert ON storage.objects
+  FOR INSERT TO anon
+  WITH CHECK (
+    bucket_id = 'app-assets'
+    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+  );
+
+DROP POLICY IF EXISTS dev_app_assets_update ON storage.objects;
+CREATE POLICY dev_app_assets_update ON storage.objects
+  FOR UPDATE TO anon
+  USING (
+    bucket_id = 'app-assets'
+    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+  )
+  WITH CHECK (
+    bucket_id = 'app-assets'
+    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+  );
+
+DROP POLICY IF EXISTS dev_app_assets_delete ON storage.objects;
+CREATE POLICY dev_app_assets_delete ON storage.objects
+  FOR DELETE TO anon
+  USING (
+    bucket_id = 'app-assets'
+    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+  );
+
 COMMIT;
 
 -- Verificación usando SQL Editor.
