@@ -30,18 +30,19 @@ export async function loadCurrentShiftData(boxId = null) {
   const { data: shift, error: shiftError } = await shiftRequest.maybeSingle()
   if (shiftError) throw shiftError
   if (!shift) {
-    const [holders, wallets, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns] = await Promise.all([
+    const [holders, wallets, walletTypes, accountTypes, expenseTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns] = await Promise.all([
       query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
       query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
       query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
       query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
+      query('tipos_gasto', 'id, nombre, invertir_signo'),
       query('tipos_turno', 'id, caja_id, nombre, color_id'),
       query('dias_turno', 'id, nombre, dia_semana, hora_inicio, hora_fin, cruza_medianoche, tipo_turno_id'),
       query('colores', 'id, nombre, hex'),
       query('app_config', 'id, nombre, icono, imagen, imagen_mini, tema, ver_notas, singleton'),
       query('turnos', 'id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, dia_turno_id, dias_turno(id, nombre, dia_semana, hora_inicio, hora_fin, tipos_turno(id, nombre, caja_id, cajas(nombre)))', request => request.eq('abierto', true).order('fecha_hora_inicio', { ascending: false })),
     ])
-    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes: [], logistics: [], users: [], goals: [], chips: [], holders, wallets, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns }
+    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users: [], goals: [], chips: [], holders, wallets, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns }
   }
 
   const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns] = await Promise.all([

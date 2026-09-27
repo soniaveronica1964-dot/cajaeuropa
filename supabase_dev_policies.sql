@@ -71,7 +71,7 @@ DECLARE
   table_name text;
 BEGIN
   FOREACH table_name IN ARRAY ARRAY[
-    'colores', 'tipos_billetera', 'tipos_cuenta', 'cajas', 'billeteras', 'titulares',
+    'colores', 'tipos_billetera', 'tipos_cuenta', 'tipos_gasto', 'cajas', 'billeteras', 'titulares',
     'titulares_x_caja', 'billeteras_x_caja', 'tipos_turno', 'dias_turno', 'turnos',
     'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'gastos'
   ] LOOP
