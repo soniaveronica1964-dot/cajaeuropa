@@ -219,7 +219,7 @@ function App() {
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
           {!loadError && appData && view === 'bonuses' && <LiveBonuses bonuses={appData.bonuses} />}
-          {!loadError && appData && view === 'settings' && <LiveSettings data={appData} setToast={setToast} onSaved={updateSettingsData} />}
+          {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} />}
         </main>
       </div>
       {toast && <div className="toast"><Sparkles size={16} />{toast}</div>}
@@ -394,7 +394,7 @@ function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(nul
 
 function LiveBonuses({ bonuses }) { const grouped = bonuses.reduce((groups, bonus) => { const key = bonus.es_publicidad ? 'Publicidad' : (bonus.recuperado ? 'Recuperados' : 'Otorgados'); groups[key] = [...(groups[key] || []), bonus]; return groups }, {}); return <><section className="panel bonus-library"><PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo bono</button>} />{Object.entries(grouped).map(([group, items]) => <div className="bonus-group" key={group}><div className="group-heading"><h2>{group}</h2><small>{items.length} registros</small></div><div className="bonus-cards">{items.map(bonus => <article className="bonus-card" key={bonus.id}><div className="bonus-art art-0"><Gift size={31} /><strong>{money.format(bonus.valor)}</strong></div><div><h3>{bonus.notas || (bonus.es_publicidad ? 'Bono de publicidad' : 'Bono operativo')}</h3><p>{new Date(bonus.fecha_hora_creacion).toLocaleString('es-AR')}</p><small>{bonus.recuperado ? 'Recuperado' : 'Otorgado'}</small></div></article>)}</div></div>)}{!bonuses.length && <EmptyInline text="No hay bonos registrados para el turno actual." />}</section></> }
 
-function LiveSettings({ data, setToast, onSaved }) {
+function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
   const appImageInputRef = useRef(null)
   const [dragState, setDragState] = useState({ type: null, index: null })
   const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
@@ -404,6 +404,16 @@ function LiveSettings({ data, setToast, onSaved }) {
   const [dayDraft, setDayDraft] = useState({ typeId: '', name: '', start: '08:00', end: '18:00', crossesMidnight: false })
   const [turnDraft, setTurnDraft] = useState({ dayId: '', initialAmount: '0' })
   const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+  const currentBoxId = selectedBoxId ?? data.shift?.caja_id ?? data.boxes?.[0]?.id ?? null
+  const currentBox = data.boxes?.find((box) => String(box.id) === String(currentBoxId))
+  const currentShiftTypes = currentBoxId == null ? [] : (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(currentBoxId))
+  const currentShiftDays = (data.shiftDays || []).filter((day) => currentShiftTypes.some((type) => String(type.id) === String(day.tipo_turno_id)))
+  const currentActiveTurns = (data.activeTurns || []).filter((turn) => String(turn.caja_id) === String(currentBoxId))
+
+  useEffect(() => {
+    setDayDraft((current) => ({ ...current, typeId: '' }))
+    setTurnDraft((current) => ({ ...current, dayId: '' }))
+  }, [currentBoxId])
   const appImageReference = data.appConfig?.[0]?.imagen_mini || data.appConfig?.[0]?.imagen
   const appImagePreview = getStoragePublicUrl(appImageReference)
 
@@ -424,7 +434,7 @@ function LiveSettings({ data, setToast, onSaved }) {
   }
 
   const refreshLocalData = async () => {
-    const fresh = await loadCurrentShiftData(data?.shift?.caja_id ?? null)
+    const fresh = await loadCurrentShiftData(currentBoxId)
     setLocalData(fresh)
     return fresh
   }
@@ -807,12 +817,12 @@ function LiveSettings({ data, setToast, onSaved }) {
         {renderTabButton('users', 'Usuarios', Users)}
         {renderTabButton('bonuses', 'Bonos', Gift)}
         {renderTabButton('goals', 'Objetivos', Target)}
-        {renderTabButton('app', 'App', Settings2)}
+        {renderTabButton('app', 'Aplicación', Settings2)}
       </div>
 
       <section className="settings-intro">
         <span className="eyebrow">Configuración</span>
-        <h2>{tab === 'boxes' ? 'Cajas' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : tab === 'goals' ? 'Objetivos' : 'App'}</h2>
+        <h2>{tab === 'boxes' ? 'Cajas' : tab === 'turns' ? 'Turnos' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : tab === 'goals' ? 'Objetivos' : 'Aplicación'}</h2>
       </section>
 
       {tab === 'boxes' && <>
@@ -852,28 +862,27 @@ function LiveSettings({ data, setToast, onSaved }) {
       {tab === 'turns' && <>
         <div className="config-two-columns">
           <section className="config-card">
-            <div className="config-list-head"><h3>Tipos de turno</h3><span>{(data.shiftTypes || []).length} registros</span></div>
-            {(data.shiftTypes || []).map((type) => (
-              <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+            <div className="config-list-head"><h3>Tipos de turno</h3><span>{currentShiftTypes.length} registros</span></div>
+            {currentShiftTypes.map((type) => (
+              <div className="config-list-row" key={type.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: '8px', alignItems: 'center' }}>
                 <input defaultValue={type.nombre || ''} onBlur={async (event) => {
                   const next = event.target.value.trim()
                   if (!next || next === type.nombre) return
                   await persistUpdate(() => updateShiftType(type.id, { name: next, colorId: type.color_id }), 'Tipo de turno actualizado en Supabase')
                 }} placeholder="Nombre del tipo" />
-                <select value={type.color_id || ''} onChange={(event) => persistUpdate(() => updateShiftType(type.id, { name: type.nombre || 'Tipo de turno', colorId: event.target.value || null }), 'Color de tipo de turno actualizado')}>
-                  <option value="">Sin color</option>
-                  {(data.colors || []).map((color) => <option value={color.id} key={color.id}>{color.nombre}</option>)}
-                </select>
                 <button type="button" className="delete-button" title="Eliminar tipo de turno" onClick={() => persistUpdate(() => deleteShiftType(type.id), 'Tipo de turno eliminado de Supabase')}><X size={14} /></button>
               </div>
             ))}
-            <button type="button" className="config-add" onClick={() => persistUpdate(() => createShiftType({ boxId: data.boxes?.[0]?.id || null, name: 'Nuevo turno', colorId: data.colors?.[0]?.id || null }), 'Tipo de turno creado en Supabase')}><Plus size={15} /> Agregar tipo de turno</button>
+            <button type="button" className="config-add" onClick={() => persistUpdate(() => {
+              if (!currentBoxId) throw new Error('No hay una caja seleccionada')
+              return createShiftType({ boxId: currentBoxId, name: 'Nuevo turno', colorId: currentBox?.color_id ?? data.colors?.[0]?.id ?? null })
+            }, 'Tipo de turno creado en Supabase')}><Plus size={15} /> Agregar tipo de turno</button>
           </section>
 
           <section className="config-card">
             <div className="config-list-head"><h3>Crear días de turno</h3><span>Un registro por cada día seleccionado</span></div>
             <div className="setup-fields">
-              <label>Tipo de turno<select value={dayDraft.typeId} onChange={(event) => setDayDraft(current => ({ ...current, typeId: event.target.value }))}><option value="">Seleccionar tipo</option>{(data.shiftTypes || []).map(type => <option value={type.id} key={type.id}>{type.nombre}</option>)}</select></label>
+              <label>Tipo de turno<select value={dayDraft.typeId} onChange={(event) => setDayDraft(current => ({ ...current, typeId: event.target.value }))}><option value="">Seleccionar tipo</option>{currentShiftTypes.map(type => <option value={type.id} key={type.id}>{type.nombre}</option>)}</select></label>
               <label>Nombre<input value={dayDraft.name} onChange={(event) => setDayDraft(current => ({ ...current, name: event.target.value }))} placeholder="Ej. Horario habitual" /></label>
               <label>Inicio<input type="time" value={dayDraft.start} onChange={(event) => setDayDraft(current => ({ ...current, start: event.target.value }))} /></label>
               <label>Fin<input type="time" value={dayDraft.end} onChange={(event) => setDayDraft(current => ({ ...current, end: event.target.value }))} /></label>
@@ -889,9 +898,9 @@ function LiveSettings({ data, setToast, onSaved }) {
         </div>
 
         <section className="config-card">
-          <div className="config-list-head"><h3>Días configurados</h3><span>{(data.shiftDays || []).length} registros</span></div>
-          {(data.shiftDays || []).map((day) => <div className="config-list-row" key={day.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto auto auto auto', gap: '8px', alignItems: 'center' }}>
-            <span><strong>{(data.shiftTypes || []).find(type => type.id === day.tipo_turno_id)?.nombre || 'Tipo de turno'}</strong><br /><small>{day.nombre}</small></span>
+          <div className="config-list-head"><h3>Días configurados</h3><span>{currentShiftDays.length} registros</span></div>
+          {currentShiftDays.map((day) => <div className="config-list-row" key={day.id} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto auto auto auto', gap: '8px', alignItems: 'center' }}>
+            <span><strong>{currentShiftTypes.find(type => String(type.id) === String(day.tipo_turno_id))?.nombre || 'Tipo de turno'}</strong><br /><small>{day.nombre}</small></span>
             <b>{weekdayLabels[(day.dia_semana || 1) - 1] || '?'}</b>
             <input type="time" defaultValue={day.hora_inicio || '08:00'} onBlur={(event) => {
               if (event.target.value === (day.hora_inicio || '08:00')) return
@@ -904,13 +913,13 @@ function LiveSettings({ data, setToast, onSaved }) {
             <label className="toggle-cell" title="Cruza medianoche"><input type="checkbox" checked={Boolean(day.cruza_medianoche)} onChange={(event) => persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: day.hora_inicio || '08:00', end: day.hora_fin || '18:00', crossesMidnight: event.target.checked }), 'Cruce de medianoche actualizado')} /><span /></label>
             <button type="button" className="delete-button" title="Eliminar día" onClick={() => persistUpdate(() => deleteDayShift(day.id), 'Día de turno eliminado de Supabase')}><X size={14} /></button>
           </div>)}
-          {!data.shiftDays?.length && <EmptyInline text="Todavía no hay días de turno configurados." />}
+          {!currentShiftDays.length && <EmptyInline text="Todavía no hay días de turno configurados para esta caja." />}
         </section>
 
         <section className="config-card" style={{ marginTop: '18px' }}>
-          <div className="config-list-head"><h3>Turnos activos</h3><span>{(data.activeTurns || []).length} abiertos</span></div>
+          <div className="config-list-head"><h3>Turnos activos</h3><span>{currentActiveTurns.length} abiertos</span></div>
           <div className="setup-fields">
-            <label>Día configurado<select value={turnDraft.dayId} onChange={(event) => setTurnDraft(current => ({ ...current, dayId: event.target.value }))}><option value="">Seleccionar día</option>{(data.shiftDays || []).map(day => <option value={day.id} key={day.id}>{(data.shiftTypes || []).find(type => type.id === day.tipo_turno_id)?.nombre || 'Turno'} · {weekdayLabels[(day.dia_semana || 1) - 1]} · {day.nombre}</option>)}</select></label>
+            <label>Día configurado<select value={turnDraft.dayId} onChange={(event) => setTurnDraft(current => ({ ...current, dayId: event.target.value }))}><option value="">Seleccionar día</option>{currentShiftDays.map(day => <option value={day.id} key={day.id}>{currentShiftTypes.find(type => String(type.id) === String(day.tipo_turno_id))?.nombre || 'Turno'} · {weekdayLabels[(day.dia_semana || 1) - 1]} · {day.nombre}</option>)}</select></label>
             <label>Caja inicial<input type="number" min="0" step="0.01" value={turnDraft.initialAmount} onChange={(event) => setTurnDraft(current => ({ ...current, initialAmount: event.target.value }))} /></label>
           </div>
           <button type="button" className="config-add" onClick={() => persistUpdate(async () => {
@@ -918,7 +927,7 @@ function LiveSettings({ data, setToast, onSaved }) {
             await createShift({ dayId: turnDraft.dayId, initialAmount: turnDraft.initialAmount })
             setTurnDraft({ dayId: '', initialAmount: '0' })
           }, 'Turno abierto en Supabase')}><Plus size={15} /> Abrir turno</button>
-          {(data.activeTurns || []).map((turn) => <div className="config-list-row" key={turn.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px', alignItems: 'center' }}>
+          {currentActiveTurns.map((turn) => <div className="config-list-row" key={turn.id} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px', alignItems: 'center' }}>
             <span><strong>{turn.dias_turno?.tipos_turno?.nombre || 'Turno'}</strong><br /><small>{weekdayLabels[(turn.dias_turno?.dia_semana || 1) - 1]} · {turn.dias_turno?.nombre || 'Día'} · Caja inicial {money.format(turn.caja_inicial || 0)}</small></span>
             <small>{new Date(turn.fecha_hora_inicio).toLocaleString('es-AR')}</small>
             <button type="button" className="delete-button" title="Cerrar turno" onClick={() => {
@@ -927,7 +936,7 @@ function LiveSettings({ data, setToast, onSaved }) {
               persistUpdate(() => closeShift(turn.id, finalAmount), 'Turno cerrado')
             }}><X size={14} /></button>
           </div>)}
-          {!data.activeTurns?.length && <EmptyInline text="No hay turnos activos." />}
+          {!currentActiveTurns.length && <EmptyInline text="No hay turnos activos para esta caja." />}
         </section>
       </>}
 
