@@ -226,6 +226,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   white-space: nowrap;
   font-size: 11px;
 }
+.box-select-trigger .box-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 7px;
+  border-radius: 50%;
+}
 .box-select-trigger::after {
   content: "";
   width: 6px;

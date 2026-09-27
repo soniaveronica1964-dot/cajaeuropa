@@ -19,7 +19,7 @@ async function query(table, columns, configure = () => {}) {
 
 export async function loadCurrentShiftData(boxId = null) {
   requireSupabase()
-  const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini, colores(nombre, hex)')
+  const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini, colores(nombre, hex)', request => request.order('id', { ascending: true }))
   let shiftRequest = supabase
     .from('turnos')
     .select('id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, cajas(id, nombre), dias_turno(id, nombre, hora_inicio, hora_fin)')
