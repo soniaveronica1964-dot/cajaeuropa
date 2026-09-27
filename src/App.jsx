@@ -128,10 +128,14 @@ function App() {
   const [openGoal, setOpenGoal] = useState(true)
   const [toast, setToast] = useState('')
   const [appData, setAppData] = useState(null)
+  const [selectedBoxId, setSelectedBoxId] = useState(null)
   const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
-    loadCurrentShiftData().then(setAppData).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
+    loadCurrentShiftData().then((freshData) => {
+      setAppData(freshData)
+      setSelectedBoxId(freshData.shift?.caja_id ?? freshData.boxes?.[0]?.id ?? null)
+    }).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
   }, [])
 
   useEffect(() => {
@@ -144,9 +148,9 @@ function App() {
   const shift = appData?.shift
   const shiftName = shift?.dias_turno?.nombre ?? 'Sin turno abierto'
   const shiftTime = shift?.dias_turno ? `${shift.dias_turno.hora_inicio.slice(0, 5)} - ${shift.dias_turno.hora_fin.slice(0, 5)}` : '--:-- - --:--'
-  const selectedBoxId = shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null
   const activeBox = shift?.cajas?.nombre ?? appData?.boxes?.find(boxItem => boxItem.id === selectedBoxId)?.nombre ?? 'Sin caja'
-  const reloadData = (boxId = selectedBoxId) => {
+  const reloadData = (boxId = selectedBoxId ?? shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null) => {
+    setSelectedBoxId(boxId)
     setLoadError('')
     setAppData(null)
     loadCurrentShiftData(boxId).then(setAppData).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
