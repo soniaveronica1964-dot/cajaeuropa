@@ -809,7 +809,8 @@ function LiveSettings({ data, setToast, onSaved }) {
                 <input value={box.title} onChange={(event) => setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) }))} onBlur={async (event) => {
                   const value = event.target.value.trim()
                   if (!box.id || !value) return
-                  if (value === box.title) return
+                  const savedName = localData.boxes?.find((item) => item.id === box.id)?.nombre
+                  if (value === savedName) return
                   await persistUpdate(() => updateBox(box.id, { name: value, colorId: box.colorId }), 'Caja actualizada en Supabase')
                 }} placeholder="Nombre" />
                 <select value={box.colorId == null ? '' : String(box.colorId)} onChange={(event) => {
