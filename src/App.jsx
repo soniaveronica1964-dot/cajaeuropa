@@ -129,12 +129,15 @@ function App() {
   const [toast, setToast] = useState('')
   const [appData, setAppData] = useState(null)
   const [selectedBoxId, setSelectedBoxId] = useState(null)
+  const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
   const [loadError, setLoadError] = useState('')
 
   useEffect(() => {
     loadCurrentShiftData().then((freshData) => {
+      const initialBoxId = freshData.shift?.caja_id ?? freshData.boxes?.[0]?.id ?? null
       setAppData(freshData)
-      setSelectedBoxId(freshData.shift?.caja_id ?? freshData.boxes?.[0]?.id ?? null)
+      setSelectedBoxId(initialBoxId)
+      setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === initialBoxId)?.colores?.hex || '#72d7ca')
     }).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
   }, [])
 
@@ -148,16 +151,24 @@ function App() {
   const shift = appData?.shift
   const shiftName = shift?.dias_turno?.nombre ?? 'Sin turno abierto'
   const shiftTime = shift?.dias_turno ? `${shift.dias_turno.hora_inicio.slice(0, 5)} - ${shift.dias_turno.hora_fin.slice(0, 5)}` : '--:-- - --:--'
-  const activeBox = shift?.cajas?.nombre ?? appData?.boxes?.find(boxItem => boxItem.id === selectedBoxId)?.nombre ?? 'Sin caja'
+  const selectedBox = appData?.boxes?.find(boxItem => boxItem.id === selectedBoxId)
+  const activeBox = shift?.cajas?.nombre ?? selectedBox?.nombre ?? 'Sin caja'
+  const accentColor = selectedBox?.colores?.hex || selectedBoxAccent
   const reloadData = (boxId = selectedBoxId ?? shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null) => {
     setSelectedBoxId(boxId)
+    const requestedBoxAccent = appData?.boxes?.find((box) => box.id === boxId)?.colores?.hex || '#72d7ca'
+    setSelectedBoxAccent(requestedBoxAccent)
     setLoadError('')
     setAppData(null)
-    loadCurrentShiftData(boxId).then(setAppData).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
+    loadCurrentShiftData(boxId).then((freshData) => {
+      setAppData(freshData)
+      setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === boxId)?.colores?.hex || requestedBoxAccent)
+    }).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
   }
   const updateSettingsData = (freshData) => {
     if (freshData) {
       setAppData(freshData)
+      setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === selectedBoxId)?.colores?.hex || '#72d7ca')
       return
     }
     reloadData()
@@ -168,7 +179,7 @@ function App() {
   const appImagePreview = getStoragePublicUrl(appConfig?.imagen_mini || appConfig?.imagen)
 
   return (
-    <div className="app-shell" data-theme={isLightTheme ? 'light' : 'dark'}>
+    <div className="app-shell" data-theme={isLightTheme ? 'light' : 'dark'} style={{ '--accent': accentColor }}>
       <header className="topbar">
         <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
           <div className="brand-mark">{appImagePreview ? <img className="brand-image" src={appImagePreview} alt="" /> : <Banknote size={21} />}</div>

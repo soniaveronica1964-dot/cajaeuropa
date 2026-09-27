@@ -15,11 +15,14 @@
   --muted: #879598;
   --muted-2: #a9b9bd;
   --text: #eaf3f1;
-  --cyan: #72d7ca;
+  --accent: #72d7ca;
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
+  --cyan: var(--accent);
   --green: #83d5a2;
   --orange: #f5ad69;
   --red: #ec817f;
-  --lavender: #c6a3ff;
+  --lavender: var(--accent);
   --box-soft: #1d302f;
   --box-line: rgba(124, 155, 150, 0.4);
   --danger: #e74c3c;
@@ -41,6 +44,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .app-shell {
+  --cyan: var(--accent);
+  --lavender: var(--accent);
+  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
+  --box-line: var(--accent-border);
   min-height: 100vh;
   background: var(--bg);
 }
@@ -74,7 +82,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: 7px;
   display: grid;
   place-items: center;
-  background: rgba(198, 163, 255, 0.95);
+  background: var(--accent);
   color: #1e1b2c;
   overflow: hidden;
 }
@@ -174,15 +182,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .icon-button:hover, .icon-button.selected {
   border-color: var(--lavender);
   color: var(--lavender);
-  background: rgba(54, 44, 68, 0.82);
+  background: color-mix(in srgb, var(--accent) 20%, #101719);
 }
 .camera-button {
-  background: rgba(122, 215, 199, 0.1);
-  border-color: rgba(114, 215, 202, 0.35);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
   color: var(--cyan);
 }
 .lock-button {
-  background: var(--lavender);
+  background: var(--accent);
   color: #201a2b;
   border-color: var(--lavender);
 }
@@ -294,7 +302,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   gap: 8px;
   max-width: min(360px, calc(100vw - 32px));
   padding: 8px 12px;
-  border: 1px solid rgba(122, 215, 199, 0.18);
+  border: 1px solid var(--accent-border);
   border-radius: 10px;
   background: rgba(16, 24, 26, 0.94);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.35);
@@ -352,8 +360,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   text-align: center;
 }
 .side-link.active {
-  background: rgba(28, 41, 42, 0.96);
-  border-color: rgba(122, 215, 199, 0.18);
+  background: color-mix(in srgb, var(--accent) 16%, #101719);
+  border-color: var(--accent-border);
   color: var(--cyan);
 }
 .side-link span { display: none; }
@@ -365,7 +373,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   height: 14px;
   padding: 0 3px;
   border-radius: 999px;
-  background: rgba(122, 215, 199, 0.18);
+  background: var(--accent-soft);
   color: var(--cyan);
   font: 700 8px 'DM Mono';
   display: flex;
@@ -389,7 +397,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   gap: 6px;
   width: calc(100% - 6px);
   padding: 10px 6px 8px;
-  border: 1px solid rgba(114, 215, 202, 0.18);
+  border: 1px solid var(--accent-border);
   border-radius: 10px;
   background: linear-gradient(180deg, rgba(18, 28, 30, 0.9), rgba(12, 18, 20, 0.82));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
@@ -412,7 +420,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: rgba(122, 215, 199, 0.16);
+  background: var(--accent-soft);
   color: var(--cyan);
   font: 700 10px 'DM Mono';
   flex-shrink: 0;
@@ -479,8 +487,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .goal-strip, .summary-bar, .panel { border: 1px solid var(--line); }
 .goal-strip {
   border-radius: 10px;
-  background: rgba(82, 63, 103, 0.73);
-  border-color: rgba(140, 110, 200, 0.24);
+  background: color-mix(in srgb, var(--accent) 22%, #202329);
+  border-color: var(--accent-border);
   padding: 10px 14px;
   margin-bottom: 16px;
   overflow: hidden;
@@ -493,7 +501,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   min-height: 36px;
 }
 .goal-strip-head > strong {
-  color: rgba(228, 220, 255, 0.9);
+  color: var(--accent);
   font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -505,14 +513,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex: 1;
   gap: 14px;
   min-height: 16px;
-  color: rgba(234, 246, 255, 0.8);
+  color: color-mix(in srgb, var(--accent) 55%, #ffffff);
 }
 .goal-summary span {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-size: 9px;
-  color: rgba(234, 246, 255, 0.7);
+  color: color-mix(in srgb, var(--accent) 45%, #ffffff);
 }
 .goal-summary b, .goal-summary small { font: 9px 'DM Mono'; }
 .goal-summary i {
@@ -528,7 +536,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, rgba(122, 215, 199, 0.9), rgba(125, 164, 255, 0.7));
+  background: var(--accent);
 }
 .goal-strip-head .icon-button {
   flex: 0 0 auto;
@@ -1148,7 +1156,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   gap: 8px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: linear-gradient(180deg, rgba(107, 230, 196, 0.18), rgba(36, 79, 72, 0.24));
+  border-color: var(--accent-border);
+  background: linear-gradient(180deg, var(--accent-soft), color-mix(in srgb, var(--accent) 10%, #17201f));
   color: var(--text);
   min-height: 32px;
   padding: 0 12px;
@@ -1158,13 +1167,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   text-transform: uppercase;
 }
 .primary-button {
-  border-color: rgba(122, 215, 199, 0.35);
-  background: linear-gradient(180deg, rgba(122, 215, 199, 0.18), rgba(24, 64, 62, 0.22));
+  border-color: var(--accent-border);
+  background: linear-gradient(180deg, var(--accent-soft), color-mix(in srgb, var(--accent) 12%, #17201f));
   color: var(--cyan);
 }
 .secondary-button {
-  background: rgba(26, 36, 36, 0.9);
-  color: var(--ink);
+  background: color-mix(in srgb, var(--accent) 9%, #1a2424);
+  color: var(--text);
 }
 .send-button {
   min-width: 38px;
@@ -1200,7 +1209,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-weight: 700;
 }
 .settings-tabs button.active {
-  background: rgba(34, 60, 61, 0.75);
+  background: color-mix(in srgb, var(--accent) 17%, #172020);
   color: var(--cyan);
 }
 .settings-intro {
@@ -1394,7 +1403,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   transition: transform 0.12s ease;
 }
 .toggle-cell input:checked + span {
-  background: rgba(52, 116, 109, 0.9);
+  background: var(--accent);
 }
 .toggle-cell input:checked + span::after {
   background: #dffdf7;
@@ -1440,7 +1449,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: rgba(122, 215, 199, 0.12);
+  background: var(--accent-soft);
   color: var(--cyan);
 }
 .modal h2 {
@@ -1597,13 +1606,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   --muted: #61716c;
   --muted-2: #43534e;
   --text: #1d2a26;
-  --cyan: #087c70;
+  --cyan: var(--accent);
   --green: #287d4a;
   --orange: #a85d12;
   --red: #bd3f3b;
-  --lavender: #7043a2;
+  --lavender: var(--accent);
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, #ffffff);
+  --accent-border: color-mix(in srgb, var(--accent) 42%, #ffffff);
+  --box-line: var(--accent-border);
   --box-soft: #e0eeea;
-  --box-line: rgba(63, 112, 99, 0.4);
   background: var(--bg);
   color: var(--text);
 }
@@ -1617,8 +1628,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: #e7eeeb;
 }
 .app-shell[data-theme='light'] .side-link.active {
-  background: #dcebe6;
-  border-color: #bdd6ce;
+  background: color-mix(in srgb, var(--accent) 17%, #ffffff);
+  border-color: var(--accent-border);
+  color: var(--accent);
 }
 .app-shell[data-theme='light'] .operator,
 .app-shell[data-theme='light'] .panel,
@@ -1641,25 +1653,30 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: #f7faf8;
   color: var(--text);
 }
-.app-shell[data-theme='light'] .secondary-button,
+.app-shell[data-theme='light'] .secondary-button:not(.app-format-button),
 .app-shell[data-theme='light'] .config-add,
-.app-shell[data-theme='light'] .icon-button,
+.app-shell[data-theme='light'] .icon-button:not(:hover):not(.selected),
 .app-shell[data-theme='light'] .account-settings-button {
-  background: #edf3f0;
-  color: var(--muted-2);
+  background: color-mix(in srgb, var(--accent) 9%, #ffffff);
+  color: var(--accent);
+}
+.app-shell[data-theme='light'] .icon-button:hover,
+.app-shell[data-theme='light'] .icon-button.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 .app-shell[data-theme='light'] .brand-mark {
-  background: #d8e9e3;
+  background: var(--accent-soft);
   color: #174d43;
 }
 .app-shell[data-theme='light'] .goal-strip {
-  background: #e9e2f2;
-  border-color: #d5c7e6;
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
 }
 .app-shell[data-theme='light'] .goal-strip-head > strong,
 .app-shell[data-theme='light'] .goal-summary,
 .app-shell[data-theme='light'] .goal-summary span {
-  color: #493568;
+  color: var(--accent);
 }
 .account-settings-fields textarea {
   resize: vertical;
@@ -1671,8 +1688,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   margin-top: 16px;
 }
 .close-button {
-  background: linear-gradient(180deg, rgba(122, 215, 199, 0.18), rgba(36, 79, 72, 0.2));
-  border-color: rgba(122, 215, 199, 0.35);
+  background: linear-gradient(180deg, var(--accent-soft), color-mix(in srgb, var(--accent) 12%, #17201f));
+  border-color: var(--accent-border);
   color: var(--cyan);
 }
 .config-add {
@@ -1681,9 +1698,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   gap: 6px;
   margin-top: 8px;
   padding: 7px 10px;
-  border: 1px solid rgba(96, 140, 139, 0.6);
+  border: 1px solid var(--accent-border);
   border-radius: 5px;
-  background: rgba(28, 44, 44, 0.9);
+  background: color-mix(in srgb, var(--accent) 10%, #1c2c2c);
   color: var(--cyan);
   font-size: 10px;
 }
