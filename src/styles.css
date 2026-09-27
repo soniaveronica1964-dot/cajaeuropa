@@ -1250,6 +1250,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   margin-bottom: 7px;
   padding: 4px 0;
 }
+.box-config-row {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) 130px 28px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(121, 146, 146, 0.18);
+}
+.box-config-row input,
+.box-config-row select {
+  min-width: 0;
+}
+.box-config-row select {
+  width: 130px;
+}
+.box-config-dot {
+  width: 9px;
+  height: 9px;
+  justify-self: center;
+  border-radius: 50%;
+}
 .config-list-row input,
 .config-list-row select,
 .wallet-config-row input,

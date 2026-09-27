@@ -86,6 +86,21 @@ import {
 } from './lib/data'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
+const boxColorOptions = [
+  { value: 'teal', label: 'Turquesa', hex: '#72d7ca' },
+  { value: 'blue', label: 'Azul', hex: '#82b8ff' },
+  { value: 'green', label: 'Verde', hex: '#83d5a2' },
+  { value: 'orange', label: 'Naranja', hex: '#f5ad69' },
+  { value: 'pink', label: 'Rosa', hex: '#ed9fc1' },
+  { value: 'red', label: 'Rojo', hex: '#ef8888' },
+  { value: 'yellow', label: 'Amarillo', hex: '#e8d477' },
+  { value: 'violet', label: 'Violeta', hex: '#c2a0ed' },
+  { value: 'slate', label: 'Pizarra', hex: '#aebdca' },
+]
+
+function boxColorKey(hex) {
+  return boxColorOptions.find((option) => option.hex.toLowerCase() === hex?.toLowerCase())?.value || 'teal'
+}
 
 async function createAppImagePayload(file) {
   const image = await new Promise((resolve, reject) => {
@@ -477,7 +492,7 @@ function LiveSettings({ data, setToast, onSaved }) {
     })
 
     return {
-      boxes: (localData.boxes || []).map((box) => ({ id: box.id, title: box.nombre || 'Caja', color: box.color_id || 'teal' })),
+      boxes: (localData.boxes || []).map((box) => ({ id: box.id, title: box.nombre || 'Caja', color: boxColorKey(box.colores?.hex), colorHex: box.colores?.hex || '#72d7ca' })),
       accounts: {
         holders: holdersFromData.map((holder) => holder.nombre || 'Sin titular'),
         wallets: walletsFromData.map((wallet) => wallet.nombre || 'Sin billetera'),
@@ -798,31 +813,22 @@ function LiveSettings({ data, setToast, onSaved }) {
       </section>
 
       {tab === 'boxes' && <>
-        <div className="config-two-columns">
-          <div className="config-list">
+        <section className="config-list">
             <div className="config-list-head"><h3>Mis cajas</h3><span>{draft.boxes.length} espacios</span></div>
             {draft.boxes.map((box, index) => (
-              <div className="config-list-row" key={box.id || index}>
+              <div className="config-list-row box-config-row" key={box.id || index}>
+                <span className="box-config-dot" style={{ backgroundColor: box.colorHex || boxColorOptions.find((option) => option.value === box.color)?.hex }} />
                 <input value={box.title} onChange={(event) => setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, title: event.target.value } : item) }))} onBlur={async (event) => {
                   const value = event.target.value.trim()
                   if (!box.id || !value) return
                   await persistUpdate(() => updateBox(box.id, { name: value, color: box.color || 'teal' }), 'Caja actualizada en Supabase')
-                }} />
+                }} placeholder="Nombre" />
                 <select value={box.color} onChange={(event) => {
                   const nextColor = event.target.value
-                  setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, color: nextColor } : item) }))
+                  const nextHex = boxColorOptions.find((option) => option.value === nextColor)?.hex
+                  setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, color: nextColor, colorHex: nextHex } : item) }))
                   if (box.id) persistUpdate(() => updateBox(box.id, { name: box.title, color: nextColor }), 'Color de caja actualizado en Supabase')
-                }}>
-                  <option value="teal">Turquesa</option>
-                  <option value="blue">Azul</option>
-                  <option value="green">Verde</option>
-                  <option value="orange">Naranja</option>
-                  <option value="pink">Rosa</option>
-                  <option value="red">Rojo</option>
-                  <option value="yellow">Amarillo</option>
-                  <option value="violet">Violeta</option>
-                  <option value="slate">Pizarra</option>
-                </select>
+                }} aria-label="Color">{boxColorOptions.map((option) => <option value={option.value} key={option.value}>{option.label}</option>)}</select>
                 <button type="button" className="delete-button" title="Eliminar caja" onClick={() => {
                   if (!box.id) return
                   persistUpdate(() => deleteBox(box.id), 'Caja eliminada de Supabase')
@@ -833,16 +839,7 @@ function LiveSettings({ data, setToast, onSaved }) {
               const name = 'Nueva caja'
               await persistUpdate(() => createBox({ name, color: 'teal' }), 'Caja creada en Supabase')
             }}><Plus size={15} /> Agregar caja</button>
-          </div>
-
-          <div className="config-card">
-            <div className="config-list-head"><h3>Referencia DB</h3><span>Los valores se mantienen en Supabase</span></div>
-            <div className="config-list-row" style={{ display: 'grid', gap: '8px' }}>
-              <span className="muted-copy">Tabla: cajas</span>
-              <span className="muted-copy">Campos: nombre, color_id, imagen, imagen_mini</span>
-            </div>
-          </div>
-        </div>
+        </section>
       </>}
 
       {tab === 'turns' && <>

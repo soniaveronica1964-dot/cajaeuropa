@@ -19,7 +19,7 @@ async function query(table, columns, configure = () => {}) {
 
 export async function loadCurrentShiftData(boxId = null) {
   requireSupabase()
-  const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini')
+  const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini, colores(nombre, hex)')
   let shiftRequest = supabase
     .from('turnos')
     .select('id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, cajas(id, nombre), dias_turno(id, nombre, hora_inicio, hora_fin)')
@@ -167,9 +167,16 @@ function colorHex(color) {
 
 async function ensureColor(name, color = 'teal') {
   requireSupabase()
-  const { data: existing, error: findError } = await supabase.from('colores').select('id').eq('nombre', name).limit(1).maybeSingle()
+  const { data: existing, error: findError } = await supabase.from('colores').select('id, hex').eq('nombre', name).limit(1).maybeSingle()
   if (findError) throw findError
-  if (existing) return existing.id
+  if (existing) {
+    const hex = colorHex(color)
+    if (existing.hex?.toLowerCase() !== hex.toLowerCase()) {
+      const { error: updateError } = await supabase.from('colores').update({ hex }).eq('id', existing.id)
+      if (updateError) throw updateError
+    }
+    return existing.id
+  }
   const { data, error } = await supabase.from('colores').insert({ nombre: name, hex: colorHex(color) }).select('id').single()
   if (error) throw error
   return data.id
