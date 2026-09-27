@@ -1216,7 +1216,7 @@ function LiveSettings({ data, setToast, onSaved }) {
       {tab === 'app' && <>
         <section className="config-card">
           <div className="config-list-head"><h3>Configuración de la aplicación</h3><span>Único registro activo</span></div>
-          <div className="account-settings-fields">
+          <div className="account-settings-fields app-config-fields">
             <label><span>Nombre</span><input value={(data.appConfig?.[0]?.nombre) || 'Caja Europa'} onChange={async (event) => {
               const next = event.target.value.trim()
               if (!next) return
@@ -1227,14 +1227,16 @@ function LiveSettings({ data, setToast, onSaved }) {
               if (!next) return
               await persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: next, theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Ícono actualizado en Supabase')
             }} /></label>
-            <label className="toggle-cell" aria-label="Tema oscuro"><span>Tema</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: !Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Tema actualizado')} /></label>
-            <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración visual guardada')} /></label>
-            <label className="toggle-cell" aria-label="Singleton"><span>Singleton</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.singleton !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: !Boolean(data.appConfig?.[0]?.singleton !== false) }), 'Configuración singleton guardada')} /></label>
+            <div className="app-config-toggles">
+              <label className="toggle-cell" aria-label="Tema oscuro"><span>Tema</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: !Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Tema actualizado')} /><span aria-hidden="true" /></label>
+              <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración visual guardada')} /><span aria-hidden="true" /></label>
+              <label className="toggle-cell" aria-label="Singleton"><span>Singleton</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.singleton !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: !Boolean(data.appConfig?.[0]?.singleton !== false) }), 'Configuración singleton guardada')} /><span aria-hidden="true" /></label>
+            </div>
           </div>
         </section>
         <section className="config-card" style={{ marginTop: '18px' }}>
           <div className="config-list-head"><h3>Colores</h3><span>{(data.colors || []).length} registros</span></div>
-          {(data.colors || []).map((color) => <div className="config-list-row" key={color.id} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+          {(data.colors || []).map((color) => <div className="config-list-row app-color-row" key={color.id}>
             <input value={color.nombre || ''} onChange={(event) => persistUpdate(() => updateColor(color.id, { name: event.target.value || 'Color', hex: color.hex || '#72D7CA' }), 'Nombre de color actualizado')} />
             <input type="color" value={color.hex || '#72D7CA'} onChange={(event) => persistUpdate(() => updateColor(color.id, { name: color.nombre || 'Color', hex: event.target.value }), 'Color actualizado')} />
             <button type="button" className="delete-button" title="Eliminar color" onClick={() => persistUpdate(() => deleteColor(color.id), 'Color eliminado')}><X size={14} /></button>
@@ -1244,7 +1246,7 @@ function LiveSettings({ data, setToast, onSaved }) {
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(239, 136, 136, 0.5)' }}>
           <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Acción destructiva</span></div>
           <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
-          <button type="button" className="delete-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
+          <button type="button" className="secondary-button app-format-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
         </section>
       </>}
 

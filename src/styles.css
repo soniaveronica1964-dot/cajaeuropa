@@ -1444,6 +1444,72 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: 10px;
   text-transform: uppercase;
 }
+.app-config-fields {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.app-config-fields > label {
+  width: min(100%, 380px);
+}
+.app-config-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.app-config-toggles .toggle-cell {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 150px;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.app-config-toggles .toggle-cell > span:first-child {
+  display: block;
+  width: auto;
+  height: auto;
+  flex: 1;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  cursor: default;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+.app-config-toggles .toggle-cell > span:first-child::after {
+  content: none;
+}
+.app-color-row {
+  display: grid;
+  grid-template-columns: minmax(0, 360px) 112px auto;
+  gap: 8px;
+  align-items: center;
+}
+.app-color-row input[type="color"] {
+  width: 112px;
+  padding: 3px;
+}
+.app-format-button {
+  border-color: rgba(239, 136, 136, 0.5);
+  background: linear-gradient(180deg, rgba(239, 136, 136, 0.18), rgba(92, 38, 42, 0.28));
+  color: #ef8888;
+}
+.app-format-button:hover:not(:disabled) {
+  border-color: rgba(239, 136, 136, 0.8);
+  background: linear-gradient(180deg, rgba(239, 136, 136, 0.25), rgba(92, 38, 42, 0.36));
+}
+@media (max-width: 560px) {
+  .app-color-row {
+    grid-template-columns: minmax(0, 1fr) 72px auto;
+  }
+  .app-color-row input[type="color"] {
+    width: 72px;
+  }
+}
 .account-settings-fields textarea {
   resize: vertical;
   min-height: 80px;
