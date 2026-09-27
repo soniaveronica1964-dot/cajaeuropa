@@ -1265,6 +1265,30 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   margin-bottom: 7px;
   padding: 4px 0;
 }
+.expense-config-row {
+  display: grid;
+  grid-template-columns: minmax(0, 420px) 160px 28px;
+  gap: 8px;
+  align-items: center;
+}
+.expense-invert-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.expense-invert-toggle input {
+  width: 14px;
+  height: 14px;
+  min-height: 14px;
+  flex: 0 0 14px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
 .box-config-row {
   display: grid;
   grid-template-columns: 10px minmax(0, 1fr) 130px 28px;
@@ -1728,6 +1752,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .summary-status { grid-column: 1 / -1; }
   .setup-fields { grid-template-columns: 1fr; }
   .app-settings-columns { grid-template-columns: minmax(0, 1fr); }
+  .expense-config-row { grid-template-columns: minmax(0, 1fr) 138px 28px; }
 }
 
 @media (max-width: 500px) {

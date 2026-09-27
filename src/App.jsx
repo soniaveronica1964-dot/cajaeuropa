@@ -1156,14 +1156,15 @@ function LiveSettings({ data, setToast, onSaved }) {
       {tab === 'expenses' && <section className="config-card">
         <div className="config-list-head"><h3>Opciones del selector</h3><span>{draft.expenses.length} categorías</span></div>
         {draft.expenses.map((expense, index) => (
-          <div className="config-list-row" key={expense.id || `expense-${index}`}>
+          <div className="config-list-row expense-config-row" key={expense.id || `expense-${index}`}>
             <input value={expense.name} onChange={(event) => setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item) }))} onBlur={async (event) => {
               const value = event.target.value.trim()
               if (!value || !data.expenseTypes.find(item => item.nombre === expense.name)) return
               const target = data.expenseTypes.find(item => item.nombre === expense.name)
               await persistUpdate(() => updateExpenseType(target.id, { name: value, inverted: expense.inverted }), 'Tipo de gasto actualizado en Supabase')
             }} placeholder="Nombre del gasto" />
-            <label className="toggle-cell" aria-label={`Invertir signo para ${expense.name}`}>
+            <label className="expense-invert-toggle">
+              <span>Invierte el signo</span>
               <input type="checkbox" checked={expense.inverted} onChange={async () => {
                 setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, inverted: !item.inverted } : item) }))
                 const target = data.expenseTypes.find(item => item.nombre === expense.name)
@@ -1171,7 +1172,6 @@ function LiveSettings({ data, setToast, onSaved }) {
                   await persistUpdate(() => updateExpenseType(target.id, { name: expense.name, inverted: !expense.inverted }), 'Regla de signo guardada en Supabase')
                 }
               }} />
-              <span />
             </label>
             <button type="button" className="delete-button" title="Eliminar gasto" onClick={async () => {
               const target = data.expenseTypes.find(item => item.nombre === expense.name)
