@@ -1163,7 +1163,7 @@ function LiveSettings({ data, setToast, onSaved }) {
               const target = data.expenseTypes.find(item => item.nombre === expense.name)
               await persistUpdate(() => updateExpenseType(target.id, { name: value, inverted: expense.inverted }), 'Tipo de gasto actualizado en Supabase')
             }} placeholder="Nombre del gasto" />
-            <label className="expense-invert-toggle">
+            <label className="toggle-cell expense-invert-toggle">
               <span>Invierte el signo</span>
               <input type="checkbox" checked={expense.inverted} onChange={async () => {
                 setDraft((current) => ({ ...current, expenses: current.expenses.map((item, itemIndex) => itemIndex === index ? { ...item, inverted: !item.inverted } : item) }))
@@ -1172,6 +1172,7 @@ function LiveSettings({ data, setToast, onSaved }) {
                   await persistUpdate(() => updateExpenseType(target.id, { name: expense.name, inverted: !expense.inverted }), 'Regla de signo guardada en Supabase')
                 }
               }} />
+              <span aria-hidden="true" />
             </label>
             <button type="button" className="delete-button" title="Eliminar gasto" onClick={async () => {
               const target = data.expenseTypes.find(item => item.nombre === expense.name)

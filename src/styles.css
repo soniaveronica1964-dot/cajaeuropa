@@ -1267,27 +1267,30 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 .expense-config-row {
   display: grid;
-  grid-template-columns: minmax(0, 420px) 160px 28px;
+  grid-template-columns: minmax(0, 420px) max-content 28px;
   gap: 8px;
   align-items: center;
 }
-.expense-invert-toggle {
+.toggle-cell.expense-invert-toggle {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 10px;
+  width: max-content;
+}
+.expense-invert-toggle > span:first-child {
+  display: block;
+  width: auto;
+  height: auto;
+  flex: 0 0 auto;
+  border-radius: 0;
+  background: none;
   color: var(--muted);
   font-size: 10px;
   white-space: nowrap;
 }
-.expense-invert-toggle input {
-  width: 14px;
-  height: 14px;
-  min-height: 14px;
-  flex: 0 0 14px;
-  margin: 0;
-  padding: 0;
-  accent-color: var(--accent);
+.expense-invert-toggle > span:first-child::after {
+  content: none;
 }
 .box-config-row {
   display: grid;
@@ -1752,7 +1755,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .summary-status { grid-column: 1 / -1; }
   .setup-fields { grid-template-columns: 1fr; }
   .app-settings-columns { grid-template-columns: minmax(0, 1fr); }
-  .expense-config-row { grid-template-columns: minmax(0, 1fr) 138px 28px; }
+  .expense-config-row { grid-template-columns: minmax(0, 1fr) max-content 28px; }
 }
 
 @media (max-width: 500px) {
