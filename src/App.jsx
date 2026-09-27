@@ -82,6 +82,26 @@ import {
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 
+async function createAppImagePayload(file) {
+  const image = await new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = () => reject(new Error('No se pudo leer la imagen'))
+    reader.readAsDataURL(file)
+  })
+  const preview = new Image()
+  preview.src = image
+  await preview.decode()
+
+  const scale = Math.min(1, 256 / Math.max(preview.naturalWidth, preview.naturalHeight))
+  const canvas = document.createElement('canvas')
+  canvas.width = Math.max(1, Math.round(preview.naturalWidth * scale))
+  canvas.height = Math.max(1, Math.round(preview.naturalHeight * scale))
+  canvas.getContext('2d').drawImage(preview, 0, 0, canvas.width, canvas.height)
+
+  return { image, imageMini: canvas.toDataURL('image/webp', 0.88) }
+}
+
 const navItems = [
   ['dashboard', 'Caja', LayoutGrid],
   ['stats', 'Estadísticas', BarChart3],
@@ -126,13 +146,16 @@ function App() {
     }
     reloadData()
   }
+  const appConfig = appData?.appConfig?.[0]
+  const appName = appConfig?.nombre || 'Caja Europa'
+  const isLightTheme = Boolean(appConfig?.tema)
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={isLightTheme ? 'light' : 'dark'}>
       <header className="topbar">
         <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
-          <div className="brand-mark"><Banknote size={21} /></div>
-          <div><strong>CAJA<span>Europa</span></strong><small>Control operativo</small></div>
+          <div className="brand-mark">{appConfig?.imagen_mini ? <img className="brand-image" src={appConfig.imagen_mini} alt="" /> : <Banknote size={21} />}</div>
+          <div><strong>{appName}</strong><small>Control operativo</small></div>
         </div>
         <div className="shift-nav">
           <button className="icon-button" title="Turno anterior"><ChevronRight size={17} className="flip-x" /></button>
@@ -1233,17 +1256,23 @@ function LiveSettings({ data, setToast, onSaved }) {
             <label><span>Nombre</span><input defaultValue={(data.appConfig?.[0]?.nombre) || 'Caja Europa'} onBlur={async (event) => {
               const next = event.target.value.trim()
               if (!next || next === (data.appConfig?.[0]?.nombre || 'Caja Europa')) return
-              await persistUpdate(() => saveAppConfig({ name: next, icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración de la app guardada en Supabase')
+              await persistUpdate(() => saveAppConfig({ name: next }), 'Configuración de la app guardada en Supabase')
             }} /></label>
-            <label><span>Ícono</span><input defaultValue={(data.appConfig?.[0]?.icono) || 'banknote'} onBlur={async (event) => {
-              const next = event.target.value.trim()
-              if (!next || next === (data.appConfig?.[0]?.icono || 'banknote')) return
-              await persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: next, theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Ícono actualizado en Supabase')
+            <label className="app-image-upload"><span>Imagen</span><input type="file" accept="image/*" onChange={async (event) => {
+              const file = event.target.files?.[0]
+              if (!file) return
+              try {
+                const imagePayload = await createAppImagePayload(file)
+                await persistUpdate(() => saveAppConfig(imagePayload), 'Imagen de la aplicación actualizada')
+              } catch (error) {
+                setToast(error.message || 'No se pudo procesar la imagen')
+              } finally {
+                event.target.value = ''
+              }
             }} /></label>
             <div className="app-config-toggles">
-              <label className="toggle-cell" aria-label="Tema oscuro"><span>Tema</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: !Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Tema actualizado')} /><span aria-hidden="true" /></label>
-              <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: Boolean(data.appConfig?.[0]?.singleton) }), 'Configuración visual guardada')} /><span aria-hidden="true" /></label>
-              <label className="toggle-cell" aria-label="Singleton"><span>Singleton</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.singleton !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ name: data.appConfig?.[0]?.nombre || 'Caja Europa', icon: data.appConfig?.[0]?.icono || 'banknote', theme: Boolean(data.appConfig?.[0]?.tema), showNotes: Boolean(data.appConfig?.[0]?.ver_notas !== false), singleton: !Boolean(data.appConfig?.[0]?.singleton !== false) }), 'Configuración singleton guardada')} /><span aria-hidden="true" /></label>
+              <label className="toggle-cell" aria-label="Tema claro"><span>Claro</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ theme: !Boolean(data.appConfig?.[0]?.tema) }), 'Tema actualizado')} /><span aria-hidden="true" /></label>
+              <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false) }), 'Configuración visual guardada')} /><span aria-hidden="true" /></label>
             </div>
           </div>
         </section>

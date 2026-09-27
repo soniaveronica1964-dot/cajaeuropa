@@ -76,6 +76,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   place-items: center;
   background: rgba(198, 163, 255, 0.95);
   color: #1e1b2c;
+  overflow: hidden;
+}
+.brand-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .brand strong {
@@ -1452,6 +1458,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .app-config-fields > label {
   width: min(100%, 380px);
 }
+.app-config-fields .app-image-upload input {
+  width: 100%;
+  min-height: 30px;
+  padding: 4px;
+  text-transform: none;
+}
 .app-config-toggles {
   display: flex;
   flex-wrap: wrap;
@@ -1509,6 +1521,80 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .app-color-row input[type="color"] {
     width: 72px;
   }
+}
+.app-shell[data-theme='light'] {
+  --bg: #f1f5f3;
+  --bg-2: #e8efec;
+  --surface: #f8fbfa;
+  --panel: #ffffff;
+  --panel-2: #eaf0ee;
+  --line: #d0dbd7;
+  --muted: #61716c;
+  --muted-2: #43534e;
+  --text: #1d2a26;
+  --cyan: #087c70;
+  --green: #287d4a;
+  --orange: #a85d12;
+  --red: #bd3f3b;
+  --lavender: #7043a2;
+  --box-soft: #e0eeea;
+  --box-line: rgba(63, 112, 99, 0.4);
+  background: var(--bg);
+  color: var(--text);
+}
+.app-shell[data-theme='light'] .topbar {
+  background: rgba(255, 255, 255, 0.96);
+}
+.app-shell[data-theme='light'] .workspace {
+  background: var(--bg);
+}
+.app-shell[data-theme='light'] .sidebar {
+  background: #e7eeeb;
+}
+.app-shell[data-theme='light'] .side-link.active {
+  background: #dcebe6;
+  border-color: #bdd6ce;
+}
+.app-shell[data-theme='light'] .operator,
+.app-shell[data-theme='light'] .panel,
+.app-shell[data-theme='light'] .config-card,
+.app-shell[data-theme='light'] .config-list,
+.app-shell[data-theme='light'] .modal {
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(28, 52, 43, 0.06);
+}
+.app-shell[data-theme='light'] .operator {
+  border-color: var(--line);
+}
+.app-shell[data-theme='light'] .config-list-row input,
+.app-shell[data-theme='light'] .config-list-row select,
+.app-shell[data-theme='light'] .account-settings-fields input,
+.app-shell[data-theme='light'] .account-settings-fields select,
+.app-shell[data-theme='light'] .account-settings-fields textarea,
+.app-shell[data-theme='light'] .setup-fields input,
+.app-shell[data-theme='light'] .setup-fields textarea {
+  background: #f7faf8;
+  color: var(--text);
+}
+.app-shell[data-theme='light'] .secondary-button,
+.app-shell[data-theme='light'] .config-add,
+.app-shell[data-theme='light'] .icon-button,
+.app-shell[data-theme='light'] .account-settings-button {
+  background: #edf3f0;
+  color: var(--muted-2);
+}
+.app-shell[data-theme='light'] .brand-mark {
+  background: #d8e9e3;
+  color: #174d43;
+}
+.app-shell[data-theme='light'] .goal-strip {
+  background: #e9e2f2;
+  border-color: #d5c7e6;
+}
+.app-shell[data-theme='light'] .goal-strip-head > strong,
+.app-shell[data-theme='light'] .goal-summary,
+.app-shell[data-theme='light'] .goal-summary span {
+  color: #493568;
 }
 .account-settings-fields textarea {
   resize: vertical;

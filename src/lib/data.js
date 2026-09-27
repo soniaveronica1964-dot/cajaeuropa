@@ -877,24 +877,23 @@ export async function setAccountAvailability({ shiftId, boxId, accountId, enable
   return null
 }
 
-export async function saveAppConfig({ name, icon, theme = false, showNotes = true, singleton = true }) {
+export async function saveAppConfig({ name, image, imageMini, theme, showNotes }) {
   requireSupabase()
   const { data: existing, error: loadError } = await supabase.from('app_config').select('id').limit(1).maybeSingle()
   if (loadError) throw loadError
 
-  const payload = {
-    nombre: name?.trim() || 'Caja Europa',
-    icono: icon || 'banknote',
-    tema: Boolean(theme),
-    ver_notas: Boolean(showNotes),
-    singleton: Boolean(singleton),
-  }
+  const payload = {}
+  if (name !== undefined) payload.nombre = name.trim() || 'Caja Europa'
+  if (image !== undefined) payload.imagen = image
+  if (imageMini !== undefined) payload.imagen_mini = imageMini
+  if (theme !== undefined) payload.tema = Boolean(theme)
+  if (showNotes !== undefined) payload.ver_notas = Boolean(showNotes)
 
   let promise
   if (existing) {
     promise = supabase.from('app_config').update(payload).eq('id', existing.id).select().single()
   } else {
-    promise = supabase.from('app_config').insert(payload).select().single()
+    promise = supabase.from('app_config').insert({ nombre: 'Caja Europa', singleton: true, ...payload }).select().single()
   }
 
   const { data, error } = await promise
