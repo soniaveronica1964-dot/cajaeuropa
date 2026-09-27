@@ -403,7 +403,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
   const [selectedWeekdays, setSelectedWeekdays] = useState([])
   const [dayDraft, setDayDraft] = useState({ typeId: '', name: '', start: '08:00', end: '18:00', crossesMidnight: false })
   const [turnDraft, setTurnDraft] = useState({ dayId: '', initialAmount: '0' })
-  const weekdayLabels = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
+  const weekdayLabels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom']
   const currentBoxId = selectedBoxId ?? data.shift?.caja_id ?? data.boxes?.[0]?.id ?? null
   const currentBox = data.boxes?.find((box) => String(box.id) === String(currentBoxId))
   const currentShiftTypes = currentBoxId == null ? [] : (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(currentBoxId))
@@ -887,8 +887,8 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               <label>Inicio<input type="time" value={dayDraft.start} onChange={(event) => setDayDraft(current => ({ ...current, start: event.target.value }))} /></label>
               <label>Fin<input type="time" value={dayDraft.end} onChange={(event) => setDayDraft(current => ({ ...current, end: event.target.value }))} /></label>
             </div>
-            <div style={{ display: 'flex', gap: '6px', margin: '12px 0', flexWrap: 'wrap' }}>{weekdayLabels.map((label, index) => <button type="button" key={label} className={selectedWeekdays.includes(index + 1) ? 'primary-button' : 'secondary-button'} onClick={() => setSelectedWeekdays(current => current.includes(index + 1) ? current.filter(day => day !== index + 1) : [...current, index + 1])}>{label}</button>)}</div>
-            <label className="toggle-cell"><span>Cruza medianoche</span><input type="checkbox" checked={dayDraft.crossesMidnight} onChange={(event) => setDayDraft(current => ({ ...current, crossesMidnight: event.target.checked }))} /></label>
+            <div className="weekday-picker">{weekdayLabels.map((label, index) => <button type="button" key={label} className={selectedWeekdays.includes(index + 1) ? 'primary-button weekday-toggle active' : 'secondary-button weekday-toggle inactive'} onClick={() => setSelectedWeekdays(current => current.includes(index + 1) ? current.filter(day => day !== index + 1) : [...current, index + 1])}>{label}</button>)}</div>
+            <label className="toggle-cell shift-midnight-toggle"><span>Cruza medianoche</span><input type="checkbox" checked={dayDraft.crossesMidnight} onChange={(event) => setDayDraft(current => ({ ...current, crossesMidnight: event.target.checked }))} /><span aria-hidden="true" /></label>
             <button type="button" className="config-add" onClick={() => persistUpdate(async () => {
               if (!dayDraft.typeId || !dayDraft.name.trim() || !selectedWeekdays.length) throw new Error('Seleccioná tipo, nombre y al menos un día')
               await createDayShifts({ typeId: dayDraft.typeId, name: dayDraft.name, weekdays: selectedWeekdays, start: dayDraft.start, end: dayDraft.end, crossesMidnight: dayDraft.crossesMidnight })

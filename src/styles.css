@@ -649,12 +649,20 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .setup-section h3 { margin: 0 0 15px; font-size: 13px; color: var(--lavender); }
 .setup-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .setup-fields label { display: flex; flex-direction: column; gap: 6px; color: var(--muted); font: 10px 'DM Mono'; text-transform: uppercase; }
-.setup-fields input, .setup-fields textarea { width: 100%; border: 1px solid var(--line); border-radius: 5px; background: rgba(20, 30, 31, 0.9); padding: 9px; font-size: 11px; text-transform: none; }
+.setup-fields input, .setup-fields textarea, .setup-fields select { width: 100%; min-height: 34px; border: 1px solid var(--line); border-radius: 5px; background: rgba(20, 30, 31, 0.9); color: var(--text); padding: 9px; font-size: 11px; text-transform: none; }
 .setup-fields textarea { height: 64px; resize: vertical; }
 .setup-fields .full-field { grid-column: 1 / -1; }
 .setup-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
 .setup-actions small { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .setup-actions button:disabled { opacity: .55; cursor: wait; }
+.weekday-picker { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.weekday-toggle { min-width: 48px; padding: 0 10px; }
+.weekday-toggle.inactive { border-color: var(--line); background: var(--panel-2); color: var(--muted); }
+.weekday-toggle.active { border-color: var(--accent-border); background: color-mix(in srgb, var(--accent) 30%, #17201f); color: var(--text); }
+.shift-midnight-toggle.toggle-cell { display: flex; align-items: center; justify-content: flex-start; gap: 10px; min-height: 32px; }
+.shift-midnight-toggle > span:first-child { display: block; width: auto; height: auto; border-radius: 0; background: none; color: var(--muted); font-size: 10px; text-transform: uppercase; }
+.shift-midnight-toggle > span:first-child::after { content: none; }
+input[type="time"] { color-scheme: dark; }
 
 .panel {
   border: 1px solid var(--line);
@@ -1688,10 +1696,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .app-shell[data-theme='light'] .account-settings-fields select,
 .app-shell[data-theme='light'] .account-settings-fields textarea,
 .app-shell[data-theme='light'] .setup-fields input,
+.app-shell[data-theme='light'] .setup-fields select,
 .app-shell[data-theme='light'] .setup-fields textarea {
   background: #f7faf8;
   color: var(--text);
 }
+.app-shell[data-theme='light'] input[type="time"] { color-scheme: light; }
 .app-shell[data-theme='light'] .secondary-button:not(.app-format-button),
 .app-shell[data-theme='light'] .config-add,
 .app-shell[data-theme='light'] .icon-button:not(:hover):not(.selected),
