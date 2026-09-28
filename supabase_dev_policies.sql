@@ -46,6 +46,7 @@ ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tipos_estado ENABLE ROW LEVEL SECURITY;
 ALTER TABLE estados ENABLE ROW LEVEL SECURITY;
 
+
 -- Lectura pública temporal para la app sin login.
 DO $$
 DECLARE
