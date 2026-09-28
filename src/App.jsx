@@ -476,8 +476,6 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
     return [...unique.values()]
   }
 
-  const currentBoxId = selectedBoxId ?? data.shift?.caja_id ?? data.boxes?.[0]?.id ?? null
-
   const buildDefaultConfig = useMemo(() => {
     const sortByOrder = (items = []) => [...items].sort((left, right) => {
       const leftValue = Number(left?.orden_num ?? Number.MAX_SAFE_INTEGER)
