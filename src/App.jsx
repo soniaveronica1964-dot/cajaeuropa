@@ -476,6 +476,8 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
     return [...unique.values()]
   }
 
+  const currentBoxId = selectedBoxId ?? data.shift?.caja_id ?? data.boxes?.[0]?.id ?? null
+
   const buildDefaultConfig = useMemo(() => {
     const sortByOrder = (items = []) => [...items].sort((left, right) => {
       const leftValue = Number(left?.orden_num ?? Number.MAX_SAFE_INTEGER)
@@ -514,7 +516,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       },
       expenses: (localData.expenseTypes || []).map((expense) => ({ id: expense.id, name: expense.nombre || 'Gasto', inverted: Boolean(expense.invertir_signo) })),
       platforms: (localData.platforms || [])
-        .filter(platform => platform.caja_id === selectedBoxId)
+        .filter(platform => platform.caja_id === currentBoxId)
         .sort((a, b) => a.id - b.id)
         .map((platform) => {
           const color = localData.colors?.find((item) => item.id === platform.color_id)
@@ -522,7 +524,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
         }),
       bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
     }
-  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions, selectedBoxId])
+  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions, currentBoxId])
 
   const [tab, setTab] = useState('accounts')
   const [draft, setDraft] = useState(buildDefaultConfig)
