@@ -513,11 +513,16 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
         walletModes: Object.fromEntries((walletsFromData.map((wallet) => [wallet.nombre || 'Sin billetera', wallet.tipos_billetera?.nombre || localData.walletTypes?.[0]?.nombre || 'Cobros y retiros']))),
       },
       expenses: (localData.expenseTypes || []).map((expense) => ({ id: expense.id, name: expense.nombre || 'Gasto', inverted: Boolean(expense.invertir_signo) })),
-      platforms: (localData.platforms || []).map((platform) => platform.nombre || 'Plataforma'),
-      platformColors: Object.fromEntries((localData.platforms || []).map((platform) => [platform.nombre || 'Plataforma', platform.color_id ? 'teal' : 'teal'])),
+      platforms: (localData.platforms || [])
+        .filter(platform => platform.caja_id === selectedBoxId)
+        .sort((a, b) => a.id - b.id)
+        .map((platform) => {
+          const color = localData.colors?.find((item) => item.id === platform.color_id)
+          return { id: platform.id, nombre: platform.nombre || 'Plataforma', colorId: platform.color_id, colorHex: color?.hex || null }
+        }),
       bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
     }
-  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions])
+  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions, selectedBoxId])
 
   const [tab, setTab] = useState('accounts')
   const [draft, setDraft] = useState(buildDefaultConfig)
@@ -1199,38 +1204,32 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       {tab === 'platforms' && <section className="config-card">
         <div className="config-list-head"><h3>Plataformas</h3><span>{draft.platforms.length} elementos</span></div>
         {draft.platforms.map((platform, index) => (
-          <div className="config-list-row" key={`${platform}-${index}`}>
-            <input value={platform} onChange={(event) => setDraft((current) => ({ ...current, platforms: current.platforms.map((item, itemIndex) => itemIndex === index ? event.target.value : item) }))} onBlur={async (event) => {
+          <div className="config-list-row box-config-row" key={platform.id || index}>
+            <span className="box-config-dot" style={{ backgroundColor: platform.colorHex || '#879598' }} />
+            <input value={platform.nombre} onChange={(event) => setDraft((current) => ({ ...current, platforms: current.platforms.map((item, itemIndex) => itemIndex === index ? { ...item, nombre: event.target.value } : item) }))} onBlur={async (event) => {
               const value = event.target.value.trim()
-              const target = data.platforms.find(item => item.nombre === platform)
-              if (!value || !target) return
-              await persistUpdate(() => updatePlatform(target.id, { name: value, color: draft.platformColors?.[platform] || 'teal' }), 'Plataforma actualizada en Supabase')
+              if (!platform.id || !value) return
+              const savedName = data.platforms?.find((item) => item.id === platform.id)?.nombre
+              if (value === savedName) return
+              await persistUpdate(() => updatePlatform(platform.id, { name: value, colorId: platform.colorId }), 'Plataforma actualizada en Supabase')
             }} placeholder="Nombre de plataforma" />
-            <select value={draft.platformColors?.[platform] || 'teal'} onChange={async (event) => {
-              const nextColor = event.target.value
-              setDraft((current) => ({ ...current, platformColors: { ...(current.platformColors || {}), [platform]: nextColor } }))
-              const target = data.platforms.find(item => item.nombre === platform)
-              if (target) await persistUpdate(() => updatePlatform(target.id, { name: platform, color: nextColor }), 'Color de plataforma guardado en Supabase')
-            }}>
-              <option value="teal">Turquesa</option>
-              <option value="blue">Azul</option>
-              <option value="green">Verde</option>
-              <option value="orange">Naranja</option>
-              <option value="pink">Rosa</option>
-              <option value="red">Rojo</option>
-              <option value="yellow">Amarillo</option>
-              <option value="violet">Violeta</option>
+            <select value={platform.colorId == null ? '' : String(platform.colorId)} onChange={(event) => {
+              const nextColorId = event.target.value || null
+              const selectedColor = localData.colors?.find((color) => String(color.id) === nextColorId)
+              setDraft((current) => ({ ...current, platforms: current.platforms.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || null } : item) }))
+              if (platform.id) persistUpdate(() => updatePlatform(platform.id, { name: platform.nombre, colorId: nextColorId }), 'Color de plataforma actualizado en Supabase')
+            }} aria-label="Color">
+              {localData.colors?.length ? localData.colors.map((color) => <option value={String(color.id)} key={color.id}>{color.nombre}</option>) : <option value="">Sin colores disponibles</option>}
             </select>
             <button type="button" className="delete-button" title="Eliminar plataforma" onClick={async () => {
-              const target = data.platforms.find(item => item.nombre === platform)
-              if (!target) return
-              await persistUpdate(() => deletePlatform(target.id), 'Plataforma eliminada de Supabase')
+              if (!platform.id) return
+              await persistUpdate(() => deletePlatform(platform.id), 'Plataforma eliminada de Supabase')
             }}><X size={14} /></button>
           </div>
         ))}
         <button type="button" className="config-add" onClick={async () => {
-          const boxId = data.boxes?.[0]?.id || null
-          await persistUpdate(() => createPlatform({ name: 'Nueva plataforma', color: 'teal', boxId }), 'Plataforma creada en Supabase')
+          const boxId = selectedBoxId || data.boxes?.[0]?.id || null
+          await persistUpdate(() => createPlatform({ name: 'Nueva plataforma', colorId: localData.colors?.[0]?.id ?? null, boxId }), 'Plataforma creada en Supabase')
         }}><Plus size={15} /> Agregar plataforma</button>
       </section>}
 
