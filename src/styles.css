@@ -53,6 +53,29 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: var(--bg);
 }
 
+.loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: radial-gradient(circle at 50% -12%, rgba(130, 110, 185, 0.2), transparent 42%), #111719;
+  color: #72d7ca;
+}
+.loading-screen-content {
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  font: 10px 'DM Mono', monospace;
+}
+.loading-screen-icon { animation: loading-screen-spin 1.2s linear infinite; }
+@keyframes loading-screen-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .loading-screen-icon { animation-duration: 3s; }
+}
+
 .topbar {
   height: var(--topbar-height);
   padding: 0 18px 0 16px;

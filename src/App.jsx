@@ -19,6 +19,7 @@ import {
   LayoutGrid,
   LockKeyhole,
   Plus,
+  RefreshCw,
   Search,
   Settings2,
   SlidersHorizontal,
@@ -177,6 +178,17 @@ function App() {
   const appName = appConfig?.nombre || 'Caja Europa'
   const isLightTheme = Boolean(appConfig?.tema)
   const appImagePreview = getStoragePublicUrl(appConfig?.imagen_mini || appConfig?.imagen)
+
+  if (!appData && !loadError) {
+    return (
+      <div className="loading-screen" role="status" aria-live="polite">
+        <div className="loading-screen-content">
+          <RefreshCw className="loading-screen-icon" size={22} aria-hidden="true" />
+          <span>{selectedBoxId == null ? 'Cargando caja y recursos...' : 'Cargando caja...'}</span>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="app-shell" data-theme={isLightTheme ? 'light' : 'dark'} style={{ '--accent': accentColor }}>
