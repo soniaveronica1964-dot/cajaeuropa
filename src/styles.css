@@ -67,10 +67,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .loading-screen-content {
   display: grid;
   justify-items: center;
-  gap: 18px;
-  font: 10px 'DM Mono', monospace;
+  gap: 20px;
+  font: 12px 'DM Mono', monospace;
 }
-.loading-screen-icon { animation: loading-screen-spin 1.2s linear infinite; }
+.loading-screen-icon { width: 28px; height: 28px; animation: loading-screen-spin 1.2s linear infinite; }
 @keyframes loading-screen-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
   .loading-screen-icon { animation-duration: 3s; }
