@@ -1228,8 +1228,11 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
           </div>
         ))}
         <button type="button" className="config-add" onClick={async () => {
-          const boxId = selectedBoxId || data.boxes?.[0]?.id || null
-          await persistUpdate(() => createPlatform({ name: 'Nueva plataforma', colorId: localData.colors?.[0]?.id ?? null, boxId }), 'Plataforma creada en Supabase')
+          if (currentBoxId == null) {
+            setToast('Seleccioná una caja antes de crear una plataforma')
+            return
+          }
+          await persistUpdate(() => createPlatform({ name: 'Nueva plataforma', colorId: localData.colors?.[0]?.id ?? null, boxId: currentBoxId }), 'Plataforma creada en Supabase')
         }}><Plus size={15} /> Agregar plataforma</button>
       </section>}
 

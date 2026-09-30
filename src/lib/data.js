@@ -523,11 +523,10 @@ export async function deleteExpenseType(id) {
   if (error) throw error
 }
 
-export async function createPlatform({ name, colorId = null, boxId = null }) {
+export async function createPlatform({ name, colorId = null, boxId }) {
   requireSupabase()
-  const boxTargetId = boxId || (await supabase.from('cajas').select('id').limit(1).maybeSingle()).data?.id
-  if (!boxTargetId) throw new Error('No hay una caja disponible para crear la plataforma')
-  const { data, error } = await supabase.from('plataformas').insert({ nombre: name.trim(), caja_id: boxTargetId, color_id: colorId }).select().single()
+  if (boxId == null) throw new Error('Seleccioná una caja para asociar la plataforma')
+  const { data, error } = await supabase.from('plataformas').insert({ nombre: name.trim(), caja_id: boxId, color_id: colorId }).select().single()
   if (error) throw error
   return data
 }
