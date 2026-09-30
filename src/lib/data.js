@@ -120,6 +120,14 @@ export function updateAccountValue(accountShiftId, value) {
   return updateRow('cuentas_x_turno', accountShiftId, { valor: Number(value) || 0 })
 }
 
+export function updateChipFinal(chipId, value) {
+  const finalValue = value == null ? null : Number(value)
+  if (finalValue != null && (!Number.isFinite(finalValue) || finalValue < 0)) {
+    throw new Error('La ficha final debe ser un valor igual o mayor a cero')
+  }
+  return updateRow('fichas', chipId, { fichas_final: finalValue })
+}
+
 export function updateAdvertisingLine(lineId, field, value) {
   if (!['total_llegados', 'nuevos', 'repetidos', 'sin_respuesta', 'total_derivados'].includes(field)) {
     throw new Error('Campo de publicidad no permitido')

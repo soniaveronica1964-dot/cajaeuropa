@@ -837,9 +837,12 @@ input[type="time"] { color-scheme: dark; }
   background: rgba(12, 17, 20, 0.45);
 }
 .chip-final-value > b { color: var(--muted); font: 11px 'DM Mono', monospace; }
-.chip-final-value > strong { flex: 1; color: var(--text); font: 11px 'DM Mono', monospace; text-align: center; }
-.chip-final-value.is-empty > strong { color: var(--muted); font-family: Manrope, sans-serif; }
+.chip-final-value > input { flex: 1; width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 11px 'DM Mono', monospace; text-align: center; }
+.chip-final-value > input::placeholder { color: var(--muted); font-family: Manrope, sans-serif; }
 .chip-final-field > small { color: var(--muted); font: 9px 'DM Mono', monospace; text-align: right; }
+.chip-final-field > small.positive { color: #34d399; }
+.chip-final-field > small.negative { color: var(--red); }
+.chip-final-field > small.neutral { color: var(--muted); }
 
 .mini-row b,
 .movement-row b,

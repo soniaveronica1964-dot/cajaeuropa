@@ -73,6 +73,7 @@ import {
   updateAccountType,
   updateAccountValue,
   updateAdvertisingLine,
+  updateChipFinal,
   updateColor,
   updateWalletType,
   updateBonusCondition,
@@ -323,7 +324,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved }) {
     <section className="summary-bar"><div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div><Metric label="Caja inicial" value={money.format(data.shift.caja_inicial)} tone="positive" /><Metric label="Caja final" value={data.shift.caja_final == null ? 'Sin cierre' : money.format(data.shift.caja_final)} tone="positive" /><Metric label="Propinas" value={money.format(tipsTotal)} tone="positive" /><Metric label="Gastos" value={money.format(expensesTotal)} tone="negative" /><Metric label="Bonos netos" value={money.format(bonusTotal)} tone="positive" /><label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? data.shift.redondeo : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={() => updateShiftRounding(data.shift.id, rounding).then(onSaved).catch(() => setToast('No se pudo guardar el redondeo'))} /></span></label></section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
-        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} /></div>
+        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} setToast={setToast} onSaved={onSaved} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard /><UsersCard users={data.users} /></div>
         <div className="three-panels lower"><MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} /><MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} /><BonusList shiftId={data.shift.id} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /></div>
@@ -334,17 +335,63 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved }) {
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
 function Publicity({ rows, setToast, onSaved }) { const fields = [['Total', 'total_llegados'], ['Nuevos', 'nuevos'], ['Repetidos', 'repetidos'], ['Sin respuesta', 'sin_respuesta']]; const change = (row, field, value) => updateAdvertisingLine(row.id, field, Math.max(0, value)).then(onSaved).catch(() => setToast('No se pudo guardar publicidad')); return <section className="panel publicity"><PanelTitle icon={Bell} title="Publicidad" action={<Copy size={15} />} /><div className="publicity-rows">{rows.length ? rows.map(row => <div className="publicity-row" key={row.id}><strong><FileText size={13} /> Línea {row.id}</strong>{fields.map(([label, field]) => <label key={field}><small>{label}</small><span><button aria-label={`Disminuir ${label}`} onClick={() => change(row, field, Number(row[field]) - 1)}>−</button><b>{row[field] ?? 0}</b><button aria-label={`Aumentar ${label}`} onClick={() => change(row, field, Number(row[field]) + 1)}>+</button></span></label>)}<em>{row.total_derivados ?? 0} derivados</em></div>) : <EmptyInline text="No hay líneas de publicidad para este turno." />}</div></section> }
 function BonusSummary({ rows }) { const total = rows.reduce((sum, row) => sum + (row.recuperado ? -Number(row.valor || 0) : Number(row.valor || 0)), 0); return <section className="panel compact-bonus"><PanelTitle icon={Gift} title="Bonos netos" action={<Eye size={15} />} /><strong className="accent-number">{money.format(total)}</strong><p>Últimos movimientos</p>{rows.slice(0, 4).map(row => <div className="mini-row" key={row.id}><span className={row.recuperado ? 'success' : ''}>{row.recuperado ? 'Recuperado' : 'Otorgado'}</span><time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time><b>{money.format(row.valor)}</b></div>)}{!rows.length && <EmptyInline text="No hay bonos registrados." />}</section> }
-function ChipSummary({ chips }) {
+function ChipSummary({ chips, setToast, onSaved }) {
+  const formatValue = (value) => value == null ? '' : Number(value).toLocaleString('es-AR', { maximumFractionDigits: 2 })
+  const parseValue = (value) => {
+    const normalized = String(value).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
+    if (!normalized) return null
+    const parsed = Number(normalized)
+    return Number.isFinite(parsed) ? parsed : Number.NaN
+  }
+  const [draftValues, setDraftValues] = useState(() => Object.fromEntries(chips.map(chip => [chip.id, formatValue(chip.fichas_final)])))
+
+  useEffect(() => {
+    setDraftValues(Object.fromEntries(chips.map(chip => [chip.id, formatValue(chip.fichas_final)])))
+  }, [chips])
+
+  const saveFinal = async (chip) => {
+    const rawValue = draftValues[chip.id] ?? formatValue(chip.fichas_final)
+    const nextValue = parseValue(rawValue)
+    if (rawValue.trim() && (!Number.isFinite(nextValue) || nextValue < 0)) {
+      setToast('Ingresá un valor final válido, igual o mayor a cero')
+      setDraftValues(current => ({ ...current, [chip.id]: formatValue(chip.fichas_final) }))
+      return
+    }
+    const savedValue = chip.fichas_final == null ? null : Number(chip.fichas_final)
+    if (nextValue === savedValue) return
+    try {
+      await updateChipFinal(chip.id, nextValue)
+      setToast('Ficha final guardada')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar la ficha final')
+      setDraftValues(current => ({ ...current, [chip.id]: formatValue(chip.fichas_final) }))
+    }
+  }
+
   return <section className="panel chip-summary">
     <PanelTitle icon={Boxes} title="Fichas finales" />
     {chips.length ? <div className="chip-final-list">{chips.map(chip => (
       <div className="chip-final-field" key={chip.id}>
         <span>Ficha Final ({chip.plataformas?.nombre || 'Plataforma'})</span>
-        <div className={`chip-final-value ${chip.fichas_final == null ? 'is-empty' : ''}`}>
+        <div className="chip-final-value">
           <b>$</b>
-          <strong>{chip.fichas_final == null ? 'Sin cierre' : Number(chip.fichas_final).toLocaleString('es-AR', { maximumFractionDigits: 0 })}</strong>
+          <input
+            aria-label={`Ficha final ${chip.plataformas?.nombre || 'Plataforma'}`}
+            inputMode="decimal"
+            value={draftValues[chip.id] ?? formatValue(chip.fichas_final)}
+            onChange={(event) => setDraftValues(current => ({ ...current, [chip.id]: event.target.value }))}
+            onBlur={() => saveFinal(chip)}
+            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+            placeholder="Sin cierre"
+          />
         </div>
-        <small>Inicial: {money.format(chip.fichas_inicial)}</small>
+        {(() => {
+          const finalValue = parseValue(draftValues[chip.id] ?? formatValue(chip.fichas_final))
+          const difference = Number.isFinite(finalValue) ? finalValue - Number(chip.fichas_inicial || 0) : null
+          const differenceTone = difference == null || difference === 0 ? 'neutral' : difference > 0 ? 'positive' : 'negative'
+          return <small className={differenceTone}>Diferencia: {difference == null ? '—' : money.format(difference)}</small>
+        })()}
       </div>
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
   </section>
