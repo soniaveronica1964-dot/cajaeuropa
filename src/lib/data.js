@@ -30,7 +30,7 @@ export async function loadCurrentShiftData(boxId = null) {
   const { data: shift, error: shiftError } = await shiftRequest.maybeSingle()
   if (shiftError) throw shiftError
   if (!shift) {
-    const [holders, wallets, walletTypes, accountTypes, expenseTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns] = await Promise.all([
+    const [holders, wallets, walletTypes, accountTypes, expenseTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, platforms] = await Promise.all([
       query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
       query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
       query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
@@ -41,8 +41,9 @@ export async function loadCurrentShiftData(boxId = null) {
       query('colores', 'id, nombre, hex'),
       query('app_config', 'id, nombre, icono, imagen, imagen_mini, tema, ver_notas, singleton'),
       query('turnos', 'id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, dia_turno_id, dias_turno(id, nombre, dia_semana, hora_inicio, hora_fin, tipos_turno(id, nombre, caja_id, cajas(nombre)))', request => request.eq('abierto', true).order('fecha_hora_inicio', { ascending: false })),
+      query('plataformas', 'id, nombre, caja_id, color_id', request => request.order('id', { ascending: true })),
     ])
-    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users: [], goals: [], chips: [], holders, wallets, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns }
+    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users: [], goals: [], chips: [], holders, wallets, platforms, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns }
   }
 
   const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns] = await Promise.all([
@@ -58,7 +59,7 @@ export async function loadCurrentShiftData(boxId = null) {
     query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id)),
     query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
-    query('plataformas', 'id, nombre, caja_id, color_id'),
+    query('plataformas', 'id, nombre, caja_id, color_id', request => request.order('id', { ascending: true })),
     query('condiciones_bono', 'id, nombre, plataforma'),
     query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
     query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),

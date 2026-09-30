@@ -514,7 +514,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       },
       expenses: (localData.expenseTypes || []).map((expense) => ({ id: expense.id, name: expense.nombre || 'Gasto', inverted: Boolean(expense.invertir_signo) })),
       platforms: (localData.platforms || [])
-        .filter(platform => platform.caja_id === currentBoxId)
+        .filter(platform => String(platform.caja_id) === String(currentBoxId))
         .sort((a, b) => a.id - b.id)
         .map((platform) => {
           const color = localData.colors?.find((item) => item.id === platform.color_id)
