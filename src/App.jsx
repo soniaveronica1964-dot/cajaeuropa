@@ -336,7 +336,7 @@ function Metric({ label, value, tone = '' }) { return <div className="metric"><s
 function Publicity({ rows, setToast, onSaved }) { const fields = [['Total', 'total_llegados'], ['Nuevos', 'nuevos'], ['Repetidos', 'repetidos'], ['Sin respuesta', 'sin_respuesta']]; const change = (row, field, value) => updateAdvertisingLine(row.id, field, Math.max(0, value)).then(onSaved).catch(() => setToast('No se pudo guardar publicidad')); return <section className="panel publicity"><PanelTitle icon={Bell} title="Publicidad" action={<Copy size={15} />} /><div className="publicity-rows">{rows.length ? rows.map(row => <div className="publicity-row" key={row.id}><strong><FileText size={13} /> Línea {row.id}</strong>{fields.map(([label, field]) => <label key={field}><small>{label}</small><span><button aria-label={`Disminuir ${label}`} onClick={() => change(row, field, Number(row[field]) - 1)}>−</button><b>{row[field] ?? 0}</b><button aria-label={`Aumentar ${label}`} onClick={() => change(row, field, Number(row[field]) + 1)}>+</button></span></label>)}<em>{row.total_derivados ?? 0} derivados</em></div>) : <EmptyInline text="No hay líneas de publicidad para este turno." />}</div></section> }
 function BonusSummary({ rows }) { const total = rows.reduce((sum, row) => sum + (row.recuperado ? -Number(row.valor || 0) : Number(row.valor || 0)), 0); return <section className="panel compact-bonus"><PanelTitle icon={Gift} title="Bonos netos" action={<Eye size={15} />} /><strong className="accent-number">{money.format(total)}</strong><p>Últimos movimientos</p>{rows.slice(0, 4).map(row => <div className="mini-row" key={row.id}><span className={row.recuperado ? 'success' : ''}>{row.recuperado ? 'Recuperado' : 'Otorgado'}</span><time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time><b>{money.format(row.valor)}</b></div>)}{!rows.length && <EmptyInline text="No hay bonos registrados." />}</section> }
 function ChipSummary({ chips, setToast, onSaved }) {
-  const formatValue = (value) => value == null ? '' : Number(value).toLocaleString('es-AR', { maximumFractionDigits: 2 })
+  const formatValue = (value) => value == null ? '' : Number(value).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const parseValue = (value) => {
     const normalized = String(value).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
     if (!normalized) return null
@@ -383,14 +383,15 @@ function ChipSummary({ chips, setToast, onSaved }) {
             onChange={(event) => setDraftValues(current => ({ ...current, [chip.id]: event.target.value }))}
             onBlur={() => saveFinal(chip)}
             onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-            placeholder="Sin cierre"
+            placeholder="0,00"
           />
         </div>
         {(() => {
-          const finalValue = parseValue(draftValues[chip.id] ?? formatValue(chip.fichas_final))
+          const parsedFinal = parseValue(draftValues[chip.id] ?? formatValue(chip.fichas_final))
+          const finalValue = parsedFinal == null ? 0 : parsedFinal
           const difference = Number.isFinite(finalValue) ? finalValue - Number(chip.fichas_inicial || 0) : null
           const differenceTone = difference == null || difference === 0 ? 'neutral' : difference > 0 ? 'positive' : 'negative'
-          return <small className={differenceTone}>Diferencia: {difference == null ? '—' : money.format(difference)}</small>
+          return <small className={differenceTone}>{difference == null ? '—' : difference.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</small>
         })()}
       </div>
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
