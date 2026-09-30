@@ -175,6 +175,12 @@ function App() {
     }
     reloadData()
   }
+  const updateChipFinalData = (chipId, value) => {
+    setAppData(current => current ? {
+      ...current,
+      chips: current.chips.map(chip => chip.id === chipId ? { ...chip, fichas_final: value } : chip),
+    } : current)
+  }
   const appConfig = appData?.appConfig?.[0]
   const appName = appConfig?.nombre || 'Caja Europa'
   const isLightTheme = Boolean(appConfig?.tema)
@@ -227,7 +233,7 @@ function App() {
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
@@ -308,7 +314,7 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved }) {
+function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved }) {
   const [rounding, setRounding] = useState('')
   if (!data.shift) return <section className="panel empty-state"><strong>No hay un turno abierto</strong><p>Creá o abrí un turno en Supabase para cargar la operación real de la caja.</p></section>
   const goals = mapGoals(data.goals)
@@ -324,7 +330,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved }) {
     <section className="summary-bar"><div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div><Metric label="Caja inicial" value={money.format(data.shift.caja_inicial)} tone="positive" /><Metric label="Caja final" value={data.shift.caja_final == null ? 'Sin cierre' : money.format(data.shift.caja_final)} tone="positive" /><Metric label="Propinas" value={money.format(tipsTotal)} tone="positive" /><Metric label="Gastos" value={money.format(expensesTotal)} tone="negative" /><Metric label="Bonos netos" value={money.format(bonusTotal)} tone="positive" /><label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? data.shift.redondeo : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={() => updateShiftRounding(data.shift.id, rounding).then(onSaved).catch(() => setToast('No se pudo guardar el redondeo'))} /></span></label></section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
-        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} setToast={setToast} onSaved={onSaved} /></div>
+        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard /><UsersCard users={data.users} /></div>
         <div className="three-panels lower"><MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} /><MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} /><BonusList shiftId={data.shift.id} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /></div>
@@ -335,7 +341,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved }) {
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
 function Publicity({ rows, setToast, onSaved }) { const fields = [['Total', 'total_llegados'], ['Nuevos', 'nuevos'], ['Repetidos', 'repetidos'], ['Sin respuesta', 'sin_respuesta']]; const change = (row, field, value) => updateAdvertisingLine(row.id, field, Math.max(0, value)).then(onSaved).catch(() => setToast('No se pudo guardar publicidad')); return <section className="panel publicity"><PanelTitle icon={Bell} title="Publicidad" action={<Copy size={15} />} /><div className="publicity-rows">{rows.length ? rows.map(row => <div className="publicity-row" key={row.id}><strong><FileText size={13} /> Línea {row.id}</strong>{fields.map(([label, field]) => <label key={field}><small>{label}</small><span><button aria-label={`Disminuir ${label}`} onClick={() => change(row, field, Number(row[field]) - 1)}>−</button><b>{row[field] ?? 0}</b><button aria-label={`Aumentar ${label}`} onClick={() => change(row, field, Number(row[field]) + 1)}>+</button></span></label>)}<em>{row.total_derivados ?? 0} derivados</em></div>) : <EmptyInline text="No hay líneas de publicidad para este turno." />}</div></section> }
 function BonusSummary({ rows }) { const total = rows.reduce((sum, row) => sum + (row.recuperado ? -Number(row.valor || 0) : Number(row.valor || 0)), 0); return <section className="panel compact-bonus"><PanelTitle icon={Gift} title="Bonos netos" action={<Eye size={15} />} /><strong className="accent-number">{money.format(total)}</strong><p>Últimos movimientos</p>{rows.slice(0, 4).map(row => <div className="mini-row" key={row.id}><span className={row.recuperado ? 'success' : ''}>{row.recuperado ? 'Recuperado' : 'Otorgado'}</span><time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time><b>{money.format(row.valor)}</b></div>)}{!rows.length && <EmptyInline text="No hay bonos registrados." />}</section> }
-function ChipSummary({ chips, setToast, onSaved }) {
+function ChipSummary({ chips, setToast, onChipFinalSaved }) {
   const formatValue = (value) => value == null ? '' : Number(value).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const parseValue = (value) => {
     const normalized = String(value).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
@@ -361,8 +367,8 @@ function ChipSummary({ chips, setToast, onSaved }) {
     if (nextValue === savedValue) return
     try {
       await updateChipFinal(chip.id, nextValue)
+      onChipFinalSaved(chip.id, nextValue)
       setToast('Ficha final guardada')
-      onSaved()
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la ficha final')
       setDraftValues(current => ({ ...current, [chip.id]: formatValue(chip.fichas_final) }))
@@ -391,7 +397,7 @@ function ChipSummary({ chips, setToast, onSaved }) {
           const finalValue = parsedFinal == null ? 0 : parsedFinal
           const difference = Number.isFinite(finalValue) ? finalValue - Number(chip.fichas_inicial || 0) : null
           const differenceTone = difference == null || difference === 0 ? 'neutral' : difference > 0 ? 'positive' : 'negative'
-          return <small className={differenceTone}>{difference == null ? '—' : difference.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</small>
+          return <small className={differenceTone}>{difference == null ? '—' : `$ ${difference.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</small>
         })()}
       </div>
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
