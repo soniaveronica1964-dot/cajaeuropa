@@ -417,9 +417,9 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
 
   return <section className="panel account-panel">
     <PanelTitle icon={WalletCards} title="Matriz de cuentas" meta={`${holders.length} titulares · ${wallets.length} billeteras`} action={<button className="text-action" onClick={() => setToast('La matriz refleja los valores guardados en Supabase')}>Estado de datos</button>} />
-    <div className="matrix-wrap">
+    <div className="matrix-wrap" style={columns}>
       {accounts.length ? <>
-        <div className="matrix-row matrix-head" style={columns}>
+        <div className="matrix-row matrix-head">
           <strong>Titular</strong>
           {wallets.map(wallet => <span key={wallet}>{wallet}</span>)}
           <span>Total</span>
@@ -427,14 +427,14 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
         {holders.map(holder => {
           const holderAccounts = accounts.filter(account => account.holder === holder)
           const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0)
-          return <div className="matrix-row" key={holder} style={columns}>
+          return <div className="matrix-row" key={holder}>
             <strong>{holder}</strong>
             {wallets.map(wallet => {
               const account = holderAccounts.find(item => item.wallet === wallet)
               return account ? <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
                 <label className={`matrix-value ${account.amount ? 'green' : ''}`}>
                   <span>$</span>
-                  <input defaultValue={account.amount.toLocaleString('es-AR')} placeholder="—" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
+                  <input defaultValue={account.amount ? account.amount.toLocaleString('es-AR') : ''} placeholder="-" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
                 </label>
                 <div className="matrix-account-flags">
                   <label className="matrix-flag" title="Cobros">
@@ -449,7 +449,7 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
             <b>{money.format(holderTotal)}</b>
           </div>
         })}
-        <div className="matrix-total" style={columns}>
+        <div className="matrix-total">
           <span>Total billetera</span>
           {wallets.map(wallet => <b key={wallet}>{money.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}
           <strong>{money.format(total)}</strong>
