@@ -89,6 +89,18 @@ import {
 } from './lib/data'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
+const moneyWithCents = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const numberWithCents = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+function parseLocalizedAmount(value) {
+  const raw = String(value).trim().replace(/\s/g, '')
+  if (!raw) return 0
+  const normalized = raw.includes(',')
+    ? raw.replace(/\./g, '').replace(',', '.')
+    : /^-?\d{1,3}(?:\.\d{3})+$/.test(raw) ? raw.replace(/\./g, '') : raw
+  const parsed = Number(normalized)
+  return Number.isFinite(parsed) ? parsed : null
+}
 
 async function createAppImagePayload(file) {
   const image = await new Promise((resolve, reject) => {
@@ -316,6 +328,24 @@ function mapGoals(rows) {
 
 function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved }) {
   const [rounding, setRounding] = useState('')
+  const saveRounding = (event) => {
+    const input = event.currentTarget
+    const value = parseLocalizedAmount(input.value)
+    if (value == null) {
+      input.value = numberWithCents.format(Number(data.shift.redondeo || 0))
+      setRounding('')
+      setToast('Ingresá un redondeo válido')
+      return
+    }
+    input.value = numberWithCents.format(value)
+    updateShiftRounding(data.shift.id, value).then(() => {
+      setRounding('')
+      onSaved()
+    }).catch(() => {
+      setRounding('')
+      setToast('No se pudo guardar el redondeo')
+    })
+  }
   if (!data.shift) return <section className="panel empty-state"><strong>No hay un turno abierto</strong><p>Creá o abrí un turno en Supabase para cargar la operación real de la caja.</p></section>
   const goals = mapGoals(data.goals)
   const accounts = data.accounts.map(account => ({ ...account, holder: account.cuentas?.titulares?.nombre || 'Sin titular', wallet: account.cuentas?.billeteras?.nombre || 'Sin billetera', amount: Number(account.valor || 0) }))
@@ -331,16 +361,16 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   const accountWallets = orderNamesByConfig(data.wallets, accounts.map(account => account.wallet))
   const cashInitial = Number(data.shift.caja_inicial || 0)
   const cashDifference = total - cashInitial
-  const realDifference = cashDifference + expensesTotal
+  const realDifference = cashDifference
   return <>
     <GoalStrip open={openGoal} onToggle={() => setOpenGoal(value => !value)} goals={goals} />
     <section className="summary-bar">
       <div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div>
-      <Metric label="Caja inicial" value={money.format(cashInitial)} tone="positive" />
-      <Metric label="Caja final" value={data.shift.caja_final == null ? 'Sin cierre' : money.format(data.shift.caja_final)} tone="positive" />
-      <Metric label="Diferencia caja" value={money.format(cashDifference)} tone={cashDifference < 0 ? 'negative' : 'positive'} />
-      <Metric label="Diferencia real" value={money.format(realDifference)} tone={realDifference < 0 ? 'negative' : 'positive'} />
-      <label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? data.shift.redondeo : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={() => updateShiftRounding(data.shift.id, rounding).then(() => onSaved()).catch(() => setToast('No se pudo guardar el redondeo'))} /></span></label>
+      <Metric label="Caja inicial" value={moneyWithCents.format(cashInitial)} tone="positive" />
+      <Metric label="Caja final" value={moneyWithCents.format(total)} tone="positive" />
+      <Metric label="Diferencia caja" value={moneyWithCents.format(cashDifference)} tone={cashDifference < 0 ? 'negative' : 'positive'} />
+      <Metric label="Diferencia real" value={moneyWithCents.format(realDifference)} tone={realDifference < 0 ? 'negative' : 'positive'} />
+      <label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? numberWithCents.format(Number(data.shift.redondeo || 0)) : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={saveRounding} /></span></label>
     </section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
@@ -419,7 +449,23 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
 }
 function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved }) {
   const [flagOverrides, setFlagOverrides] = useState({})
-  const saveAccount = (account, event) => updateAccountValue(account.id, event.target.value.replace(/\./g, '').replace(',', '.')).then(() => onSaved()).catch(() => setToast('No se pudo guardar el valor de la cuenta'))
+  const saveAccount = async (account, event) => {
+    const input = event.currentTarget
+    const value = parseLocalizedAmount(input.value)
+    if (value == null || value < 0) {
+      input.value = numberWithCents.format(account.amount)
+      setToast('Ingresá un valor válido, igual o mayor a cero')
+      return
+    }
+    input.value = numberWithCents.format(value)
+    try {
+      await updateAccountValue(account.id, value)
+      onSaved()
+    } catch {
+      input.value = numberWithCents.format(account.amount)
+      setToast('No se pudo guardar el valor de la cuenta')
+    }
+  }
   const saveFlag = (account, field, checked) => {
     const previousFlags = flagOverrides[account.id] || { cobros: Boolean(account.cobros), retiros: Boolean(account.retiros) }
     const nextFlags = { ...previousFlags, [field]: checked }
@@ -452,7 +498,7 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
               return <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
                 <label className={`matrix-value ${valueTone}`}>
                   <span>$</span>
-                  <input defaultValue={account.amount ? account.amount.toLocaleString('es-AR') : ''} placeholder="-" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
+                  <input defaultValue={numberWithCents.format(account.amount)} placeholder="0,00" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
                 </label>
                 <div className="matrix-account-flags">
                   <label className="matrix-flag" title="Cobros">
@@ -464,13 +510,13 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
                 </div>
               </div>
             })}
-            <b>{money.format(holderTotal)}</b>
+            <b>{moneyWithCents.format(holderTotal)}</b>
           </div>
         })}
         <div className="matrix-total">
           <span>Total billetera</span>
-          {wallets.map(wallet => <b key={wallet}>{money.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}
-          <strong>{money.format(total)}</strong>
+          {wallets.map(wallet => <b key={wallet}>{moneyWithCents.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}
+          <strong>{moneyWithCents.format(total)}</strong>
         </div>
       </> : <EmptyInline text="No hay cuentas vinculadas al turno abierto." />}
     </div>
