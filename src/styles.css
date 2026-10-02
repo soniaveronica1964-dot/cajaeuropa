@@ -1052,15 +1052,24 @@ input[type="time"] { color-scheme: dark; }
   text-align: center;
 }
 
-.matrix-row .matrix-value.green {
+.matrix-row .matrix-value.collecting {
   border-color: rgba(150, 213, 165, 0.45);
   background: rgba(18, 39, 31, 0.7);
   color: var(--green);
 }
 
+.matrix-row .matrix-value.withdrawing {
+  border-color: color-mix(in srgb, var(--orange) 55%, transparent);
+  background: color-mix(in srgb, var(--orange) 12%, rgba(17, 23, 24, 0.7));
+  color: var(--orange);
+}
+
 .matrix-row .matrix-value span {
   color: var(--muted);
 }
+
+.matrix-row .matrix-value.collecting span { color: var(--green); }
+.matrix-row .matrix-value.withdrawing span { color: var(--orange); }
 
 .matrix-row .matrix-value input {
   flex: 1;
@@ -1114,6 +1123,11 @@ input[type="time"] { color-scheme: dark; }
   background: var(--green);
 }
 
+.matrix-account-flags .matrix-flag:last-child input:checked {
+  border-color: var(--orange);
+  background: var(--orange);
+}
+
 .matrix-flag input:checked::after {
   width: 5px;
   height: 3px;
@@ -1121,6 +1135,10 @@ input[type="time"] { color-scheme: dark; }
   border-width: 0 0 1.5px 1.5px;
   content: '';
   transform: rotate(-45deg) translate(0, -1px);
+}
+
+.matrix-account-flags .matrix-flag:last-child input:checked::after {
+  border-color: #402713;
 }
 
 .matrix-account-empty {

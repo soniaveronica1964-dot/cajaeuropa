@@ -162,7 +162,6 @@ function App() {
     const requestedBoxAccent = appData?.boxes?.find((box) => box.id === boxId)?.colores?.hex || '#72d7ca'
     setSelectedBoxAccent(requestedBoxAccent)
     setLoadError('')
-    setAppData(null)
     loadCurrentShiftData(boxId).then((freshData) => {
       setAppData(freshData)
       setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === boxId)?.colores?.hex || requestedBoxAccent)
@@ -432,7 +431,7 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
             {wallets.map(wallet => {
               const account = holderAccounts.find(item => item.wallet === wallet)
               return account ? <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
-                <label className={`matrix-value ${account.amount ? 'green' : ''}`}>
+                <label className={`matrix-value ${account.cobros !== account.retiros ? (account.cobros ? 'collecting' : 'withdrawing') : ''}`}>
                   <span>$</span>
                   <input defaultValue={account.amount ? account.amount.toLocaleString('es-AR') : ''} placeholder="-" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
                 </label>
@@ -444,7 +443,7 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
                     <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} defaultChecked={Boolean(account.retiros)} onChange={(event) => saveFlag(account, 'retiros', event)} />
                   </label>
                 </div>
-              </div> : <span className="matrix-account-empty" key={`${holder}-${wallet}`}>—</span>
+              </div> : <span className="matrix-account-empty" key={`${holder}-${wallet}`} aria-hidden="true" />
             })}
             <b>{money.format(holderTotal)}</b>
           </div>
