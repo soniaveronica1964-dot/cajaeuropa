@@ -35,6 +35,7 @@ import {
 import {
   createAccount,
   createAccountType,
+  createBonusLine,
   createBonusCondition,
   createColor,
   createBox,
