@@ -323,8 +323,13 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   const tipsTotal = data.tips.reduce((sum, tip) => sum + Number(tip.monto || 0), 0)
   const expensesTotal = data.expenses.reduce((sum, expense) => sum + Number(expense.monto || 0), 0)
   const bonusTotal = data.bonuses.reduce((sum, bonus) => sum + (bonus.recuperado ? -Number(bonus.valor || 0) : Number(bonus.valor || 0)), 0)
-  const accountHolders = [...new Set(accounts.map(account => account.holder))]
-  const accountWallets = [...new Set(accounts.map(account => account.wallet))]
+  const orderNamesByConfig = (configured, names) => {
+    const remaining = new Set(names)
+    const ordered = configured.map(item => item.nombre).filter(name => remaining.delete(name))
+    return [...ordered, ...remaining]
+  }
+  const accountHolders = orderNamesByConfig(data.holders, accounts.map(account => account.holder))
+  const accountWallets = orderNamesByConfig(data.wallets, accounts.map(account => account.wallet))
   return <>
     <GoalStrip open={openGoal} onToggle={() => setOpenGoal(value => !value)} goals={goals} />
     <section className="summary-bar"><div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div><Metric label="Caja inicial" value={money.format(data.shift.caja_inicial)} tone="positive" /><Metric label="Caja final" value={data.shift.caja_final == null ? 'Sin cierre' : money.format(data.shift.caja_final)} tone="positive" /><Metric label="Propinas" value={money.format(tipsTotal)} tone="positive" /><Metric label="Gastos" value={money.format(expensesTotal)} tone="negative" /><Metric label="Bonos netos" value={money.format(bonusTotal)} tone="positive" /><label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? data.shift.redondeo : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={() => updateShiftRounding(data.shift.id, rounding).then(onSaved).catch(() => setToast('No se pudo guardar el redondeo'))} /></span></label></section>
