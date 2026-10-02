@@ -973,9 +973,7 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-wrap {
   display: grid;
-  --matrix-wallet-width: 190px;
-  grid-template-columns: 140px repeat(var(--wallet-count, 4), var(--matrix-wallet-width)) var(--matrix-wallet-width);
-  justify-content: safe center;
+  grid-template-columns: minmax(120px, 0.8fr) repeat(var(--wallet-count, 4), minmax(155px, 1fr)) minmax(155px, 1fr);
   gap: 0;
   overflow-x: auto;
 }
@@ -1029,8 +1027,8 @@ input[type="time"] { color-scheme: dark; }
   display: flex;
   align-items: center;
   gap: 4px;
-  justify-self: start;
-  width: min(100%, 190px);
+  justify-self: stretch;
+  width: 100%;
   min-width: 0;
 }
 
@@ -1256,8 +1254,7 @@ input[type="time"] { color-scheme: dark; }
   }
 
   .matrix-wrap {
-    grid-template-columns: 120px repeat(var(--wallet-count, 4), var(--matrix-wallet-width)) var(--matrix-wallet-width);
-    justify-content: start;
+    grid-template-columns: minmax(100px, 0.7fr) repeat(var(--wallet-count, 4), minmax(155px, 1fr)) minmax(155px, 1fr);
   }
 }
 
