@@ -205,12 +205,6 @@ function App() {
       chips: current.chips.map(chip => chip.id === chipId ? { ...chip, fichas_final: value } : chip),
     } : current)
   }
-  const updateAccountValueData = (accountId, value) => {
-    setAppData(current => current ? {
-      ...current,
-      accounts: current.accounts.map(account => account.id === accountId ? { ...account, valor: value } : account),
-    } : current)
-  }
   const updateRoundingData = (value) => {
     setAppData(current => current?.shift ? { ...current, shift: { ...current.shift, redondeo: value } } : current)
   }
@@ -267,7 +261,8 @@ function App() {
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onAccountValueChange={updateAccountValueData} onRoundingChange={updateRoundingData} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} />}
+                    {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
@@ -348,9 +343,51 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved, onAccountValueChange, onRoundingChange }) {
+function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved, onRoundingChange }) {
   const [rounding, setRounding] = useState(null)
+  const [accountValueDrafts, setAccountValueDrafts] = useState({})
+  const [chipFinalDrafts, setChipFinalDrafts] = useState({})
   useEffect(() => setRounding(null), [data.shift?.id])
+  useEffect(() => {
+    setAccountValueDrafts(current => {
+      let changed = false
+      const next = { ...current }
+      Object.entries(current).forEach(([accountId, value]) => {
+        const account = data.accounts.find(item => String(item.id) === accountId)
+        if (account && Number(account.valor || 0) === value) {
+          delete next[accountId]
+          changed = true
+        }
+      })
+      return changed ? next : current
+    })
+  }, [data.accounts])
+  useEffect(() => {
+    setChipFinalDrafts(current => {
+      let changed = false
+      const next = { ...current }
+      Object.entries(current).forEach(([chipId, value]) => {
+        const chip = data.chips.find(item => String(item.id) === chipId)
+        const savedValue = chip?.fichas_final == null ? null : Number(chip.fichas_final)
+        if (chip && savedValue === value) {
+          delete next[chipId]
+          changed = true
+        }
+      })
+      return changed ? next : current
+    })
+  }, [data.chips])
+  const updateAccountValueDraft = (accountId, value) => {
+    setAccountValueDrafts(current => {
+      const next = { ...current }
+      if (value === undefined) delete next[String(accountId)]
+      else next[String(accountId)] = value
+      return next
+    })
+  }
+  const updateChipFinalDraft = (chipId, value) => {
+    setChipFinalDrafts(current => ({ ...current, [String(chipId)]: value }))
+  }
   const saveRounding = (event) => {
     const input = event.currentTarget
     const value = parseLocalizedAmount(input.value)
@@ -365,22 +402,28 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
     const formatted = value ? numberCompact.format(value) : ''
     input.value = formatted
     setRounding(formatted)
-    onRoundingChange(value)
     updateShiftRounding(data.shift.id, value).then(() => {
+      onRoundingChange(value)
       onSaved()
     }).catch(() => {
       const savedValue = Number(data.shift.redondeo || 0)
       const reverted = savedValue ? numberCompact.format(savedValue) : ''
       input.value = reverted
       setRounding(reverted)
-      onRoundingChange(savedValue)
       setToast('No se pudo guardar el redondeo')
     })
   }
   if (!data.shift) return <section className="panel empty-state"><strong>No hay un turno abierto</strong><p>Creá o abrí un turno en Supabase para cargar la operación real de la caja.</p></section>
   const goals = mapGoals(data.goals)
-  const accounts = data.accounts.map(account => ({ ...account, holder: account.cuentas?.titulares?.nombre || 'Sin titular', wallet: account.cuentas?.billeteras?.nombre || 'Sin billetera', amount: Number(account.valor || 0) }))
+  const accounts = data.accounts.map(account => {
+    const savedAmount = Number(account.valor || 0)
+    return { ...account, holder: account.cuentas?.titulares?.nombre || 'Sin titular', wallet: account.cuentas?.billeteras?.nombre || 'Sin billetera', savedAmount, amount: accountValueDrafts[String(account.id)] ?? savedAmount }
+  })
   const total = accounts.reduce((sum, account) => sum + account.amount, 0)
+  const chips = data.chips.map(chip => ({
+    ...chip,
+    fichas_final: Object.prototype.hasOwnProperty.call(chipFinalDrafts, String(chip.id)) ? chipFinalDrafts[String(chip.id)] : chip.fichas_final,
+  }))
   const tipsTotal = data.tips.reduce((sum, tip) => sum + Number(tip.monto || 0), 0)
   const expensesTotal = data.expenses.reduce((sum, expense) => sum + Number(expense.monto || 0), 0)
   const orderNamesByConfig = (configured, names) => {
@@ -392,8 +435,10 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   const accountWallets = orderNamesByConfig(data.wallets, accounts.map(account => account.wallet))
   const savedRounding = Number(data.shift.redondeo || 0)
   const roundingValue = rounding === null ? (savedRounding ? numberCompact.format(savedRounding) : '') : rounding
+  const roundingAmount = rounding === null ? savedRounding : parseLocalizedAmount(rounding) ?? savedRounding
   const cashInitial = Number(data.shift.caja_inicial || 0)
-  const cashDifference = total - cashInitial
+  const countedChipDifference = chips.reduce((sum, chip) => chip.fichas_final == null ? sum : sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0), 0)
+  const cashDifference = total - cashInitial - countedChipDifference + roundingAmount
   const realDifference = cashDifference
   return <>
     <GoalStrip open={openGoal} onToggle={() => setOpenGoal(value => !value)} goals={goals} />
@@ -407,8 +452,8 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
     </section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
-        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} /></div>
-        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} onAccountValueChange={onAccountValueChange} />
+        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
+        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard /><UsersCard users={data.users} /></div>
         <div className="three-panels lower"><MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} /><MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} /><BonusList shiftId={data.shift.id} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /></div>
       </div>
@@ -418,7 +463,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
 function Publicity({ rows, setToast, onSaved }) { const fields = [['Total', 'total_llegados'], ['Nuevos', 'nuevos'], ['Repetidos', 'repetidos'], ['Sin respuesta', 'sin_respuesta']]; const change = (row, field, value) => updateAdvertisingLine(row.id, field, Math.max(0, value)).then(onSaved).catch(() => setToast('No se pudo guardar publicidad')); return <section className="panel publicity"><PanelTitle icon={Bell} title="Publicidad" action={<Copy size={15} />} /><div className="publicity-rows">{rows.length ? rows.map(row => <div className="publicity-row" key={row.id}><strong><FileText size={13} /> Línea {row.id}</strong>{fields.map(([label, field]) => <label key={field}><small>{label}</small><span><button aria-label={`Disminuir ${label}`} onClick={() => change(row, field, Number(row[field]) - 1)}>−</button><b>{row[field] ?? 0}</b><button aria-label={`Aumentar ${label}`} onClick={() => change(row, field, Number(row[field]) + 1)}>+</button></span></label>)}<em>{row.total_derivados ?? 0} derivados</em></div>) : <EmptyInline text="No hay líneas de publicidad para este turno." />}</div></section> }
 function BonusSummary({ rows }) { const total = rows.reduce((sum, row) => sum + (row.recuperado ? -Number(row.valor || 0) : Number(row.valor || 0)), 0); return <section className="panel compact-bonus"><PanelTitle icon={Gift} title="Bonos netos" action={<Eye size={15} />} /><strong className="accent-number">{money.format(total)}</strong><p>Últimos movimientos</p>{rows.slice(0, 4).map(row => <div className="mini-row" key={row.id}><span className={row.recuperado ? 'success' : ''}>{row.recuperado ? 'Recuperado' : 'Otorgado'}</span><time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time><b>{money.format(row.valor)}</b></div>)}{!rows.length && <EmptyInline text="No hay bonos registrados." />}</section> }
-function ChipSummary({ chips, setToast, onChipFinalSaved }) {
+function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) {
   const formatValue = (value) => value == null ? '' : Number(value).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   const parseValue = (value) => {
     const normalized = String(value).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
@@ -438,6 +483,7 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
     if (rawValue.trim() && (!Number.isFinite(nextValue) || nextValue < 0)) {
       setToast('Ingresá un valor final válido, igual o mayor a cero')
       setDraftValues(current => ({ ...current, [chip.id]: formatValue(chip.fichas_final) }))
+      onChipFinalPreview(chip.id, chip.fichas_final == null ? null : Number(chip.fichas_final))
       return
     }
     const savedValue = chip.fichas_final == null ? null : Number(chip.fichas_final)
@@ -449,6 +495,7 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la ficha final')
       setDraftValues(current => ({ ...current, [chip.id]: formatValue(chip.fichas_final) }))
+      onChipFinalPreview(chip.id, chip.fichas_final == null ? null : Number(chip.fichas_final))
     }
   }
 
@@ -463,7 +510,12 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
             aria-label={`Ficha final ${chip.plataformas?.nombre || 'Plataforma'}`}
             inputMode="decimal"
             value={draftValues[chip.id] ?? formatValue(chip.fichas_final)}
-            onChange={(event) => setDraftValues(current => ({ ...current, [chip.id]: event.target.value }))}
+            onChange={(event) => {
+              const value = event.target.value
+              const parsed = parseValue(value)
+              setDraftValues(current => ({ ...current, [chip.id]: value }))
+              if (parsed == null || Number.isFinite(parsed)) onChipFinalPreview(chip.id, parsed)
+            }}
             onBlur={() => saveFinal(chip)}
             onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
             placeholder="0,00"
@@ -480,25 +532,28 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
   </section>
 }
-function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved, onAccountValueChange }) {
+function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved, onAccountValueDraft }) {
   const [flagOverrides, setFlagOverrides] = useState({})
   const saveAccount = async (account, event) => {
     const input = event.currentTarget
     const value = parseLocalizedAmount(input.value)
     if (value == null || value < 0) {
-      input.value = account.amount ? numberWithCents.format(account.amount) : ''
+      input.value = account.savedAmount ? numberWithCents.format(account.savedAmount) : ''
+      onAccountValueDraft(account.id, undefined)
       setToast('Ingresá un valor válido, igual o mayor a cero')
       return
     }
     input.value = value ? numberWithCents.format(value) : ''
-    if (value === account.amount) return
-    onAccountValueChange(account.id, value)
+    if (value === account.savedAmount) {
+      onAccountValueDraft(account.id, undefined)
+      return
+    }
     try {
       await updateAccountValue(account.id, value)
       onSaved()
     } catch {
-      onAccountValueChange(account.id, account.amount)
-      input.value = account.amount ? numberWithCents.format(account.amount) : ''
+      onAccountValueDraft(account.id, undefined)
+      input.value = account.savedAmount ? numberWithCents.format(account.savedAmount) : ''
       setToast('No se pudo guardar el valor de la cuenta')
     }
   }
@@ -534,7 +589,10 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved, o
               return <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
                 <label className={`matrix-value ${valueTone}`}>
                   <span>$</span>
-                  <input defaultValue={account.amount ? numberWithCents.format(account.amount) : ''} placeholder="-" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
+                  <input defaultValue={account.savedAmount ? numberWithCents.format(account.savedAmount) : ''} placeholder="-" onFocus={(event) => event.target.select()} onChange={(event) => {
+                    const value = parseLocalizedAmount(event.target.value)
+                    if (value !== null && value >= 0) onAccountValueDraft(account.id, value)
+                  }} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
                 </label>
                 <div className="matrix-account-flags">
                   <label className="matrix-flag" title="Cobros">
