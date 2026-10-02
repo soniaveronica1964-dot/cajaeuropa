@@ -120,6 +120,13 @@ export function updateAccountValue(accountShiftId, value) {
   return updateRow('cuentas_x_turno', accountShiftId, { valor: Number(value) || 0 })
 }
 
+export function updateAccountFlags(accountShiftId, field, enabled) {
+  if (!['cobros', 'retiros'].includes(field)) {
+    throw new Error('Campo de disponibilidad no permitido')
+  }
+  return updateRow('cuentas_x_turno', accountShiftId, { [field]: Boolean(enabled) })
+}
+
 export function updateChipFinal(chipId, value) {
   const finalValue = value == null ? null : Number(value)
   if (finalValue != null && (!Number.isFinite(finalValue) || finalValue < 0)) {

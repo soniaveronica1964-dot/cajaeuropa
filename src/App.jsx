@@ -70,6 +70,7 @@ import {
   saveAppConfig,
   setAccountAvailability,
   updateAccount,
+  updateAccountFlags,
   updateAccountType,
   updateAccountValue,
   updateAdvertisingLine,
@@ -403,7 +404,60 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
   </section>
 }
-function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved }) { const saveAccount = (account, event) => updateAccountValue(account.id, event.target.value.replace(/\./g, '').replace(',', '.')).then(onSaved).catch(() => setToast('No se pudo guardar el valor de la cuenta')); return <section className="panel account-panel"><PanelTitle icon={WalletCards} title="Matriz de cuentas" meta={`${holders.length} titulares · ${wallets.length} billeteras`} action={<button className="text-action" onClick={() => setToast('La matriz refleja los valores guardados en Supabase')}>Estado de datos</button>} /><div className="matrix-wrap">{accounts.length ? <><div className="matrix-row matrix-head"><strong>Titular</strong>{wallets.map(wallet => <span key={wallet}>{wallet}</span>)}<span>Total</span></div>{holders.map(holder => { const holderAccounts = accounts.filter(account => account.holder === holder); const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0); return <div className="matrix-row" key={holder}><strong>{holder}</strong>{wallets.map(wallet => { const account = holderAccounts.find(item => item.wallet === wallet); return <label key={`${holder}-${wallet}`} className={account?.amount ? 'green' : ''}>{account ? <><span>$</span><input defaultValue={account.amount.toLocaleString('es-AR')} onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} /></> : '—'}</label> })}<b>{money.format(holderTotal)}</b></div> })}<div className="matrix-total"><span>Total billetera</span>{wallets.map(wallet => <b key={wallet}>{money.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}<strong>{money.format(total)}</strong></div></> : <EmptyInline text="No hay cuentas vinculadas al turno abierto." />}</div></section> }
+function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved }) {
+  const saveAccount = (account, event) => updateAccountValue(account.id, event.target.value.replace(/\./g, '').replace(',', '.')).then(onSaved).catch(() => setToast('No se pudo guardar el valor de la cuenta'))
+  const saveFlag = (account, field, event) => {
+    const checked = event.target.checked
+    updateAccountFlags(account.id, field, checked).then(onSaved).catch(() => {
+      event.target.checked = !checked
+      setToast(`No se pudo guardar ${field === 'cobros' ? 'cobros' : 'retiros'}`)
+    })
+  }
+  const columns = { '--wallet-count': wallets.length }
+
+  return <section className="panel account-panel">
+    <PanelTitle icon={WalletCards} title="Matriz de cuentas" meta={`${holders.length} titulares · ${wallets.length} billeteras`} action={<button className="text-action" onClick={() => setToast('La matriz refleja los valores guardados en Supabase')}>Estado de datos</button>} />
+    <div className="matrix-wrap">
+      {accounts.length ? <>
+        <div className="matrix-row matrix-head" style={columns}>
+          <strong>Titular</strong>
+          {wallets.map(wallet => <span key={wallet}>{wallet}</span>)}
+          <span>Total</span>
+        </div>
+        {holders.map(holder => {
+          const holderAccounts = accounts.filter(account => account.holder === holder)
+          const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0)
+          return <div className="matrix-row" key={holder} style={columns}>
+            <strong>{holder}</strong>
+            {wallets.map(wallet => {
+              const account = holderAccounts.find(item => item.wallet === wallet)
+              return account ? <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
+                <label className={`matrix-value ${account.amount ? 'green' : ''}`}>
+                  <span>$</span>
+                  <input defaultValue={account.amount.toLocaleString('es-AR')} onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
+                </label>
+                <div className="matrix-account-flags">
+                  <label className="matrix-flag" title="Cobros">
+                    <input type="checkbox" aria-label={`Cobros ${wallet}, ${holder}`} defaultChecked={Boolean(account.cobros)} onChange={(event) => saveFlag(account, 'cobros', event)} />
+                  </label>
+                  <label className="matrix-flag" title="Retiros">
+                    <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} defaultChecked={Boolean(account.retiros)} onChange={(event) => saveFlag(account, 'retiros', event)} />
+                  </label>
+                </div>
+              </div> : <span className="matrix-account-empty" key={`${holder}-${wallet}`}>—</span>
+            })}
+            <b>{money.format(holderTotal)}</b>
+          </div>
+        })}
+        <div className="matrix-total" style={columns}>
+          <span>Total billetera</span>
+          {wallets.map(wallet => <b key={wallet}>{money.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}
+          <strong>{money.format(total)}</strong>
+        </div>
+      </> : <EmptyInline text="No hay cuentas vinculadas al turno abierto." />}
+    </div>
+  </section>
+}
 function LogisticsCard({ rows }) { return <section className="panel mini-card logistics-card"><PanelTitle icon={WalletCards} title="Logística" action={<ChevronRight size={15} />} />{rows.length ? rows.slice(0, 4).map(row => { const account = row.cuentas_x_turno?.cuentas; return <div className="route-row" key={row.id}><span>{row.num_orden ?? '—'}</span><b>{account?.titulares?.nombre || 'Sin titular'} · {account?.billeteras?.nombre || 'Sin billetera'}</b></div> }) : <EmptyInline text="No hay rutas de logística configuradas." />}</section> }
 function StatusCard() { return <section className="panel mini-card"><PanelTitle icon={Sparkles} title="Estados" action={<SlidersHorizontal size={15} />} /><EmptyInline text="Los estados se mostrarán cuando estén configurados en Supabase." /></section> }
 function UsersCard({ users }) { return <section className="panel mini-card"><PanelTitle icon={Users} title="Usuarios" action={<Plus size={15} />} /><div className="search-line"><Search size={14} /><input placeholder="Buscar usuario" /></div>{users.slice(0, 5).map(user => <div className="user-row" key={user.id}><span><UserRound size={15} /></span><b>{user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`}</b><ChevronRight size={14} /></div>)}{!users.length && <EmptyInline text="No hay usuarios registrados." />}</section> }
