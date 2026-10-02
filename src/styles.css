@@ -989,12 +989,12 @@ input[type="time"] { color-scheme: dark; }
   border-bottom: 1px solid rgba(121, 146, 146, 0.16);
 }
 
-.matrix-row > *:not(:last-child),
-.matrix-total > *:not(:last-child) {
+.matrix-row > :first-child,
+.matrix-total > :first-child {
   display: flex;
   align-items: center;
   padding-inline: 10px;
-  border-right: 1px dotted rgba(121, 146, 146, 0.28);
+  border-right: 1px solid rgba(121, 146, 146, 0.28);
 }
 
 .matrix-row strong,
@@ -1091,11 +1091,30 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .matrix-flag input {
+  appearance: none;
+  display: grid;
+  place-content: center;
   width: 11px;
   height: 11px;
   margin: 0;
-  accent-color: var(--green);
+  border: 1px solid #536164;
+  border-radius: 2px;
+  background: #273235;
   cursor: pointer;
+}
+
+.matrix-flag input:checked {
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.matrix-flag input:checked::after {
+  width: 5px;
+  height: 3px;
+  border: solid #183027;
+  border-width: 0 0 1.5px 1.5px;
+  content: '';
+  transform: rotate(-45deg) translate(0, -1px);
 }
 
 .matrix-account-empty {
