@@ -171,6 +171,16 @@ function App() {
   const selectedBox = appData?.boxes?.find(boxItem => boxItem.id === selectedBoxId)
   const activeBox = shift?.cajas?.nombre ?? selectedBox?.nombre ?? 'Sin caja'
   const accentColor = selectedBox?.colores?.hex || selectedBoxAccent
+  const cashTotal = (appData?.accounts || []).reduce((sum, account) => sum + Number(account.valor || 0), 0)
+  const countedChipDifference = (appData?.chips || []).reduce((sum, chip) => {
+    if (chip.fichas_final == null) return sum
+    return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
+  }, 0)
+  const cashDiscrepancy = cashTotal - Number(shift?.caja_inicial || 0) - countedChipDifference + Number(shift?.redondeo || 0)
+  const cashDiscrepancyTone = cashDiscrepancy === 0 ? 'neutral' : cashDiscrepancy > 0 ? 'positive' : 'negative'
+  const cashDiscrepancyLabel = cashDiscrepancy >= 0
+    ? `+${moneyWithCents.format(cashDiscrepancy)}`
+    : moneyWithCents.format(cashDiscrepancy)
   const reloadData = (boxId = selectedBoxId ?? shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null) => {
     setSelectedBoxId(boxId)
     const requestedBoxAccent = appData?.boxes?.find((box) => box.id === boxId)?.colores?.hex || '#72d7ca'
@@ -194,6 +204,15 @@ function App() {
       ...current,
       chips: current.chips.map(chip => chip.id === chipId ? { ...chip, fichas_final: value } : chip),
     } : current)
+  }
+  const updateAccountValueData = (accountId, value) => {
+    setAppData(current => current ? {
+      ...current,
+      accounts: current.accounts.map(account => account.id === accountId ? { ...account, valor: value } : account),
+    } : current)
+  }
+  const updateRoundingData = (value) => {
+    setAppData(current => current?.shift ? { ...current, shift: { ...current.shift, redondeo: value } } : current)
   }
   const appConfig = appData?.appConfig?.[0]
   const appName = appConfig?.nombre || 'Caja Europa'
@@ -241,13 +260,14 @@ function App() {
         <main className="main-content">
           <section className="page-heading">
             <div><span className="eyebrow">{shift ? `Turno iniciado · ${new Date(shift.fecha_hora_inicio).toLocaleString('es-AR')}` : 'Sin turno abierto'}</span><h1>{activeLabel === 'Caja' ? `${shiftName} / ${shiftTime}` : activeLabel}</h1><p>{shift ? new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Seleccioná una caja con un turno abierto'} · {activeBox}</p></div>
+            {view === 'dashboard' && shift && <div className="shift-discrepancy" aria-label={`Sobrante o faltante: ${cashDiscrepancyLabel}`}><span>Sobrante / Faltante</span><strong className={cashDiscrepancyTone}>{cashDiscrepancyLabel}</strong></div>}
           </section>
 
           {loadError && <div className="empty-state"><strong>Error al cargar Supabase</strong><p>{loadError}</p></div>}
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onAccountValueChange={updateAccountValueData} onRoundingChange={updateRoundingData} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
@@ -328,7 +348,7 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved }) {
+function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved, onAccountValueChange, onRoundingChange }) {
   const [rounding, setRounding] = useState(null)
   useEffect(() => setRounding(null), [data.shift?.id])
   const saveRounding = (event) => {
@@ -345,6 +365,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
     const formatted = value ? numberCompact.format(value) : ''
     input.value = formatted
     setRounding(formatted)
+    onRoundingChange(value)
     updateShiftRounding(data.shift.id, value).then(() => {
       onSaved()
     }).catch(() => {
@@ -352,6 +373,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
       const reverted = savedValue ? numberCompact.format(savedValue) : ''
       input.value = reverted
       setRounding(reverted)
+      onRoundingChange(savedValue)
       setToast('No se pudo guardar el redondeo')
     })
   }
@@ -386,7 +408,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
     <div className="dashboard-grid">
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} /></div>
-        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} />
+        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} onAccountValueChange={onAccountValueChange} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard /><UsersCard users={data.users} /></div>
         <div className="three-panels lower"><MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} /><MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} /><BonusList shiftId={data.shift.id} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /></div>
       </div>
@@ -458,7 +480,7 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
   </section>
 }
-function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved }) {
+function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved, onAccountValueChange }) {
   const [flagOverrides, setFlagOverrides] = useState({})
   const saveAccount = async (account, event) => {
     const input = event.currentTarget
@@ -470,10 +492,12 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
     }
     input.value = value ? numberWithCents.format(value) : ''
     if (value === account.amount) return
+    onAccountValueChange(account.id, value)
     try {
       await updateAccountValue(account.id, value)
       onSaved()
     } catch {
+      onAccountValueChange(account.id, account.amount)
       input.value = account.amount ? numberWithCents.format(account.amount) : ''
       setToast('No se pudo guardar el valor de la cuenta')
     }
