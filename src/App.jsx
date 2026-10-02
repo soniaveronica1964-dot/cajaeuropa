@@ -91,6 +91,7 @@ import {
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 const moneyWithCents = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const numberWithCents = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const numberCompact = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 
 function parseLocalizedAmount(value) {
   const raw = String(value).trim().replace(/\s/g, '')
@@ -327,22 +328,29 @@ function mapGoals(rows) {
 }
 
 function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved }) {
-  const [rounding, setRounding] = useState('')
+  const [rounding, setRounding] = useState(null)
+  useEffect(() => setRounding(null), [data.shift?.id])
   const saveRounding = (event) => {
     const input = event.currentTarget
     const value = parseLocalizedAmount(input.value)
     if (value == null) {
-      input.value = numberWithCents.format(Number(data.shift.redondeo || 0))
-      setRounding('')
+      const savedValue = Number(data.shift.redondeo || 0)
+      const formatted = savedValue ? numberCompact.format(savedValue) : ''
+      input.value = formatted
+      setRounding(formatted)
       setToast('Ingresá un redondeo válido')
       return
     }
-    input.value = numberWithCents.format(value)
+    const formatted = value ? numberCompact.format(value) : ''
+    input.value = formatted
+    setRounding(formatted)
     updateShiftRounding(data.shift.id, value).then(() => {
-      setRounding('')
       onSaved()
     }).catch(() => {
-      setRounding('')
+      const savedValue = Number(data.shift.redondeo || 0)
+      const reverted = savedValue ? numberCompact.format(savedValue) : ''
+      input.value = reverted
+      setRounding(reverted)
       setToast('No se pudo guardar el redondeo')
     })
   }
@@ -359,6 +367,8 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   }
   const accountHolders = orderNamesByConfig(data.holders, accounts.map(account => account.holder))
   const accountWallets = orderNamesByConfig(data.wallets, accounts.map(account => account.wallet))
+  const savedRounding = Number(data.shift.redondeo || 0)
+  const roundingValue = rounding === null ? (savedRounding ? numberCompact.format(savedRounding) : '') : rounding
   const cashInitial = Number(data.shift.caja_inicial || 0)
   const cashDifference = total - cashInitial
   const realDifference = cashDifference
@@ -370,7 +380,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
       <Metric label="Caja final" value={moneyWithCents.format(total)} tone="positive" />
       <Metric label="Diferencia caja" value={moneyWithCents.format(cashDifference)} tone={cashDifference < 0 ? 'negative' : 'positive'} />
       <Metric label="Diferencia real" value={moneyWithCents.format(realDifference)} tone={realDifference < 0 ? 'negative' : 'positive'} />
-      <label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? numberWithCents.format(Number(data.shift.redondeo || 0)) : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={saveRounding} /></span></label>
+      <label className="rounding"><small>Redondeo</small><span className={Number(parseLocalizedAmount(roundingValue)) ? 'has-value' : ''}>$<input value={roundingValue} placeholder="0,00" onChange={(event) => setRounding(event.target.value)} onBlur={saveRounding} /></span></label>
     </section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
@@ -498,7 +508,7 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
               return <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
                 <label className={`matrix-value ${valueTone}`}>
                   <span>$</span>
-                  <input defaultValue={numberWithCents.format(account.amount)} placeholder="0,00" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
+                  <input defaultValue={account.amount ? numberWithCents.format(account.amount) : ''} placeholder="-" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
                 </label>
                 <div className="matrix-account-flags">
                   <label className="matrix-flag" title="Cobros">

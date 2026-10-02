@@ -641,15 +641,19 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: rgba(23, 31, 32, 0.8);
   padding: 6px 8px;
   max-width: 150px;
-  color: var(--green);
+  color: var(--muted);
 }
+
+.rounding span.has-value { color: var(--text); }
 .rounding input {
   width: 100%;
   border: 0;
   background: transparent;
   outline: none;
-  color: var(--green);
+  color: inherit;
 }
+
+.rounding input::placeholder { color: var(--muted); }
 
 .empty-state { padding: 34px; text-align: center; }
 .empty-state strong {
