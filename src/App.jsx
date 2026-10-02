@@ -128,7 +128,7 @@ const navItems = [
 
 function App() {
   const [view, setView] = useState('dashboard')
-  const [openGoal, setOpenGoal] = useState(true)
+  const [openGoal, setOpenGoal] = useState(false)
   const [toast, setToast] = useState('')
   const [appData, setAppData] = useState(null)
   const [selectedBoxId, setSelectedBoxId] = useState(null)
@@ -322,7 +322,6 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   const total = accounts.reduce((sum, account) => sum + account.amount, 0)
   const tipsTotal = data.tips.reduce((sum, tip) => sum + Number(tip.monto || 0), 0)
   const expensesTotal = data.expenses.reduce((sum, expense) => sum + Number(expense.monto || 0), 0)
-  const bonusTotal = data.bonuses.reduce((sum, bonus) => sum + (bonus.recuperado ? -Number(bonus.valor || 0) : Number(bonus.valor || 0)), 0)
   const orderNamesByConfig = (configured, names) => {
     const remaining = new Set(names)
     const ordered = configured.map(item => item.nombre).filter(name => remaining.delete(name))
@@ -330,9 +329,19 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   }
   const accountHolders = orderNamesByConfig(data.holders, accounts.map(account => account.holder))
   const accountWallets = orderNamesByConfig(data.wallets, accounts.map(account => account.wallet))
+  const cashInitial = Number(data.shift.caja_inicial || 0)
+  const cashDifference = total - cashInitial
+  const realDifference = cashDifference + expensesTotal
   return <>
     <GoalStrip open={openGoal} onToggle={() => setOpenGoal(value => !value)} goals={goals} />
-    <section className="summary-bar"><div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div><Metric label="Caja inicial" value={money.format(data.shift.caja_inicial)} tone="positive" /><Metric label="Caja final" value={data.shift.caja_final == null ? 'Sin cierre' : money.format(data.shift.caja_final)} tone="positive" /><Metric label="Propinas" value={money.format(tipsTotal)} tone="positive" /><Metric label="Gastos" value={money.format(expensesTotal)} tone="negative" /><Metric label="Bonos netos" value={money.format(bonusTotal)} tone="positive" /><label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? data.shift.redondeo : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={() => updateShiftRounding(data.shift.id, rounding).then(onSaved).catch(() => setToast('No se pudo guardar el redondeo'))} /></span></label></section>
+    <section className="summary-bar">
+      <div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div>
+      <Metric label="Caja inicial" value={money.format(cashInitial)} tone="positive" />
+      <Metric label="Caja final" value={data.shift.caja_final == null ? 'Sin cierre' : money.format(data.shift.caja_final)} tone="positive" />
+      <Metric label="Diferencia caja" value={money.format(cashDifference)} tone={cashDifference < 0 ? 'negative' : 'positive'} />
+      <Metric label="Diferencia real" value={money.format(realDifference)} tone={realDifference < 0 ? 'negative' : 'positive'} />
+      <label className="rounding"><small>Redondeo</small><span>$<input value={rounding === '' ? data.shift.redondeo : rounding} onChange={(event) => setRounding(event.target.value)} onBlur={() => updateShiftRounding(data.shift.id, rounding).then(() => onSaved()).catch(() => setToast('No se pudo guardar el redondeo'))} /></span></label>
+    </section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusSummary rows={data.bonuses} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} /></div>
