@@ -1146,6 +1146,7 @@ input[type="time"] { color-scheme: dark; }
   gap: 0;
   align-items: stretch;
   min-height: 36px;
+  padding-top: 10px;
   border-top: 1px solid rgba(121, 146, 146, 0.22);
 }
 

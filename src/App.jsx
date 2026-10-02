@@ -405,10 +405,10 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
   </section>
 }
 function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved }) {
-  const saveAccount = (account, event) => updateAccountValue(account.id, event.target.value.replace(/\./g, '').replace(',', '.')).then(onSaved).catch(() => setToast('No se pudo guardar el valor de la cuenta'))
+  const saveAccount = (account, event) => updateAccountValue(account.id, event.target.value.replace(/\./g, '').replace(',', '.')).then(() => onSaved()).catch(() => setToast('No se pudo guardar el valor de la cuenta'))
   const saveFlag = (account, field, event) => {
     const checked = event.target.checked
-    updateAccountFlags(account.id, field, checked).then(onSaved).catch(() => {
+    updateAccountFlags(account.id, field, checked).then(() => onSaved()).catch(() => {
       event.target.checked = !checked
       setToast(`No se pudo guardar ${field === 'cobros' ? 'cobros' : 'retiros'}`)
     })
