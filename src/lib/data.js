@@ -191,10 +191,15 @@ export async function createBonusLine(shiftId, { value, type = 'granted', notes 
   return data
 }
 
-export async function updateBonusLine(id, { type, notes }) {
+export async function updateBonusLine(id, { type, notes, value }) {
   const values = {}
   if (type !== undefined) Object.assign(values, bonusTypeFields(type))
   if (notes !== undefined) values.notas = notes?.trim() || null
+  if (value !== undefined) {
+    const amount = Number(value)
+    if (!Number.isFinite(amount) || amount < 0) throw new Error('El monto del bono debe ser igual o mayor a cero')
+    values.valor = amount
+  }
   const line = await updateRow('lineas_bonos', id, values)
   await recalculateBonusTotals(line.bono_id)
   return line

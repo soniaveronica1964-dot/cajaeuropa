@@ -214,6 +214,17 @@ function App() {
   const updateRoundingData = (value) => {
     setAppData(current => current?.shift ? { ...current, shift: { ...current.shift, redondeo: value } } : current)
   }
+  const updateBonusLineData = (lineId, line) => {
+    setAppData(current => current ? {
+      ...current,
+      bonuses: (() => {
+        const index = current.bonuses.findIndex(item => item.id === lineId)
+        if (!line) return current.bonuses.filter(item => item.id !== lineId)
+        if (index < 0) return [line, ...current.bonuses.filter(item => item.id !== line.id)]
+        return current.bonuses.map((item, itemIndex) => itemIndex === index ? line : item).filter(item => item.id !== lineId || line.id === lineId)
+      })(),
+    } : current)
+  }
   const appConfig = appData?.appConfig?.[0]
   const appName = appConfig?.nombre || 'Caja Europa'
   const isLightTheme = Boolean(appConfig?.tema)
@@ -272,6 +283,8 @@ function App() {
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
           {!loadError && appData && view === 'bonuses' && <LiveBonuses bonuses={appData.bonuses} shift={appData.shift} onSaved={reloadData} setToast={setToast} />}
+                    {!loadError && appData && view === 'bonuses' && <LiveBonuses bonuses={appData.bonuses} shift={appData.shift} onSaved={reloadData} onBonusLineChange={updateBonusLineData} setToast={setToast} />}
+                    {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} onBonusLineChange={updateBonusLineData} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} />}
         </main>
       </div>
@@ -348,7 +361,8 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved, onRoundingChange, onDiscrepancyChange }) {
+  function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved, onRoundingChange, onDiscrepancyChange, onBonusLineChange }) {
+    <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusList shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onBonusLineChange={onBonusLineChange} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
   const [rounding, setRounding] = useState(null)
   const [accountValueDrafts, setAccountValueDrafts] = useState({})
   const [chipFinalDrafts, setChipFinalDrafts] = useState({})
@@ -484,11 +498,25 @@ function bonusNetTotal(rows) {
   return rows.reduce((sum, bonus) => sum + (bonus.recuperado ? -Number(bonus.valor || 0) : Number(bonus.valor || 0)), 0)
 }
 
-function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
+function BonusList({ shiftId, shift, rows, onSaved, onBonusLineChange, setToast }) {
   const [mode, setMode] = useState('granted')
   const [value, setValue] = useState('')
-  const [saving, setSaving] = useState(false)
+  const [recentDrafts, setRecentDrafts] = useState({})
   const [historyOpen, setHistoryOpen] = useState(false)
+  useEffect(() => {
+    setRecentDrafts(current => {
+      let changed = false
+      const next = { ...current }
+      Object.entries(current).forEach(([id, value]) => {
+        const bonus = rows.find(item => String(item.id) === id)
+        if (bonus && parseLocalizedAmount(value) === Number(bonus.valor)) {
+          delete next[id]
+          changed = true
+        }
+      })
+      return changed ? next : current
+    })
+  }, [rows])
   const recentRows = rows.slice(0, 5)
   const modeOrder = ['granted', 'recovered', 'publicity']
   const net = bonusNetTotal(rows)
@@ -504,17 +532,64 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
       return
     }
     const type = key === '+' ? 'recovered' : key === '-' ? 'publicity' : mode
-    setSaving(true)
+    const temporaryId = `pending-${crypto.randomUUID()}`
+    const submittedValue = value
+    setValue('')
+    const optimisticLine = {
+      id: temporaryId,
+      valor: amount,
+      recuperado: type === 'recovered',
+      es_publicidad: type === 'publicity',
+      notas: null,
+      fecha_hora_creacion: new Date().toISOString(),
+    }
+    onBonusLineChange(temporaryId, optimisticLine)
     try {
-      await createBonusLine(shiftId, { value: amount, type })
-      setValue('')
-      setMode(type)
+      const savedLine = await createBonusLine(shiftId, { value: amount, type })
+      onBonusLineChange(temporaryId, savedLine)
       setToast(`${bonusTypeLabels[type]} guardado`)
       onSaved()
     } catch (error) {
+      onBonusLineChange(temporaryId, null)
+      setValue(current => current || submittedValue)
       setToast(error.message || 'No se pudo guardar el bono')
-    } finally {
-      setSaving(false)
+    }
+  }
+
+  const saveRecentAmount = async (bonus, event) => {
+    const input = event.currentTarget
+    const amount = parseLocalizedAmount(input.value)
+    if (amount == null || amount < 0) {
+      setRecentDrafts(current => ({ ...current, [bonus.id]: numberCompact.format(bonus.valor) }))
+      return
+    }
+    if (amount === Number(bonus.valor)) {
+      setRecentDrafts(current => { const next = { ...current }; delete next[bonus.id]; return next })
+      return
+    }
+    if (amount === 0) {
+      setRecentDrafts(current => { const next = { ...current }; delete next[bonus.id]; return next })
+      onBonusLineChange(bonus.id, null)
+      try {
+        await deleteBonusLine(bonus.id)
+        onSaved()
+      } catch (error) {
+        onBonusLineChange(bonus.id, bonus)
+        setRecentDrafts(current => ({ ...current, [bonus.id]: numberCompact.format(bonus.valor) }))
+        setToast(error.message || 'No se pudo borrar el bono')
+      }
+      return
+    }
+    const optimisticLine = { ...bonus, valor: amount }
+    onBonusLineChange(bonus.id, optimisticLine)
+    setRecentDrafts(current => { const next = { ...current }; delete next[bonus.id]; return next })
+    try {
+      const savedLine = await updateBonusLine(bonus.id, { value: amount })
+      onBonusLineChange(bonus.id, savedLine)
+      onSaved()
+    } catch (error) {
+      onBonusLineChange(bonus.id, bonus)
+      setToast(error.message || 'No se pudo actualizar el bono')
     }
   }
 
@@ -523,7 +598,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
     <div className="bonus-quick-controls">
       <label className={`bonus-quick-amount bonus-type-${mode}`}>
         <span>$</span>
-        <input aria-label="Monto del bono" inputMode="decimal" value={value} placeholder={`Bonos netos: ${moneyWithCents.format(net)}`} onChange={(event) => setValue(event.target.value)} onKeyDown={create} disabled={saving} />
+        <input aria-label="Monto del bono" inputMode="decimal" value={value} placeholder={`Bonos netos: ${moneyWithCents.format(net)}`} onChange={(event) => setValue(event.target.value)} onKeyDown={create} />
       </label>
       <button type="button" className={`bonus-mode-button bonus-type-${mode}`} title={`Tipo: ${bonusTypeLabels[mode]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[mode]}`} onClick={cycleMode}><ArrowLeftRight size={14} /></button>
       <button type="button" className="icon-button bonus-placeholder-button" title="Agregar bono manual próximamente" aria-label="Agregar bono manual próximamente"><Plus size={14} /></button>
@@ -533,19 +608,23 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
       <small>Últimos 5 bonos</small>
       {recentRows.map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
         <span>{bonusTypeLabels[bonusTypeOf(bonus)]}</span>
-        <time>{new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
-        <b>{moneyWithCents.format(bonus.valor)}</b>
+        <div className="bonus-recent-value">
+          <time>{new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
+          <span>-</span>
+          <span>$</span>
+          <input aria-label={`Editar monto de ${bonusTypeLabels[bonusTypeOf(bonus)]}`} inputMode="decimal" value={recentDrafts[bonus.id] ?? numberCompact.format(bonus.valor)} onFocus={(event) => event.target.select()} onChange={(event) => setRecentDrafts(current => ({ ...current, [bonus.id]: event.target.value }))} onBlur={(event) => saveRecentAmount(bonus, event)} onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }} disabled={String(bonus.id).startsWith('pending-')} />
+        </div>
       </div>)}
       {!recentRows.length && <span className="bonus-recent-empty">Sin bonos registrados</span>}
     </div>
-    {historyOpen && <BonusHistoryModal bonuses={rows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />}
+    {historyOpen && <BonusHistoryModal bonuses={rows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} onBonusLineChange={onBonusLineChange} setToast={setToast} />}
   </section>
 }
 
-function LiveBonuses({ bonuses, shift, onSaved, setToast }) {
+function LiveBonuses({ bonuses, shift, onSaved, onBonusLineChange, setToast }) {
   return <section className="panel bonus-library">
     <PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} />
-    <BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} setToast={setToast} />
+    <BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} onBonusLineChange={onBonusLineChange} setToast={setToast} />
   </section>
 }
 
@@ -574,7 +653,7 @@ function bonusHistoryGroups(bonuses, shift) {
   return groups
 }
 
-function BonusHistoryContent({ bonuses, shift, onSaved, setToast }) {
+function BonusHistoryContent({ bonuses, shift, onSaved, onBonusLineChange, setToast }) {
   const [editingNoteId, setEditingNoteId] = useState(null)
   const [noteDraft, setNoteDraft] = useState('')
   const [savingId, setSavingId] = useState(null)
@@ -583,11 +662,15 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast }) {
   const changeType = async (bonus) => {
     const order = ['granted', 'recovered', 'publicity']
     const type = order[(order.indexOf(bonusTypeOf(bonus)) + 1) % order.length]
+    const optimisticLine = { ...bonus, recuperado: type === 'recovered', es_publicidad: type === 'publicity' }
+    onBonusLineChange(bonus.id, optimisticLine)
     setSavingId(bonus.id)
     try {
-      await updateBonusLine(bonus.id, { type })
+      const savedLine = await updateBonusLine(bonus.id, { type })
+      onBonusLineChange(bonus.id, savedLine)
       onSaved()
     } catch (error) {
+      onBonusLineChange(bonus.id, bonus)
       setToast(error.message || 'No se pudo cambiar el tipo del bono')
     } finally {
       setSavingId(null)
@@ -595,13 +678,17 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast }) {
   }
 
   const saveNote = async (bonus) => {
+    const optimisticLine = { ...bonus, notas: noteDraft.trim() || null }
+    onBonusLineChange(bonus.id, optimisticLine)
     setSavingId(bonus.id)
     try {
-      await updateBonusLine(bonus.id, { notes: noteDraft })
+      const savedLine = await updateBonusLine(bonus.id, { notes: noteDraft })
+      onBonusLineChange(bonus.id, savedLine)
       setEditingNoteId(null)
       setNoteDraft('')
       onSaved()
     } catch (error) {
+      onBonusLineChange(bonus.id, bonus)
       setToast(error.message || 'No se pudo guardar la nota')
     } finally {
       setSavingId(null)
@@ -610,11 +697,13 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast }) {
 
   const removeBonus = async (bonus) => {
     if (!window.confirm('¿Querés borrar este bono? Esta acción no se puede deshacer.')) return
+    onBonusLineChange(bonus.id, null)
     setSavingId(bonus.id)
     try {
       await deleteBonusLine(bonus.id)
       onSaved()
     } catch (error) {
+      onBonusLineChange(bonus.id, bonus)
       setToast(error.message || 'No se pudo borrar el bono')
     } finally {
       setSavingId(null)
@@ -643,11 +732,11 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast }) {
   </div>
 }
 
-function BonusHistoryModal({ bonuses, shift, onClose, onSaved, setToast }) {
+function BonusHistoryModal({ bonuses, shift, onClose, onSaved, onBonusLineChange, setToast }) {
   return <div className="modal-backdrop bonus-history-backdrop" onClick={onClose}>
     <section className="bonus-history-modal" role="dialog" aria-modal="true" aria-label="Bonos del turno" onClick={(event) => event.stopPropagation()}>
       <header><div><h2>Bonos del turno</h2><span>Revisá y editá los registros del turno</span></div><button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button></header>
-      <div className="bonus-history-scroll"><BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} setToast={setToast} /></div>
+      <div className="bonus-history-scroll"><BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} onBonusLineChange={onBonusLineChange} setToast={setToast} /></div>
       <footer><button type="button" className="primary-button" onClick={onClose}>Listo <Check size={14} /></button></footer>
     </section>
   </div>
