@@ -67,6 +67,7 @@ import {
   deleteAppImage,
   getStoragePublicUrl,
   replaceAppImage,
+  reorderEntityOrder,
   saveAppConfig,
   setAccountAvailability,
   updateAccount,
@@ -733,7 +734,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
     }
   }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions, currentBoxId])
 
-  const [tab, setTab] = useState('accounts')
+  const [tab, setTab] = useState('boxes')
   const [draft, setDraft] = useState(buildDefaultConfig)
   const [selected, setSelected] = useState(null)
 
@@ -746,10 +747,11 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
   }
 
   const reorderAccountEntries = async (type, fromIndex, toIndex) => {
-    if (fromIndex === toIndex || fromIndex === null || toIndex === null) return
+    if (dragState.type !== type || fromIndex === toIndex || fromIndex === null || toIndex === null) return
 
     const key = type === 'holders' ? 'holders' : 'wallets'
-    const next = [...draft.accounts[key]]
+    const previous = [...draft.accounts[key]]
+    const next = [...previous]
     const [moved] = next.splice(fromIndex, 1)
     next.splice(toIndex, 0, moved)
     updateAccounts({ [key]: next })
@@ -759,15 +761,12 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       .map((label) => source.find((item) => item.nombre === label)?.id)
       .filter(Boolean)
 
-    for (let index = 0; index < orderedIds.length; index += 1) {
-      const id = orderedIds[index]
-      const label = next[index]
-      if (type === 'holders') {
-        await updateHolder(id, { name: label, orderNum: index + 1 })
-      } else {
-        const walletMode = draft.accounts.walletModes?.[label] || localData.walletTypes?.[0]?.nombre || 'Cobros y retiros'
-        await updateWallet(id, { name: label, typeName: walletMode, orderNum: index + 1 })
-      }
+    try {
+      await reorderEntityOrder(type === 'holders' ? 'titulares' : 'billeteras', orderedIds)
+      onSaved()
+    } catch (error) {
+      updateAccounts({ [key]: previous })
+      setToast(error.message || 'No se pudo guardar el orden')
     }
   }
 

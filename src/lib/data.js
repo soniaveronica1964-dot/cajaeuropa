@@ -233,10 +233,22 @@ function nextAvailableOrderNumber(rows = []) {
     .map((row) => Number(row.orden_num))
     .filter((value) => Number.isFinite(value) && value > 0)
 
-  const unique = new Set(numbers)
-  let index = 1
-  while (unique.has(index)) index += 1
-  return index
+  return Math.max(0, ...numbers) + 1
+}
+
+async function persistEntityOrder(table, orderedRows) {
+  const maxOrder = Math.max(0, ...orderedRows.map((row) => Number(row.orden_num) || 0))
+  const temporaryStart = maxOrder + orderedRows.length + 1
+
+  for (const [index, row] of orderedRows.entries()) {
+    const { error } = await supabase.from(table).update({ orden_num: temporaryStart + index }).eq('id', row.id)
+    if (error) throw error
+  }
+
+  for (const [index, row] of orderedRows.entries()) {
+    const { error } = await supabase.from(table).update({ orden_num: index + 1 }).eq('id', row.id)
+    if (error) throw error
+  }
 }
 
 async function reindexEntityOrders(table, rows = []) {
@@ -250,10 +262,7 @@ async function reindexEntityOrders(table, rows = []) {
     })
     .map((row, index) => ({ id: row.id, orden_num: index + 1 }))
 
-  await Promise.all(ordered.map(({ id, orden_num }) => supabase
-    .from(table)
-    .update({ orden_num })
-    .eq('id', id)))
+  await persistEntityOrder(table, ordered)
 
   return ordered
 }
@@ -265,18 +274,19 @@ export async function reorderEntityOrder(table, orderedIds = []) {
   const { data: rows = [], error } = await supabase
     .from(table)
     .select('id, orden_num, is_off')
-    .in('id', orderedIds)
     .eq('is_off', false)
+    .order('orden_num', { ascending: true })
+    .order('id', { ascending: true })
 
   if (error) throw error
 
   const byId = new Map((rows || []).map((row) => [String(row.id), row]))
-  await Promise.all(orderedIds.map((id, index) => {
-    if (!byId.has(String(id))) return Promise.resolve(null)
-    return supabase.from(table).update({ orden_num: index + 1 }).eq('id', id)
-  }))
+  const includedIds = new Set(orderedIds.map(String))
+  const orderedRows = orderedIds.map((id) => byId.get(String(id))).filter(Boolean)
+  orderedRows.push(...rows.filter((row) => !includedIds.has(String(row.id))))
+  await persistEntityOrder(table, orderedRows)
 
-  return orderedIds
+  return orderedRows.map((row) => row.id)
 }
 
 async function ensureHolderWalletCombination({ holderId, walletId, boxId = null, shiftId = null, active = true }) {
