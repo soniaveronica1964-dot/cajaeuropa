@@ -1008,6 +1008,11 @@ input[type="time"] { color-scheme: dark; }
   justify-content: flex-start;
 }
 
+.matrix-head > .matrix-box-heading {
+  align-items: center;
+  gap: 6px;
+}
+
 .matrix-row > span,
 .matrix-head > span {
   justify-content: center;

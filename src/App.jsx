@@ -427,7 +427,7 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
     <div className="matrix-wrap" style={columns}>
       {accounts.length ? <>
         <div className="matrix-row matrix-head">
-          <strong>Titular</strong>
+          <strong className="matrix-box-heading"><WalletCards size={13} />Caja</strong>
           {wallets.map(wallet => <span key={wallet}>{wallet}</span>)}
           <span>Total</span>
         </div>
