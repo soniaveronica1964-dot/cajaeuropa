@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ArrowLeftRight,
   BarChart3,
@@ -148,6 +148,7 @@ function App() {
   const [selectedBoxId, setSelectedBoxId] = useState(null)
   const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
   const [loadError, setLoadError] = useState('')
+  const [cashDiscrepancyPreview, setCashDiscrepancyPreview] = useState(null)
 
   useEffect(() => {
     loadCurrentShiftData().then((freshData) => {
@@ -176,7 +177,8 @@ function App() {
     if (chip.fichas_final == null) return sum
     return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
   }, 0)
-  const cashDiscrepancy = cashTotal - Number(shift?.caja_inicial || 0) - countedChipDifference + Number(shift?.redondeo || 0)
+  const savedCashDiscrepancy = cashTotal - Number(shift?.caja_inicial || 0) - countedChipDifference + Number(shift?.redondeo || 0)
+  const cashDiscrepancy = cashDiscrepancyPreview ?? savedCashDiscrepancy
   const cashDiscrepancyTone = cashDiscrepancy === 0 ? 'neutral' : cashDiscrepancy > 0 ? 'positive' : 'negative'
   const cashDiscrepancyLabel = cashDiscrepancy >= 0
     ? `+${moneyWithCents.format(cashDiscrepancy)}`
@@ -261,8 +263,7 @@ function App() {
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} />}
-                    {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
@@ -343,7 +344,7 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved, onRoundingChange }) {
+function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved, onRoundingChange, onDiscrepancyChange }) {
   const [rounding, setRounding] = useState(null)
   const [accountValueDrafts, setAccountValueDrafts] = useState({})
   const [chipFinalDrafts, setChipFinalDrafts] = useState({})
@@ -438,8 +439,12 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   const roundingAmount = rounding === null ? savedRounding : parseLocalizedAmount(rounding) ?? savedRounding
   const cashInitial = Number(data.shift.caja_inicial || 0)
   const countedChipDifference = chips.reduce((sum, chip) => chip.fichas_final == null ? sum : sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0), 0)
-  const cashDifference = total - cashInitial - countedChipDifference + roundingAmount
+  const cashDifference = total - cashInitial
   const realDifference = cashDifference
+  const cashDiscrepancy = cashDifference - countedChipDifference + roundingAmount
+  useLayoutEffect(() => {
+    onDiscrepancyChange(cashDiscrepancy)
+  }, [cashDiscrepancy, onDiscrepancyChange])
   return <>
     <GoalStrip open={openGoal} onToggle={() => setOpenGoal(value => !value)} goals={goals} />
     <section className="summary-bar">
