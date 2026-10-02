@@ -463,16 +463,17 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
     const input = event.currentTarget
     const value = parseLocalizedAmount(input.value)
     if (value == null || value < 0) {
-      input.value = numberWithCents.format(account.amount)
+      input.value = account.amount ? numberWithCents.format(account.amount) : ''
       setToast('Ingresá un valor válido, igual o mayor a cero')
       return
     }
-    input.value = numberWithCents.format(value)
+    input.value = value ? numberWithCents.format(value) : ''
+    if (value === account.amount) return
     try {
       await updateAccountValue(account.id, value)
       onSaved()
     } catch {
-      input.value = numberWithCents.format(account.amount)
+      input.value = account.amount ? numberWithCents.format(account.amount) : ''
       setToast('No se pudo guardar el valor de la cuenta')
     }
   }
