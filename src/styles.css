@@ -973,7 +973,9 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-wrap {
   display: grid;
-  grid-template-columns: minmax(90px, 0.75fr) repeat(var(--wallet-count, 4), minmax(90px, 1fr)) minmax(82px, 0.75fr);
+  --matrix-wallet-width: 190px;
+  grid-template-columns: 140px repeat(var(--wallet-count, 4), var(--matrix-wallet-width)) var(--matrix-wallet-width);
+  justify-content: safe center;
   gap: 0;
   overflow-x: auto;
 }
@@ -1254,7 +1256,8 @@ input[type="time"] { color-scheme: dark; }
   }
 
   .matrix-wrap {
-    grid-template-columns: minmax(100px, 1.1fr) repeat(var(--wallet-count, 4), minmax(82px, 1fr)) minmax(75px, 0.8fr);
+    grid-template-columns: 120px repeat(var(--wallet-count, 4), var(--matrix-wallet-width)) var(--matrix-wallet-width);
+    justify-content: start;
   }
 }
 
