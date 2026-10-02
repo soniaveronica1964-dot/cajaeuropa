@@ -423,7 +423,6 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
   const columns = { '--wallet-count': wallets.length }
 
   return <section className="panel account-panel">
-    <PanelTitle icon={WalletCards} title="Caja" />
     <div className="matrix-wrap" style={columns}>
       {accounts.length ? <>
         <div className="matrix-row matrix-head">
