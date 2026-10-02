@@ -142,14 +142,71 @@ export function updateAdvertisingLine(lineId, field, value) {
   return updateRow('lineas_publicidad', lineId, { [field]: Math.max(0, Number(value) || 0) })
 }
 
-export async function createBonusLine(shiftId, { value, recovered, notes }) {
-  requireSupabase()
-  const { data: bonus, error: bonusError } = await supabase.from('bonos').select('id').eq('turno_id', shiftId).limit(1).maybeSingle()
-  if (bonusError) throw bonusError
-  if (!bonus) throw new Error('Este turno todavía no tiene un registro de bonos')
-  const { data, error } = await supabase.from('lineas_bonos').insert({ bono_id: bonus.id, valor: Number(value) || 0, recuperado: Boolean(recovered), es_publicidad: false, notas: notes?.trim() || null }).select().single()
+async function recalculateBonusTotals(bonusId) {
+  const { data: lines, error: linesError } = await supabase
+    .from('lineas_bonos')
+    .select('valor, recuperado, es_publicidad')
+    .eq('bono_id', bonusId)
+  if (linesError) throw linesError
+
+  const totals = (lines || []).reduce((sum, line) => {
+    const cents = Math.round(Number(line.valor || 0) * 100)
+    if (line.recuperado) sum.recovered += cents
+    else if (line.es_publicidad) sum.publicity += cents
+    else sum.granted += cents
+    return sum
+  }, { granted: 0, recovered: 0, publicity: 0 })
+
+  const { error } = await supabase.from('bonos').update({
+    total_otorgado: totals.granted / 100,
+    total_recuperado: totals.recovered / 100,
+    total_publicidad: totals.publicity / 100,
+    numero_bonos: lines?.length || 0,
+  }).eq('id', bonusId)
   if (error) throw error
+}
+
+function bonusTypeFields(type) {
+  if (!['granted', 'recovered', 'publicity'].includes(type)) {
+    throw new Error('Tipo de bono no válido')
+  }
+  return { recuperado: type === 'recovered', es_publicidad: type === 'publicity' }
+}
+
+export async function createBonusLine(shiftId, { value, type = 'granted', notes }) {
+  requireSupabase()
+  const { data: bonus, error: bonusError } = await supabase.from('bonos')
+    .upsert({ turno_id: shiftId }, { onConflict: 'turno_id' })
+    .select('id')
+    .single()
+  if (bonusError) throw bonusError
+  const { data, error } = await supabase.from('lineas_bonos').insert({
+    bono_id: bonus.id,
+    valor: Math.max(0, Number(value) || 0),
+    ...bonusTypeFields(type),
+    notas: notes?.trim() || null,
+  }).select().single()
+  if (error) throw error
+  await recalculateBonusTotals(bonus.id)
   return data
+}
+
+export async function updateBonusLine(id, { type, notes }) {
+  const values = {}
+  if (type !== undefined) Object.assign(values, bonusTypeFields(type))
+  if (notes !== undefined) values.notas = notes?.trim() || null
+  const line = await updateRow('lineas_bonos', id, values)
+  await recalculateBonusTotals(line.bono_id)
+  return line
+}
+
+export async function deleteBonusLine(id) {
+  requireSupabase()
+  const { data: line, error: loadError } = await supabase.from('lineas_bonos').select('id, bono_id').eq('id', id).single()
+  if (loadError) throw loadError
+  const { error } = await supabase.from('lineas_bonos').delete().eq('id', id)
+  if (error) throw error
+  await recalculateBonusTotals(line.bono_id)
 }
 
 export async function createTip(shiftId, { value, user, notes }) {
