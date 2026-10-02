@@ -423,7 +423,7 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
   const columns = { '--wallet-count': wallets.length }
 
   return <section className="panel account-panel">
-    <PanelTitle icon={WalletCards} title="Matriz de cuentas" meta={`${holders.length} titulares · ${wallets.length} billeteras`} action={<button className="text-action" onClick={() => setToast('La matriz refleja los valores guardados en Supabase')}>Estado de datos</button>} />
+    <PanelTitle icon={WalletCards} title="Caja" />
     <div className="matrix-wrap" style={columns}>
       {accounts.length ? <>
         <div className="matrix-row matrix-head">
