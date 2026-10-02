@@ -297,7 +297,7 @@ async function ensureHolderWalletCombination({ holderId, walletId, boxId = null,
     await ensureAccountBoxLink({ accountId: account.id, boxId })
   }
   if (boxId && shiftId) {
-    await setAccountAvailability({ shiftId, boxId, accountId: account.id, enabled: Boolean(active), value: 0, canCollect: true, canWithdraw: true })
+    await setAccountAvailability({ shiftId, boxId, accountId: account.id, enabled: Boolean(active), value: 0, canCollect: false, canWithdraw: false })
   }
   return account
 }
@@ -887,7 +887,7 @@ export async function ensureAccountBoxLink({ accountId, boxId }) {
   return data
 }
 
-export async function setAccountAvailability({ shiftId, boxId, accountId, enabled = true, value = 0, canCollect = true, canWithdraw = true }) {
+export async function setAccountAvailability({ shiftId, boxId, accountId, enabled = true, value = 0, canCollect = false, canWithdraw = false }) {
   requireSupabase()
   if (!accountId || !shiftId || !boxId) return null
 
@@ -1032,7 +1032,7 @@ export async function createInitialSetup({ boxName, shiftName = null, startTime 
         titular_id: holder.id, billetera_id: wallet.id, alias: null, tipo_cuenta_id: accountType.id, activa: true,
       })
       await ensureLink('cuentas_x_turno', { turno_id: shift.id, cuenta_id: account.id, caja_id: box.id }, {
-        turno_id: shift.id, cuenta_id: account.id, caja_id: box.id, valor: 0, cobros: true, retiros: true,
+        turno_id: shift.id, cuenta_id: account.id, caja_id: box.id, valor: 0, cobros: false, retiros: false,
       })
     }
   }

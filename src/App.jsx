@@ -827,8 +827,8 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
             accountId: created.id,
             enabled: nextValue,
             value: 0,
-            canCollect: true,
-            canWithdraw: true,
+            canCollect: false,
+            canWithdraw: false,
           })
         }
       } else {
@@ -848,8 +848,8 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
             accountId: existingAccount.cuentas.id,
             enabled: false,
             value: existingAccount.valor ?? 0,
-            canCollect: true,
-            canWithdraw: true,
+            canCollect: false,
+            canWithdraw: false,
           })
         }
       }
@@ -949,8 +949,8 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
             accountId: account.id,
             enabled: true,
             value: 0,
-            canCollect: true,
-            canWithdraw: true,
+            canCollect: false,
+            canWithdraw: false,
           })
         }
       } else {
