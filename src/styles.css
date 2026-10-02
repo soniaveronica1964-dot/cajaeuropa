@@ -1027,7 +1027,7 @@ input[type="time"] { color-scheme: dark; }
   display: flex;
   align-items: center;
   gap: 4px;
-  justify-self: center;
+  justify-self: start;
   width: min(100%, 190px);
   min-width: 0;
 }
