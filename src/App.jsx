@@ -409,11 +409,14 @@ function ChipSummary({ chips, setToast, onChipFinalSaved }) {
   </section>
 }
 function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved }) {
+  const [flagOverrides, setFlagOverrides] = useState({})
   const saveAccount = (account, event) => updateAccountValue(account.id, event.target.value.replace(/\./g, '').replace(',', '.')).then(() => onSaved()).catch(() => setToast('No se pudo guardar el valor de la cuenta'))
-  const saveFlag = (account, field, event) => {
-    const checked = event.target.checked
+  const saveFlag = (account, field, checked) => {
+    const previousFlags = flagOverrides[account.id] || { cobros: Boolean(account.cobros), retiros: Boolean(account.retiros) }
+    const nextFlags = { ...previousFlags, [field]: checked }
+    setFlagOverrides(current => ({ ...current, [account.id]: nextFlags }))
     updateAccountFlags(account.id, field, checked).then(() => onSaved()).catch(() => {
-      event.target.checked = !checked
+      setFlagOverrides(current => ({ ...current, [account.id]: previousFlags }))
       setToast(`No se pudo guardar ${field === 'cobros' ? 'cobros' : 'retiros'}`)
     })
   }
@@ -435,20 +438,23 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
             <strong>{holder}</strong>
             {wallets.map(wallet => {
               const account = holderAccounts.find(item => item.wallet === wallet)
-              return account ? <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
-                <label className={`matrix-value ${account.cobros !== account.retiros ? (account.cobros ? 'collecting' : 'withdrawing') : ''}`}>
+              if (!account) return <span className="matrix-account-empty" key={`${holder}-${wallet}`} aria-hidden="true" />
+              const flags = flagOverrides[account.id] || account
+              const valueTone = flags.cobros && flags.retiros ? 'both-enabled' : flags.cobros ? 'collecting' : flags.retiros ? 'withdrawing' : ''
+              return <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
+                <label className={`matrix-value ${valueTone}`}>
                   <span>$</span>
                   <input defaultValue={account.amount ? account.amount.toLocaleString('es-AR') : ''} placeholder="-" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
                 </label>
                 <div className="matrix-account-flags">
                   <label className="matrix-flag" title="Cobros">
-                    <input type="checkbox" aria-label={`Cobros ${wallet}, ${holder}`} defaultChecked={Boolean(account.cobros)} onChange={(event) => saveFlag(account, 'cobros', event)} />
+                    <input type="checkbox" aria-label={`Cobros ${wallet}, ${holder}`} checked={Boolean(flags.cobros)} onChange={(event) => saveFlag(account, 'cobros', event.target.checked)} />
                   </label>
                   <label className="matrix-flag" title="Retiros">
-                    <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} defaultChecked={Boolean(account.retiros)} onChange={(event) => saveFlag(account, 'retiros', event)} />
+                    <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} checked={Boolean(flags.retiros)} onChange={(event) => saveFlag(account, 'retiros', event.target.checked)} />
                   </label>
                 </div>
-              </div> : <span className="matrix-account-empty" key={`${holder}-${wallet}`} aria-hidden="true" />
+              </div>
             })}
             <b>{money.format(holderTotal)}</b>
           </div>
