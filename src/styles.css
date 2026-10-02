@@ -973,7 +973,7 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-wrap {
   display: grid;
-  grid-template-columns: minmax(120px, 1.3fr) repeat(var(--wallet-count, 4), minmax(90px, 1fr)) minmax(82px, 0.8fr);
+  grid-template-columns: minmax(90px, 0.75fr) repeat(var(--wallet-count, 4), minmax(90px, 1fr)) minmax(82px, 0.75fr);
   gap: 0;
   overflow-x: auto;
 }
@@ -1017,12 +1017,18 @@ input[type="time"] { color-scheme: dark; }
   text-align: center;
 }
 
+.matrix-head > span:last-child {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .matrix-account-cell {
   display: flex;
   align-items: center;
   gap: 4px;
-  justify-self: stretch;
-  width: 100%;
+  justify-self: center;
+  width: min(100%, 190px);
   min-width: 0;
 }
 
@@ -1156,7 +1162,8 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-total > b {
   align-self: center;
-  text-align: center;
+  justify-content: flex-end;
+  text-align: right;
   font: 11px 'DM Mono';
   color: var(--text);
 }
