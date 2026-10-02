@@ -434,7 +434,7 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved })
               return account ? <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
                 <label className={`matrix-value ${account.amount ? 'green' : ''}`}>
                   <span>$</span>
-                  <input defaultValue={account.amount.toLocaleString('es-AR')} onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
+                  <input defaultValue={account.amount.toLocaleString('es-AR')} placeholder="—" onFocus={(event) => event.target.select()} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
                 </label>
                 <div className="matrix-account-flags">
                   <label className="matrix-flag" title="Cobros">

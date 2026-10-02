@@ -973,17 +973,27 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-wrap {
   display: grid;
-  gap: 10px;
+  gap: 0;
   overflow-x: auto;
 }
 
 .matrix-row {
   display: grid;
   grid-template-columns: minmax(120px, 1.3fr) repeat(var(--wallet-count, 4), minmax(90px, 1fr)) minmax(82px, 0.8fr);
-  gap: 8px;
+  gap: 0;
   align-items: center;
-  min-height: 38px;
+  min-height: 48px;
   padding: 0;
+  border-bottom: 1px solid rgba(121, 146, 146, 0.16);
+}
+
+.matrix-row > *:not(:last-child),
+.matrix-total > *:not(:last-child) {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  padding-inline: 10px;
+  border-right: 1px dotted rgba(121, 146, 146, 0.28);
 }
 
 .matrix-row strong,
@@ -994,11 +1004,12 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-row > strong {
   color: var(--text);
-  padding-right: 8px;
+  justify-content: flex-start;
 }
 
 .matrix-row > span,
 .matrix-head > span {
+  justify-content: center;
   color: var(--muted);
   font: 10px 'DM Mono';
   text-transform: uppercase;
@@ -1009,6 +1020,8 @@ input[type="time"] { color-scheme: dark; }
   display: flex;
   align-items: center;
   gap: 4px;
+  justify-self: center;
+  width: min(100%, 170px);
   min-width: 0;
 }
 
@@ -1019,7 +1032,7 @@ input[type="time"] { color-scheme: dark; }
   gap: 4px;
   flex: 1;
   min-width: 0;
-  min-height: 28px;
+  min-height: 34px;
   border: 1px solid rgba(121, 146, 146, 0.2);
   border-radius: 5px;
   background: rgba(17, 23, 24, 0.7);
@@ -1043,9 +1056,14 @@ input[type="time"] { color-scheme: dark; }
   min-width: 0;
   border: 0;
   background: transparent;
-  text-align: center;
+  text-align: right;
   color: inherit;
   font: 11px 'DM Mono';
+}
+
+.matrix-row .matrix-value input::placeholder {
+  color: var(--muted);
+  text-align: right;
 }
 
 .matrix-account-flags {
@@ -1057,8 +1075,8 @@ input[type="time"] { color-scheme: dark; }
 .matrix-row .matrix-flag {
   display: grid;
   place-items: center;
-  width: 14px;
-  min-height: 13px;
+  width: 15px;
+  min-height: 15px;
   padding: 0;
   border: 1px solid rgba(121, 146, 146, 0.2);
   border-radius: 3px;
@@ -1067,14 +1085,15 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .matrix-flag input {
-  width: 10px;
-  height: 10px;
+  width: 11px;
+  height: 11px;
   margin: 0;
   accent-color: var(--green);
   cursor: pointer;
 }
 
 .matrix-account-empty {
+  justify-content: center;
   color: var(--muted);
   text-align: center;
 }
@@ -1088,10 +1107,14 @@ input[type="time"] { color-scheme: dark; }
 .matrix-total {
   display: grid;
   grid-template-columns: minmax(120px, 1.3fr) repeat(var(--wallet-count, 4), minmax(90px, 1fr)) minmax(82px, 0.8fr);
-  gap: 8px;
+  gap: 0;
   align-items: center;
   padding-top: 10px;
   border-top: 1px solid rgba(121, 146, 146, 0.22);
+}
+
+.matrix-total > span {
+  justify-content: flex-start;
 }
 
 .matrix-total > span,
