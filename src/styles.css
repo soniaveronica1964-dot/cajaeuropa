@@ -989,12 +989,12 @@ input[type="time"] { color-scheme: dark; }
   border-bottom: 1px solid rgba(121, 146, 146, 0.16);
 }
 
-.matrix-row > :first-child,
-.matrix-total > :first-child {
+.matrix-row > :not(:last-child),
+.matrix-total > :not(:last-child) {
   display: flex;
   align-items: center;
   padding-inline: 10px;
-  border-right: 1px solid rgba(121, 146, 146, 0.28);
+  border-right: 1px dotted rgba(121, 146, 146, 0.28);
 }
 
 .matrix-row strong,
@@ -1021,13 +1021,13 @@ input[type="time"] { color-scheme: dark; }
   display: flex;
   align-items: center;
   gap: 4px;
-  justify-self: center;
-  width: min(100%, 170px);
+  justify-self: stretch;
+  width: 100%;
   min-width: 0;
 }
 
 .matrix-row > .matrix-account-cell {
-  padding-right: 18px;
+  padding-right: 10px;
 }
 
 .matrix-row .matrix-value {
