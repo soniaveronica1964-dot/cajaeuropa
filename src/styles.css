@@ -1026,6 +1026,10 @@ input[type="time"] { color-scheme: dark; }
   min-width: 0;
 }
 
+.matrix-row > .matrix-account-cell {
+  padding-right: 18px;
+}
+
 .matrix-row .matrix-value {
   display: flex;
   align-items: center;
@@ -1106,6 +1110,10 @@ input[type="time"] { color-scheme: dark; }
   font: 11px 'DM Mono';
 }
 
+.matrix-row > b {
+  align-self: center;
+}
+
 .matrix-total {
   display: grid;
   grid-column: 1 / -1;
@@ -1128,12 +1136,14 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .matrix-total > b {
+  align-self: center;
   text-align: center;
   font: 11px 'DM Mono';
   color: var(--text);
 }
 
 .matrix-total > strong {
+  align-self: center;
   text-align: right;
   color: var(--cyan);
 }
