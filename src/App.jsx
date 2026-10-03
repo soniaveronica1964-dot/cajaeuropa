@@ -922,16 +922,48 @@ function UsersCard({ users }) { return <section className="panel mini-card"><Pan
 function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, rows, onSaved, setToast }) {
   const [value, setValue] = useState('')
   const [detail, setDetail] = useState('')
+  const [notes, setNotes] = useState('')
   const [typeId, setTypeId] = useState(options[0]?.id || '')
+  const [saving, setSaving] = useState(false)
   const add = async () => {
-    if (!Number(value)) { setToast('Ingresá un monto válido'); return }
+    const parsedAmount = parseLocalizedAmount(value)
+    if (!(parsedAmount > 0)) { setToast('Ingresá un monto válido'); return }
+    setSaving(true)
     try {
-      if (kind === 'expenses') await createExpense(shiftId, { typeId, value, notes: detail })
-      else await createTip(shiftId, { value, user: detail, notes: '' })
-      setValue(''); setDetail(''); setToast(`${title} guardado`); onSaved()
-    } catch (error) { setToast(error.message || `No se pudo guardar ${title.toLowerCase()}`) }
+      if (kind === 'expenses') await createExpense(shiftId, { typeId, value: parsedAmount, notes })
+      else await createTip(shiftId, { value: parsedAmount, user: detail, notes })
+      setValue('')
+      setDetail('')
+      setNotes('')
+      setToast(`${title} guardado`)
+      onSaved()
+    } catch (error) {
+      setToast(error.message || `No se pudo guardar ${title.toLowerCase()}`)
+    } finally {
+      setSaving(false)
+    }
   }
-  return <section className="panel movement-card"><PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} action={<button className="icon-button" title={`Ver ${title.toLowerCase()}`}><Eye size={15} /></button>} /><div className="entry-form">{kind === 'expenses' ? <select value={typeId} onChange={(event) => setTypeId(event.target.value)}><option value="">Tipo</option>{options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}</select> : <input placeholder="Usuario" value={detail} onChange={(event) => setDetail(event.target.value)} />}<input placeholder="$ Monto" value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') add() }} />{kind === 'expenses' ? <input placeholder="Notas" value={detail} onChange={(event) => setDetail(event.target.value)} /> : <span /> }<button className="send-button" title={`Agregar ${title.toLowerCase()}`} onClick={add}><ArrowLeftRight size={14} /></button></div><small className="section-kicker">Últimos registros</small>{rows.slice(0, 5).map(row => <div className="movement-row" key={row.id}><span>{row.usuario_texto || row.notas || row.tipos_gasto?.nombre || 'Movimiento'}</span><b>{money.format(row.monto)}</b></div>)}{!rows.length && <EmptyInline text="No hay movimientos registrados." />}<footer>Total <strong>{money.format(amount)}</strong></footer></section>
+  return <section className={`panel movement-card movement-card-${kind}`}>
+    <PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} />
+    <form className="entry-form" onSubmit={(event) => { event.preventDefault(); add() }}>
+      {kind === 'expenses'
+        ? <select aria-label="Tipo de gasto" value={typeId} onChange={(event) => setTypeId(event.target.value)} disabled={saving}>
+          <option value="">Tipo</option>
+          {options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}
+        </select>
+        : <input aria-label="Usuario" placeholder="Usuario" value={detail} onChange={(event) => setDetail(event.target.value)} disabled={saving} />}
+      <input aria-label="Monto" inputMode="decimal" placeholder="$ Monto" value={value} onChange={(event) => setValue(event.target.value)} disabled={saving} />
+      <input aria-label="Notas" placeholder="Notas" value={notes} onChange={(event) => setNotes(event.target.value)} disabled={saving} />
+      <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}><Plus size={14} /></button>
+    </form>
+    <small className="section-kicker">Últimos registros</small>
+    {rows.slice(0, 5).map(row => <div className="movement-row" key={row.id}>
+      <span>{kind === 'tips' ? row.usuario_texto || row.notas || 'Propina' : row.tipos_gasto?.nombre || row.notas || 'Gasto'}</span>
+      <b>{money.format(row.monto)}</b>
+    </div>)}
+    {!rows.length && <EmptyInline text="No hay movimientos registrados." />}
+    <footer>Total <strong>{money.format(amount)}</strong></footer>
+  </section>
 }
 function LegacyBonusList({ shiftId, rows, onSaved, setToast }) {
   const [open, setOpen] = useState(false)
