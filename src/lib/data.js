@@ -227,7 +227,9 @@ export async function createTip(shiftId, { value, user, notes }) {
 export async function createExpense(shiftId, { typeId, value, notes }) {
   requireSupabase()
   if (!typeId) throw new Error('Seleccioná un tipo de gasto')
-  const { data, error } = await supabase.from('gastos').insert({ turno_id: shiftId, tipo_gasto_id: typeId, monto: Number(value) || 0, notas: notes?.trim() || null }).select().single()
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount < 0) throw new Error('El monto del gasto no puede ser negativo')
+  const { data, error } = await supabase.from('gastos').insert({ turno_id: shiftId, tipo_gasto_id: typeId, monto: amount, notas: notes?.trim() || null }).select().single()
   if (error) throw error
   return data
 }
@@ -235,7 +237,11 @@ export async function createExpense(shiftId, { typeId, value, notes }) {
 export async function updateExpenseLine(id, { typeId, value, notes }) {
   const values = {}
   if (typeId !== undefined) values.tipo_gasto_id = typeId
-  if (value !== undefined) values.monto = Math.max(0, Number(value) || 0)
+  if (value !== undefined) {
+    const amount = Number(value)
+    if (!Number.isFinite(amount) || amount < 0) throw new Error('El monto del gasto no puede ser negativo')
+    values.monto = amount
+  }
   if (notes !== undefined) values.notas = notes?.trim() || null
   return updateRow('gastos', id, values)
 }

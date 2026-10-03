@@ -125,6 +125,29 @@ function parseLocalizedAmount(value) {
   return Number.isFinite(parsed) ? parsed : null
 }
 
+function sumMovementAmounts(rows = []) {
+  return rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
+}
+
+function signedExpenseImpact(rows = []) {
+  return rows.reduce((sum, row) => {
+    const amount = Number(row.monto || 0)
+    return sum + (row.tipos_gasto?.invertir_signo ? -amount : amount)
+  }, 0)
+}
+
+function calculateCashDiscrepancy({ cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney }) {
+  const bonusImpact = bonuses.reduce((sum, bonus) => sum + (bonus.recuperado ? -Number(bonus.valor || 0) : Number(bonus.valor || 0)), 0)
+  return cashDifference
+    - countedChipDifference
+    + rounding
+    + bonusImpact
+    + sumMovementAmounts(expenses)
+    + sumMovementAmounts(taCharges)
+    - sumMovementAmounts(tips)
+    - sumMovementAmounts(foundMoney)
+}
+
 async function createAppImagePayload(file) {
   const image = await new Promise((resolve, reject) => {
     const reader = new FileReader()
@@ -261,8 +284,16 @@ function App() {
     if (chip.fichas_final == null) return sum
     return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
   }, 0)
-  const bonusImpact = (appData?.bonuses || []).reduce((sum, bonus) => sum + (bonus.recuperado ? -Number(bonus.valor || 0) : Number(bonus.valor || 0)), 0)
-  const savedCashDiscrepancy = cashTotal - Number(shift?.caja_inicial || 0) - countedChipDifference + Number(shift?.redondeo || 0) + bonusImpact
+  const savedCashDiscrepancy = calculateCashDiscrepancy({
+    cashDifference: cashTotal - Number(shift?.caja_inicial || 0),
+    countedChipDifference,
+    rounding: Number(shift?.redondeo || 0),
+    bonuses: appData?.bonuses || [],
+    expenses: appData?.expenses || [],
+    tips: appData?.tips || [],
+    taCharges: appData?.taCharges || [],
+    foundMoney: appData?.foundMoney || [],
+  })
   const cashDiscrepancy = cashDiscrepancyPreview ?? savedCashDiscrepancy
   const cashDiscrepancyTone = cashDiscrepancy === 0 ? 'neutral' : cashDiscrepancy > 0 ? 'positive' : 'negative'
   const cashDiscrepancyLabel = cashDiscrepancy >= 0
@@ -532,9 +563,18 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   const cashInitial = Number(data.shift.caja_inicial || 0)
   const countedChipDifference = chips.reduce((sum, chip) => chip.fichas_final == null ? sum : sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0), 0)
   const cashDifference = total - cashInitial
-  const realDifference = cashDifference
-  const bonusImpact = data.bonuses.reduce((sum, bonus) => sum + (bonus.recuperado ? -Number(bonus.valor || 0) : Number(bonus.valor || 0)), 0)
-  const cashDiscrepancy = cashDifference - countedChipDifference + roundingAmount + bonusImpact
+  const taChargesTotal = sumMovementAmounts(data.taCharges)
+  const realDifference = cashDifference + signedExpenseImpact(data.expenses) + taChargesTotal
+  const cashDiscrepancy = calculateCashDiscrepancy({
+    cashDifference,
+    countedChipDifference,
+    rounding: roundingAmount,
+    bonuses: data.bonuses,
+    expenses: data.expenses,
+    tips: data.tips,
+    taCharges: data.taCharges,
+    foundMoney: data.foundMoney,
+  })
   useLayoutEffect(() => {
     onDiscrepancyChange(cashDiscrepancy)
   }, [cashDiscrepancy, onDiscrepancyChange])
@@ -984,7 +1024,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
           {options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}
         </select>
         : <input aria-label="Usuario" placeholder="Usuario" value={detail} onChange={(event) => setDetail(event.target.value)} disabled={saving} />}
-      <input aria-label="Monto" inputMode="decimal" placeholder="$ Monto" value={value} onChange={(event) => setValue(event.target.value)} disabled={saving} />
+      <input aria-label="Monto" inputMode="decimal" placeholder="$ Monto" value={value} onChange={(event) => { if (kind !== 'expenses' || !event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (kind === 'expenses' && event.key === '-') event.preventDefault() }} disabled={saving} />
       <input aria-label="Notas" placeholder="Notas" value={notes} onChange={(event) => setNotes(event.target.value)} disabled={saving} />
       <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}><Send size={14} /></button>
     </form>
@@ -1095,7 +1135,7 @@ function ExpenseHistoryModal({ rows, options, onClose, onSaved, setToast }) {
             <select aria-label="Tipo de gasto" value={draft.typeId} onChange={event => changeDraft(row.id, 'typeId', event.target.value)} disabled={saving || savingId === row.id}>
               {options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}
             </select>
-            <input aria-label="Monto del gasto" inputMode="decimal" value={draft.amount} onChange={event => changeDraft(row.id, 'amount', event.target.value)} disabled={saving || savingId === row.id} />
+            <input aria-label="Monto del gasto" inputMode="decimal" value={draft.amount} onChange={event => { if (!event.target.value.includes('-')) changeDraft(row.id, 'amount', event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving || savingId === row.id} />
             <input aria-label="Notas del gasto" placeholder="Notas" value={draft.notes} onChange={event => changeDraft(row.id, 'notes', event.target.value)} disabled={saving || savingId === row.id} />
             <button className="delete-button" type="button" title="Eliminar gasto" aria-label="Eliminar gasto" onClick={() => removeRow(row)} disabled={saving || savingId === row.id}><Trash2 size={14} /></button>
           </div>
