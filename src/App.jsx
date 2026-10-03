@@ -994,33 +994,59 @@ function ExpenseHistoryModal({ rows, options, onClose, onSaved, setToast }) {
   }]))
   const [drafts, setDrafts] = useState(createDrafts)
   const [savingId, setSavingId] = useState(null)
+  const [saving, setSaving] = useState(false)
   const savedDrafts = useRef(createDrafts())
 
   const changeDraft = (id, field, value) => {
     setDrafts(current => ({ ...current, [id]: { ...current[id], [field]: value } }))
   }
 
-  const saveRow = async (row) => {
-    const draft = drafts[row.id]
-    if (!draft || savingId === row.id) return
-    const amount = parseLocalizedAmount(draft.amount)
-    if (amount == null || amount < 0) {
+  const saveAll = async () => {
+    const pending = rows.flatMap(row => {
+      const draft = drafts[row.id]
+      const saved = savedDrafts.current[row.id]
+      if (!draft || (saved && saved.typeId === draft.typeId && saved.amount === draft.amount && saved.notes === draft.notes)) return []
+      const amount = parseLocalizedAmount(draft.amount)
+      return [{ row, draft, amount }]
+    })
+    const invalidAmount = pending.find(item => item.amount == null || item.amount < 0)
+    if (invalidAmount) {
       setToast('Ingresá un monto válido')
       return
     }
-    const saved = savedDrafts.current[row.id]
-    if (saved && saved.typeId === draft.typeId && saved.amount === draft.amount && saved.notes === draft.notes) return
-    setSavingId(row.id)
+    if (!pending.length) {
+      onClose()
+      return
+    }
+
+    setSaving(true)
     try {
-      await updateExpenseLine(row.id, { typeId: draft.typeId, value: amount, notes: draft.notes })
-      savedDrafts.current[row.id] = { ...draft, amount: numberWithCents.format(amount) }
-      setDrafts(current => ({ ...current, [row.id]: savedDrafts.current[row.id] }))
-      setToast('Gasto actualizado')
-      onSaved()
-    } catch (error) {
-      setToast(error.message || 'No se pudo actualizar el gasto')
+      const results = await Promise.allSettled(pending.map(({ row, draft, amount }) => updateExpenseLine(row.id, { typeId: draft.typeId, value: amount, notes: draft.notes })))
+      const successfulUpdates = []
+      results.forEach((result, index) => {
+        if (result.status !== 'fulfilled') return
+        const { row, draft, amount } = pending[index]
+        const savedDraft = { ...draft, amount: numberWithCents.format(amount) }
+        savedDrafts.current[row.id] = savedDraft
+        successfulUpdates.push([row.id, savedDraft])
+      })
+      if (successfulUpdates.length) {
+        setDrafts(current => {
+          const next = { ...current }
+          successfulUpdates.forEach(([id, draft]) => { next[id] = draft })
+          return next
+        })
+        onSaved()
+      }
+      const failedUpdate = results.find(result => result.status === 'rejected')
+      if (failedUpdate) {
+        setToast(failedUpdate.reason?.message || 'No se pudieron guardar todos los gastos')
+        return
+      }
+      setToast('Gastos guardados')
+      onClose()
     } finally {
-      setSavingId(null)
+      setSaving(false)
     }
   }
 
@@ -1038,28 +1064,27 @@ function ExpenseHistoryModal({ rows, options, onClose, onSaved, setToast }) {
     }
   }
 
-  return <div className="modal-backdrop expense-history-backdrop" onClick={onClose}>
+  return <div className="modal-backdrop expense-history-backdrop" onClick={() => !saving && !savingId && onClose()}>
     <section className="bonus-history-modal expense-history-modal" role="dialog" aria-modal="true" aria-label="Gastos del turno" onClick={event => event.stopPropagation()}>
       <header>
         <div><h2><FileText size={16} /> Gastos del turno</h2><span>Editá los datos completos de cada movimiento.</span></div>
-        <button className="modal-close" type="button" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button>
+        <button className="modal-close" type="button" title="Cerrar" aria-label="Cerrar" onClick={onClose} disabled={saving || Boolean(savingId)}><X size={17} /></button>
       </header>
       <div className="expense-history-scroll">
         {rows.length ? rows.map(row => {
           const draft = drafts[row.id] || { typeId: String(row.tipo_gasto_id), amount: numberWithCents.format(row.monto), notes: row.notas || '' }
           return <div className="expense-history-row" key={row.id}>
             <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
-            <select aria-label="Tipo de gasto" value={draft.typeId} onChange={event => changeDraft(row.id, 'typeId', event.target.value)} disabled={savingId === row.id}>
+            <select aria-label="Tipo de gasto" value={draft.typeId} onChange={event => changeDraft(row.id, 'typeId', event.target.value)} disabled={saving || savingId === row.id}>
               {options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}
             </select>
-            <input aria-label="Monto del gasto" inputMode="decimal" value={draft.amount} onChange={event => changeDraft(row.id, 'amount', event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveRow(row) }} disabled={savingId === row.id} />
-            <input aria-label="Notas del gasto" placeholder="Notas" value={draft.notes} onChange={event => changeDraft(row.id, 'notes', event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveRow(row) }} disabled={savingId === row.id} />
-            <button className="icon-button expense-save-button" type="button" title="Guardar cambios" aria-label="Guardar cambios" onClick={() => saveRow(row)} disabled={savingId === row.id}><Check size={14} /></button>
-            <button className="delete-button" type="button" title="Eliminar gasto" aria-label="Eliminar gasto" onClick={() => removeRow(row)} disabled={savingId === row.id}><Trash2 size={14} /></button>
+            <input aria-label="Monto del gasto" inputMode="decimal" value={draft.amount} onChange={event => changeDraft(row.id, 'amount', event.target.value)} disabled={saving || savingId === row.id} />
+            <input aria-label="Notas del gasto" placeholder="Notas" value={draft.notes} onChange={event => changeDraft(row.id, 'notes', event.target.value)} disabled={saving || savingId === row.id} />
+            <button className="delete-button" type="button" title="Eliminar gasto" aria-label="Eliminar gasto" onClick={() => removeRow(row)} disabled={saving || savingId === row.id}><Trash2 size={14} /></button>
           </div>
         }) : <EmptyInline text="Todavía no hay gastos registrados." />}
       </div>
-      <footer><button className="close-button" type="button" onClick={onClose}>Listo <Check size={15} /></button></footer>
+      <footer><button className="close-button" type="button" onClick={saveAll} disabled={saving || Boolean(savingId)}>{saving ? 'Guardando...' : 'Listo'} <Check size={15} /></button></footer>
     </section>
   </div>
 }
