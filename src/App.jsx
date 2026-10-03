@@ -91,11 +91,21 @@ import {
   updateShiftType,
   updateWallet,
 } from './lib/data'
+import { DATABASE_SAVE_EVENT } from './lib/supabase'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 const moneyWithCents = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const numberWithCents = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const numberCompact = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
+const LAST_SAVED_STORAGE_KEY = 'caja:last-saved-at'
+
+function readLastSavedAt() {
+  try {
+    return globalThis.localStorage.getItem(LAST_SAVED_STORAGE_KEY) || ''
+  } catch {
+    return ''
+  }
+}
 
 function parseLocalizedAmount(value) {
   const raw = String(value).trim().replace(/\s/g, '')
@@ -152,6 +162,8 @@ function App() {
   const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
   const [loadError, setLoadError] = useState('')
   const [cashDiscrepancyPreview, setCashDiscrepancyPreview] = useState(null)
+  const [saveStatus, setSaveStatus] = useState('saved')
+  const [lastSavedAt, setLastSavedAt] = useState(readLastSavedAt)
 
   useEffect(() => {
     loadCurrentShiftData().then((freshData) => {
@@ -168,7 +180,27 @@ function App() {
     return () => clearTimeout(timer)
   }, [toast])
 
+  useEffect(() => {
+    const handleSaveStatus = (event) => {
+      const { status, savedAt } = event.detail || {}
+      setSaveStatus(status || 'saved')
+      if (status !== 'saved' || !savedAt) return
+      setLastSavedAt(savedAt)
+      try {
+        globalThis.localStorage.setItem(LAST_SAVED_STORAGE_KEY, savedAt)
+      } catch {
+        // The in-memory timestamp still provides the hover detail for this session.
+      }
+    }
+    globalThis.addEventListener(DATABASE_SAVE_EVENT, handleSaveStatus)
+    return () => globalThis.removeEventListener(DATABASE_SAVE_EVENT, handleSaveStatus)
+  }, [])
+
   const activeLabel = navItems.find(([id]) => id === view)?.[1] ?? 'Caja'
+  const lastSavedLabel = lastSavedAt
+    ? `Último guardado: ${new Intl.DateTimeFormat('es-AR', { dateStyle: 'short', timeStyle: 'medium' }).format(new Date(lastSavedAt))}`
+    : 'Todavía no hay guardados'
+  const saveStatusLabel = saveStatus === 'saving' ? 'Guardando...' : saveStatus === 'error' ? 'Error al guardar' : 'Guardado'
   const shift = appData?.shift
   const shiftName = shift?.dias_turno?.nombre ?? 'Sin turno abierto'
   const shiftTime = shift?.dias_turno ? `${shift.dias_turno.hora_inicio.slice(0, 5)} - ${shift.dias_turno.hora_fin.slice(0, 5)}` : '--:-- - --:--'
@@ -244,7 +276,7 @@ function App() {
         </div>
         <div className="top-actions">
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={reloadData} />
-          <span className="saved"><i /> {shift ? 'Conectado' : 'Sin turno'}</span>
+          <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
           <button className="camera-button" title="Cámara"><Camera size={16} /></button>
           <button className="lock-button" title="Bloquear caja"><LockKeyhole size={16} /></button>
         </div>

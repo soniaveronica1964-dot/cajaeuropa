@@ -177,18 +177,22 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: var(--muted);
+  color: var(--green);
   font: 10px 'DM Mono';
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+}
+.saved-saving {
+  color: var(--orange);
+}
+.saved-error {
+  color: var(--red);
 }
 .saved i {
   display: inline-block;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 8px var(--green);
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
 }
 
 .icon-button, .lock-button, .camera-button {
