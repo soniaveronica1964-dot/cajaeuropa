@@ -43,10 +43,10 @@ export async function loadCurrentShiftData(boxId = null) {
       query('turnos', 'id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, dia_turno_id, dias_turno(id, nombre, dia_semana, hora_inicio, hora_fin, tipos_turno(id, nombre, caja_id, cajas(nombre)))', request => request.eq('abierto', true).order('fecha_hora_inicio', { ascending: false })),
       query('plataformas', 'id, nombre, caja_id, color_id', request => request.order('id', { ascending: true })),
     ])
-    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users: [], goals: [], chips: [], holders, wallets, platforms, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns }
+    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users: [], goals: [], chips: [], holders, wallets, platforms, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
-  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns] = await Promise.all([
+  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes, movements] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id)),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
@@ -68,6 +68,10 @@ export async function loadCurrentShiftData(boxId = null) {
     query('colores', 'id, nombre, hex'),
     query('app_config', 'id, nombre, icono, imagen, imagen_mini, tema, ver_notas, singleton'),
     query('turnos', 'id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, dia_turno_id, dias_turno(id, nombre, dia_semana, hora_inicio, hora_fin, tipos_turno(id, nombre, caja_id, cajas(nombre)))', request => request.eq('abierto', true).order('fecha_hora_inicio', { ascending: false })),
+    query('cargas_ta', 'id, usuario_texto, monto, notas, fecha_hora_creacion', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
+    query('dinero_encontrado', 'id, cuenta_x_turno_id, monto, notas, fecha_hora_creacion, cuentas_x_turno!inner(turno_id)', request => request.eq('cuentas_x_turno.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
+    query('notas_turno', 'id, nota_general, nota_heredable', request => request.eq('turno_id', shift.id)),
+    query('movimientos', 'id, caja_desde_id, caja_hasta_id, fecha_hora_creacion, monto, es_ahorro, cuenta_x_turno_id, notas', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
   ])
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
@@ -79,7 +83,7 @@ export async function loadCurrentShiftData(boxId = null) {
 
   const logisticsWithAccounts = logistics.map(line => ({ ...line, cuentas_x_turno: { cuentas: accountById.get(accountLinks.find(link => link.id === line.cuenta_x_turno_id)?.cuenta_id) || null } }))
 
-  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns }
+  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, bonusConditions, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
 
 export async function loadConfigurationData() {
@@ -224,6 +228,66 @@ export async function createExpense(shiftId, { typeId, value, notes }) {
   requireSupabase()
   if (!typeId) throw new Error('Seleccioná un tipo de gasto')
   const { data, error } = await supabase.from('gastos').insert({ turno_id: shiftId, tipo_gasto_id: typeId, monto: Number(value) || 0, notas: notes?.trim() || null }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function createTaCharge(shiftId, { value, user, notes }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('cargas_ta').insert({
+    turno_id: shiftId,
+    usuario_texto: user?.trim() || null,
+    monto: Number(value) || 0,
+    notas: notes?.trim() || null,
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function createFoundMoney({ accountShiftId, value, notes }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('dinero_encontrado').insert({
+    cuenta_x_turno_id: accountShiftId,
+    monto: Number(value) || 0,
+    notas: notes?.trim() || null,
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function saveShiftNotes(shiftId, { general, inheritable }) {
+  requireSupabase()
+  const { data, error } = await supabase.from('notas_turno').upsert({
+    turno_id: shiftId,
+    nota_general: general?.trim() || null,
+    nota_heredable: inheritable?.trim() || null,
+  }, { onConflict: 'turno_id' }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function createTransferMovement(shiftId, { fromBoxId, toBoxId, accountShiftId, value, notes, savings }) {
+  requireSupabase()
+  if (String(fromBoxId) === String(toBoxId)) throw new Error('Elegí dos cajas distintas')
+  const { data, error } = await supabase.from('movimientos').insert({
+    turno_id: shiftId,
+    caja_desde_id: fromBoxId,
+    caja_hasta_id: toBoxId,
+    cuenta_x_turno_id: accountShiftId,
+    monto: Number(value) || 0,
+    notas: notes?.trim() || null,
+    es_ahorro: Boolean(savings),
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function createChipLoad(chipId, value) {
+  requireSupabase()
+  const { data, error } = await supabase.from('cargas_fichas').insert({
+    fichas_id: chipId,
+    valor: Number(value) || 0,
+  }).select().single()
   if (error) throw error
   return data
 }

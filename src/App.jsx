@@ -50,6 +50,11 @@ import {
   createPlatform,
   createShiftType,
   createTip,
+  createTaCharge,
+  createFoundMoney,
+  createTransferMovement,
+  createChipLoad,
+  saveShiftNotes,
   createWallet,
   deleteAccountType,
   deleteBonusLine,
@@ -530,7 +535,16 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
         <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusList shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard /><UsersCard users={data.users} /></div>
-        <div className="three-panels lower"><MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} /><MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} /></div>
+        <div className="operations-grid">
+          <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
+          <MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} />
+          <BonusOperationCard shiftId={data.shift.id} rows={data.bonuses} onSaved={onSaved} setToast={setToast} />
+          <TaChargesCard shiftId={data.shift.id} rows={data.taCharges || []} onSaved={onSaved} setToast={setToast} />
+          <FoundMoneyCard accounts={accounts} rows={data.foundMoney || []} onSaved={onSaved} setToast={setToast} />
+          <ShiftNotesCard shiftId={data.shift.id} notes={data.shiftNotes} onSaved={onSaved} setToast={setToast} />
+          <TransferMovementsCard shift={data.shift} boxes={data.boxes} accounts={accounts} rows={data.movements || []} onSaved={onSaved} setToast={setToast} />
+          <ChipControlCard chips={chips} onSaved={onSaved} setToast={setToast} />
+        </div>
       </div>
     </div>
   </>
@@ -943,7 +957,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
       setSaving(false)
     }
   }
-  return <section className={`panel movement-card movement-card-${kind}`}>
+  return <section className={`panel operation-card movement-card movement-card-${kind}`}>
     <PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} />
     <form className="entry-form" onSubmit={(event) => { event.preventDefault(); add() }}>
       {kind === 'expenses'
@@ -965,6 +979,269 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
     <footer>Total <strong>{money.format(amount)}</strong></footer>
   </section>
 }
+
+function BonusOperationCard({ shiftId, rows, onSaved, setToast }) {
+  const [value, setValue] = useState('')
+  const [notes, setNotes] = useState('')
+  const [type, setType] = useState('granted')
+  const [saving, setSaving] = useState(false)
+  const add = async (event) => {
+    event.preventDefault()
+    const amount = parseLocalizedAmount(value)
+    if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
+    setSaving(true)
+    try {
+      await createBonusLine(shiftId, { value: amount, type, notes, bonusId: rows[0]?.bono_id })
+      setValue('')
+      setNotes('')
+      setToast(`${bonusTypeLabels[type]} guardado`)
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar el bono')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return <section className="panel operation-card operation-bonus-card">
+    <PanelTitle icon={Gift} title="Bonos" meta={`${rows.length} registros`} />
+    <form className="operation-form" onSubmit={add}>
+      <select aria-label="Tipo de bono" value={type} onChange={event => setType(event.target.value)} disabled={saving}>
+        <option value="granted">Otorgado</option>
+        <option value="recovered">Recuperado</option>
+        <option value="publicity">Publicidad</option>
+      </select>
+      <input aria-label="Monto del bono" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
+      <input aria-label="Notas del bono" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
+      <button className="operation-submit" type="submit" title="Agregar bono" aria-label="Agregar bono" disabled={saving}><Plus size={14} /></button>
+    </form>
+    <div className="operation-recent-list">
+      <small>Últimos bonos</small>
+      {rows.slice(0, 10).map(row => <div className={`operation-recent-row bonus-type-${bonusTypeOf(row)}`} key={row.id}>
+        <span>{bonusTypeLabels[bonusTypeOf(row)]}</span>
+        <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
+        <b>{money.format(row.valor)}</b>
+      </div>)}
+      {!rows.length && <EmptyInline text="Sin bonos registrados." />}
+    </div>
+    <footer className="operation-total">Bonos netos <strong>{money.format(bonusNetTotal(rows))}</strong></footer>
+  </section>
+}
+
+function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
+  const [user, setUser] = useState('')
+  const [value, setValue] = useState('')
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const add = async (event) => {
+    event.preventDefault()
+    const amount = parseLocalizedAmount(value)
+    if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
+    setSaving(true)
+    try {
+      await createTaCharge(shiftId, { value: amount, user, notes })
+      setUser('')
+      setValue('')
+      setNotes('')
+      setToast('Carga T.A. guardada')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar la carga T.A.')
+    } finally {
+      setSaving(false)
+    }
+  }
+  const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
+  return <section className="panel operation-card">
+    <PanelTitle icon={Banknote} title="Cargas T.A." meta={`${rows.length} registros`} />
+    <form className="operation-form" onSubmit={add}>
+      <input aria-label="Usuario" placeholder="Usuario" value={user} onChange={event => setUser(event.target.value)} disabled={saving} />
+      <input aria-label="Monto de carga T.A." inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
+      <input aria-label="Notas de carga T.A." placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
+      <button className="operation-submit" type="submit" title="Agregar carga T.A." aria-label="Agregar carga T.A." disabled={saving}><Plus size={14} /></button>
+    </form>
+    <div className="operation-recent-list">
+      <small>Últimas cargas</small>
+      {rows.slice(0, 4).map(row => <div className="operation-recent-row" key={row.id}>
+        <span>{row.usuario_texto || row.notas || 'Carga T.A.'}</span>
+        <b>{money.format(row.monto)}</b>
+      </div>)}
+      {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
+    </div>
+    <footer className="operation-total">Total <strong>{money.format(total)}</strong></footer>
+  </section>
+}
+
+function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
+  const [accountId, setAccountId] = useState(accounts[0]?.id?.toString() || '')
+  const [value, setValue] = useState('')
+  const [notes, setNotes] = useState('')
+  const [saving, setSaving] = useState(false)
+  const accountName = account => `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}`
+  const add = async (event) => {
+    event.preventDefault()
+    const amount = parseLocalizedAmount(value)
+    if (!accountId) { setToast('Seleccioná una cuenta'); return }
+    if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
+    setSaving(true)
+    try {
+      await createFoundMoney({ accountShiftId: accountId, value: amount, notes })
+      setValue('')
+      setNotes('')
+      setToast('Dinero encontrado guardado')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar el dinero encontrado')
+    } finally {
+      setSaving(false)
+    }
+  }
+  const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
+  return <section className="panel operation-card">
+    <PanelTitle icon={Search} title="Dinero encontrado" meta={`${rows.length} registros`} />
+    <form className="operation-form" onSubmit={add}>
+      <select aria-label="Cuenta donde se encontró dinero" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
+        {accounts.length ? accounts.map(account => <option value={account.id} key={account.id}>{accountName(account)}</option>) : <option value="">Sin cuentas</option>}
+      </select>
+      <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
+      <input aria-label="Notas del dinero encontrado" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
+      <button className="operation-submit" type="submit" title="Agregar dinero encontrado" aria-label="Agregar dinero encontrado" disabled={saving || !accounts.length}><Plus size={14} /></button>
+    </form>
+    <div className="operation-recent-list">
+      <small>Últimos registros</small>
+      {rows.slice(0, 4).map(row => <div className="operation-recent-row" key={row.id}>
+        <span>{accounts.find(account => String(account.id) === String(row.cuenta_x_turno_id)) ? accountName(accounts.find(account => String(account.id) === String(row.cuenta_x_turno_id))) : row.notas || 'Dinero encontrado'}</span>
+        <b>{money.format(row.monto)}</b>
+      </div>)}
+      {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
+    </div>
+    <footer className="operation-total">Total <strong>{money.format(total)}</strong></footer>
+  </section>
+}
+
+function ShiftNotesCard({ shiftId, notes, onSaved, setToast }) {
+  const [draft, setDraft] = useState({ general: notes?.nota_general || '', inheritable: notes?.nota_heredable || '' })
+  const [saving, setSaving] = useState(false)
+  useEffect(() => setDraft({ general: notes?.nota_general || '', inheritable: notes?.nota_heredable || '' }), [notes?.id, notes?.nota_general, notes?.nota_heredable])
+  const save = async () => {
+    if (draft.general === (notes?.nota_general || '') && draft.inheritable === (notes?.nota_heredable || '')) return
+    setSaving(true)
+    try {
+      await saveShiftNotes(shiftId, draft)
+      setToast('Notas del turno guardadas')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudieron guardar las notas')
+    } finally {
+      setSaving(false)
+    }
+  }
+  return <section className="panel operation-card shift-notes-card">
+    <PanelTitle icon={FileText} title="Notas del turno" meta={saving ? 'Guardando...' : '2 notas'} />
+    <label className="shift-note-field"><span>Nota actual</span><textarea value={draft.general} onChange={event => setDraft(current => ({ ...current, general: event.target.value }))} onBlur={save} placeholder="Información importante de este turno" /></label>
+    <label className="shift-note-field"><span>Para el próximo turno</span><textarea value={draft.inheritable} onChange={event => setDraft(current => ({ ...current, inheritable: event.target.value }))} onBlur={save} placeholder="Información que conviene heredar" /></label>
+  </section>
+}
+
+function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast }) {
+  const [fromBoxId, setFromBoxId] = useState(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
+  const [toBoxId, setToBoxId] = useState(boxes.find(box => String(box.id) !== String(shift.caja_id))?.id?.toString() || '')
+  const [accountId, setAccountId] = useState(accounts[0]?.id?.toString() || '')
+  const [value, setValue] = useState('')
+  const [notes, setNotes] = useState('')
+  const [savings, setSavings] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const add = async (event) => {
+    event.preventDefault()
+    const amount = parseLocalizedAmount(value)
+    if (boxes.length < 2) { setToast('Se necesitan dos cajas para crear un movimiento'); return }
+    if (!accountId) { setToast('Seleccioná una cuenta'); return }
+    if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
+    setSaving(true)
+    try {
+      await createTransferMovement(shift.id, { fromBoxId, toBoxId, accountShiftId: accountId, value: amount, notes, savings })
+      setValue('')
+      setNotes('')
+      setToast('Movimiento guardado')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar el movimiento')
+    } finally {
+      setSaving(false)
+    }
+  }
+  const boxName = id => boxes.find(box => String(box.id) === String(id))?.nombre || 'Caja'
+  const accountName = id => {
+    const account = accounts.find(item => String(item.id) === String(id))
+    return account ? `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}` : 'Cuenta'
+  }
+  return <section className="panel operation-card transfer-card">
+    <PanelTitle icon={ArrowLeftRight} title="Movimientos" meta={`${rows.length} registros`} />
+    <form className="transfer-form" onSubmit={add}>
+      <select aria-label="Caja de origen" value={fromBoxId} onChange={event => { const nextFrom = event.target.value; setFromBoxId(nextFrom); if (nextFrom === toBoxId) setToBoxId(boxes.find(box => String(box.id) !== nextFrom)?.id?.toString() || '') }} disabled={saving || boxes.length < 2}>
+        {boxes.map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
+      </select>
+      <select aria-label="Caja de destino" value={toBoxId} onChange={event => setToBoxId(event.target.value)} disabled={saving || boxes.length < 2}>
+        {boxes.filter(box => String(box.id) !== String(fromBoxId)).map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
+      </select>
+      <select aria-label="Cuenta del movimiento" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
+        {accounts.map(account => <option value={account.id} key={account.id}>{accountName(account.id)}</option>)}
+      </select>
+      <input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
+      <input aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
+      <label className="savings-toggle"><input type="checkbox" checked={savings} onChange={event => setSavings(event.target.checked)} disabled={saving} /><span>Ahorro</span></label>
+      <button className="operation-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !accounts.length}><Plus size={14} /></button>
+    </form>
+    <div className="operation-recent-list">
+      <small>Últimos movimientos</small>
+      {rows.slice(0, 4).map(row => <div className="operation-recent-row" key={row.id}>
+        <span>{row.es_ahorro ? 'Ahorro · ' : ''}{boxName(row.caja_desde_id)} &gt; {boxName(row.caja_hasta_id)} · {accountName(row.cuenta_x_turno_id)}</span>
+        <b>{money.format(row.monto)}</b>
+      </div>)}
+      {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
+    </div>
+  </section>
+}
+
+function ChipControlCard({ chips, onSaved, setToast }) {
+  const [drafts, setDrafts] = useState({})
+  const [savingId, setSavingId] = useState(null)
+  const addLoad = async (event, chip) => {
+    event.preventDefault()
+    const amount = parseLocalizedAmount(drafts[chip.id] || '')
+    if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
+    setSavingId(chip.id)
+    try {
+      await createChipLoad(chip.id, amount)
+      setDrafts(current => ({ ...current, [chip.id]: '' }))
+      setToast('Carga de fichas guardada')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar la carga de fichas')
+    } finally {
+      setSavingId(null)
+    }
+  }
+  return <section className="panel operation-card chip-control-card">
+    <PanelTitle icon={Boxes} title="Control de fichas" meta={`${chips.length} plataformas`} />
+    {chips.length ? <>
+      <div className="chip-control-head"><span>Plataforma</span><span>Inicial</span><span>Final</span><span>Cargas</span></div>
+      <div className="chip-control-list">{chips.map(chip => {
+        const loads = (chip.cargas_fichas || []).reduce((sum, load) => sum + Number(load.valor || 0), 0)
+        return <div className="chip-control-row" key={chip.id}>
+          <strong>{chip.plataformas?.nombre || 'Plataforma'}</strong>
+          <span>{money.format(chip.fichas_inicial)}</span>
+          <span>{chip.fichas_final == null ? '—' : money.format(chip.fichas_final)}</span>
+          <span>{money.format(loads)}</span>
+          <form className="chip-load-form" onSubmit={event => addLoad(event, chip)}>
+            <input aria-label={`Nueva carga para ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="Nueva carga" value={drafts[chip.id] || ''} onChange={event => setDrafts(current => ({ ...current, [chip.id]: event.target.value }))} disabled={savingId === chip.id} />
+            <button className="operation-submit" type="submit" title="Registrar carga" aria-label={`Registrar carga para ${chip.plataformas?.nombre || 'plataforma'}`} disabled={savingId === chip.id}><Plus size={13} /></button>
+          </form>
+        </div>
+      })}</div>
+    </> : <EmptyInline text="No hay fichas configuradas para este turno." />}
+  </section>
+}
+
 function LegacyBonusList({ shiftId, rows, onSaved, setToast }) {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
