@@ -232,6 +232,20 @@ export async function createExpense(shiftId, { typeId, value, notes }) {
   return data
 }
 
+export async function updateExpenseLine(id, { typeId, value, notes }) {
+  const values = {}
+  if (typeId !== undefined) values.tipo_gasto_id = typeId
+  if (value !== undefined) values.monto = Math.max(0, Number(value) || 0)
+  if (notes !== undefined) values.notas = notes?.trim() || null
+  return updateRow('gastos', id, values)
+}
+
+export async function deleteExpenseLine(id) {
+  requireSupabase()
+  const { error } = await supabase.from('gastos').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createTaCharge(shiftId, { value, user, notes }) {
   requireSupabase()
   const { data, error } = await supabase.from('cargas_ta').insert({

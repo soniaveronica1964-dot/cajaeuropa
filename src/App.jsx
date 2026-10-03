@@ -21,6 +21,7 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Send,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -50,6 +51,8 @@ import {
   createPlatform,
   createShiftType,
   createTip,
+  deleteExpenseLine,
+  updateExpenseLine,
   createTaCharge,
   createFoundMoney,
   createTransferMovement,
@@ -939,6 +942,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
   const [notes, setNotes] = useState('')
   const [typeId, setTypeId] = useState(options[0]?.id || '')
   const [saving, setSaving] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const add = async () => {
     const parsedAmount = parseLocalizedAmount(value)
     if (!(parsedAmount > 0)) { setToast('Ingresá un monto válido'); return }
@@ -958,26 +962,106 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
     }
   }
   return <section className={`panel operation-card movement-card movement-card-${kind}`}>
-    <PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} />
+    <PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} action={kind === 'expenses' && <button className="icon-button" type="button" title="Ver gastos" aria-label="Ver gastos" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
     <form className="entry-form" onSubmit={(event) => { event.preventDefault(); add() }}>
       {kind === 'expenses'
-        ? <select aria-label="Tipo de gasto" value={typeId} onChange={(event) => setTypeId(event.target.value)} disabled={saving}>
-          <option value="">Tipo</option>
+        ? <select aria-label="Tipo de gasto" value={typeId} onChange={(event) => setTypeId(event.target.value)} disabled={saving || !options.length}>
           {options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}
         </select>
         : <input aria-label="Usuario" placeholder="Usuario" value={detail} onChange={(event) => setDetail(event.target.value)} disabled={saving} />}
       <input aria-label="Monto" inputMode="decimal" placeholder="$ Monto" value={value} onChange={(event) => setValue(event.target.value)} disabled={saving} />
       <input aria-label="Notas" placeholder="Notas" value={notes} onChange={(event) => setNotes(event.target.value)} disabled={saving} />
-      <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}><Plus size={14} /></button>
+      <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}>{kind === 'expenses' ? <Send size={14} /> : <Plus size={14} />}</button>
     </form>
-    <small className="section-kicker">Últimos registros</small>
+    <small className="section-kicker">{kind === 'expenses' ? 'Últimos gastos' : 'Últimas propinas'}</small>
     {rows.slice(0, 5).map(row => <div className="movement-row" key={row.id}>
-      <span>{kind === 'tips' ? row.usuario_texto || row.notas || 'Propina' : row.tipos_gasto?.nombre || row.notas || 'Gasto'}</span>
+      <span>{kind === 'tips'
+        ? [row.usuario_texto, row.notas].filter(Boolean).join(' · ') || 'Propina'
+        : [row.tipos_gasto?.nombre, row.notas].filter(Boolean).join(' · ') || 'Gasto'}</span>
       <b>{money.format(row.monto)}</b>
     </div>)}
     {!rows.length && <EmptyInline text="No hay movimientos registrados." />}
     <footer>Total <strong>{money.format(amount)}</strong></footer>
+    {kind === 'expenses' && historyOpen && <ExpenseHistoryModal rows={rows} options={options} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />}
   </section>
+}
+
+function ExpenseHistoryModal({ rows, options, onClose, onSaved, setToast }) {
+  const createDrafts = () => Object.fromEntries(rows.map(row => [row.id, {
+    typeId: String(row.tipo_gasto_id),
+    amount: numberWithCents.format(row.monto),
+    notes: row.notas || '',
+  }]))
+  const [drafts, setDrafts] = useState(createDrafts)
+  const [savingId, setSavingId] = useState(null)
+  const savedDrafts = useRef(createDrafts())
+
+  const changeDraft = (id, field, value) => {
+    setDrafts(current => ({ ...current, [id]: { ...current[id], [field]: value } }))
+  }
+
+  const saveRow = async (row) => {
+    const draft = drafts[row.id]
+    if (!draft || savingId === row.id) return
+    const amount = parseLocalizedAmount(draft.amount)
+    if (amount == null || amount < 0) {
+      setToast('Ingresá un monto válido')
+      return
+    }
+    const saved = savedDrafts.current[row.id]
+    if (saved && saved.typeId === draft.typeId && saved.amount === draft.amount && saved.notes === draft.notes) return
+    setSavingId(row.id)
+    try {
+      await updateExpenseLine(row.id, { typeId: draft.typeId, value: amount, notes: draft.notes })
+      savedDrafts.current[row.id] = { ...draft, amount: numberWithCents.format(amount) }
+      setDrafts(current => ({ ...current, [row.id]: savedDrafts.current[row.id] }))
+      setToast('Gasto actualizado')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo actualizar el gasto')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  const removeRow = async (row) => {
+    if (!window.confirm('¿Querés borrar este gasto? Esta acción no se puede deshacer.')) return
+    setSavingId(row.id)
+    try {
+      await deleteExpenseLine(row.id)
+      setToast('Gasto eliminado')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo eliminar el gasto')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  return <div className="modal-backdrop expense-history-backdrop" onClick={onClose}>
+    <section className="bonus-history-modal expense-history-modal" role="dialog" aria-modal="true" aria-label="Gastos del turno" onClick={event => event.stopPropagation()}>
+      <header>
+        <div><h2><FileText size={16} /> Gastos del turno</h2><span>Editá los datos completos de cada movimiento.</span></div>
+        <button className="modal-close" type="button" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button>
+      </header>
+      <div className="expense-history-scroll">
+        {rows.length ? rows.map(row => {
+          const draft = drafts[row.id] || { typeId: String(row.tipo_gasto_id), amount: numberWithCents.format(row.monto), notes: row.notas || '' }
+          return <div className="expense-history-row" key={row.id}>
+            <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
+            <select aria-label="Tipo de gasto" value={draft.typeId} onChange={event => changeDraft(row.id, 'typeId', event.target.value)} disabled={savingId === row.id}>
+              {options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}
+            </select>
+            <input aria-label="Monto del gasto" inputMode="decimal" value={draft.amount} onChange={event => changeDraft(row.id, 'amount', event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveRow(row) }} disabled={savingId === row.id} />
+            <input aria-label="Notas del gasto" placeholder="Notas" value={draft.notes} onChange={event => changeDraft(row.id, 'notes', event.target.value)} onKeyDown={event => { if (event.key === 'Enter') saveRow(row) }} disabled={savingId === row.id} />
+            <button className="icon-button expense-save-button" type="button" title="Guardar cambios" aria-label="Guardar cambios" onClick={() => saveRow(row)} disabled={savingId === row.id}><Check size={14} /></button>
+            <button className="delete-button" type="button" title="Eliminar gasto" aria-label="Eliminar gasto" onClick={() => removeRow(row)} disabled={savingId === row.id}><Trash2 size={14} /></button>
+          </div>
+        }) : <EmptyInline text="Todavía no hay gastos registrados." />}
+      </div>
+      <footer><button className="close-button" type="button" onClick={onClose}>Listo <Check size={15} /></button></footer>
+    </section>
+  </div>
 }
 
 function BonusOperationCard({ shiftId, rows, onSaved, setToast }) {
