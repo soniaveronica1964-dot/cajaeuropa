@@ -764,10 +764,12 @@ input[type="time"] { color-scheme: dark; }
   grid-column: 2;
 }
 
-.top-panels .bonus-quick-panel { grid-column: 2; }
+.top-panels .bonus-quick-panel { grid-column: 2; align-self: start; min-height: 150px; }
 
 .top-panels .chip-summary {
   grid-column: 3;
+  align-self: start;
+  min-height: 150px;
 }
 
 .mini-card,
@@ -851,7 +853,7 @@ input[type="time"] { color-scheme: dark; }
   font-size: 10px;
 }
 
-.chip-final-list { display: grid; flex: 1; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); align-content: center; gap: 12px; align-items: start; }
+.chip-final-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 120px), 1fr)); align-content: start; gap: 12px; align-items: start; }
 .chip-final-field { display: grid; gap: 5px; min-width: 0; }
 .chip-final-field > span { color: #cbd5e1; font-size: 10px; font-weight: 600; text-align: center; }
 .chip-final-value {
@@ -1985,10 +1987,6 @@ input[type="time"] { color-scheme: dark; }
   min-width: 0;
   padding: 12px;
 }
-.bonus-quick-panel .panel-title { min-width: 0; margin-bottom: 8px; padding-bottom: 7px; }
-.bonus-quick-panel .panel-title > div { min-width: 0; }
-.bonus-quick-panel .panel-title h2 { font-size: 12px; }
-.bonus-quick-panel .panel-title small { white-space: nowrap; }
 .bonus-quick-controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 30px 30px 30px;

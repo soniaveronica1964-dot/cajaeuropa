@@ -557,7 +557,6 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
   }
 
   return <section className="panel bonus-quick-panel">
-    <PanelTitle icon={Gift} title="Bonos del turno" meta={`${rows.length} registros`} />
     <div className="bonus-quick-controls">
       <label className={`bonus-quick-amount bonus-type-${mode}`}>
         <span>$</span>
@@ -568,7 +567,6 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
       <button type="button" className="icon-button" title="Ver bonos del turno" aria-label="Ver bonos del turno" onClick={() => setHistoryOpen(true)}><Eye size={14} /></button>
     </div>
     <div className="bonus-recent-list">
-      <small>Últimos 5 bonos</small>
       {recentRows.filter(bonus => !hiddenRecentIds.has(bonus.id)).map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
         <span>{bonusTypeLabels[bonusTypeOf(bonus)]}</span>
         <div className="bonus-recent-value">
