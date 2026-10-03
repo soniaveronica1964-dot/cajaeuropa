@@ -32,7 +32,7 @@ async function trackedFetch(input, init) {
   } else if (pendingWrites === 0) {
     failedWrite = false
   }
-  if (pendingWrites === 0) publishSaveStatus({ status: 'saving' })
+  if (pendingWrites === 0) publishSaveStatus({ status: 'saving', source: 'request' })
   pendingWrites += 1
 
   let succeeded = false

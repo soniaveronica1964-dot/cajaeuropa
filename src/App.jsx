@@ -164,6 +164,7 @@ function App() {
   const [cashDiscrepancyPreview, setCashDiscrepancyPreview] = useState(null)
   const [saveStatus, setSaveStatus] = useState('saved')
   const [lastSavedAt, setLastSavedAt] = useState(readLastSavedAt)
+  const editStatusTimer = useRef(null)
 
   useEffect(() => {
     loadCurrentShiftData().then((freshData) => {
@@ -183,6 +184,10 @@ function App() {
   useEffect(() => {
     const handleSaveStatus = (event) => {
       const { status, savedAt } = event.detail || {}
+      if (editStatusTimer.current) {
+        clearTimeout(editStatusTimer.current)
+        editStatusTimer.current = null
+      }
       setSaveStatus(status || 'saved')
       if (status !== 'saved' || !savedAt) return
       setLastSavedAt(savedAt)
@@ -193,8 +198,29 @@ function App() {
       }
     }
     globalThis.addEventListener(DATABASE_SAVE_EVENT, handleSaveStatus)
-    return () => globalThis.removeEventListener(DATABASE_SAVE_EVENT, handleSaveStatus)
+    return () => {
+      globalThis.removeEventListener(DATABASE_SAVE_EVENT, handleSaveStatus)
+      if (editStatusTimer.current) clearTimeout(editStatusTimer.current)
+    }
   }, [])
+
+  const handleFieldModification = (event) => {
+    if (!event.target.matches('input, textarea, select')) return
+    if (editStatusTimer.current) {
+      clearTimeout(editStatusTimer.current)
+      editStatusTimer.current = null
+    }
+    setSaveStatus('saving')
+  }
+
+  const finishFieldModification = (event) => {
+    if (!event.target.matches('input, textarea, select')) return
+    if (editStatusTimer.current) clearTimeout(editStatusTimer.current)
+    editStatusTimer.current = setTimeout(() => {
+      editStatusTimer.current = null
+      setSaveStatus(current => current === 'saving' ? 'saved' : current)
+    }, 600)
+  }
 
   const activeLabel = navItems.find(([id]) => id === view)?.[1] ?? 'Caja'
   const lastSavedLabel = lastSavedAt
@@ -263,7 +289,14 @@ function App() {
   }
 
   return (
-    <div className="app-shell" data-theme={isLightTheme ? 'light' : 'dark'} style={{ '--accent': accentColor }}>
+    <div
+      className="app-shell"
+      data-theme={isLightTheme ? 'light' : 'dark'}
+      style={{ '--accent': accentColor }}
+      onInputCapture={handleFieldModification}
+      onChangeCapture={handleFieldModification}
+      onBlurCapture={finishFieldModification}
+    >
       <header className="topbar">
         <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
           <div className="brand-mark">{appImagePreview ? <img className="brand-image" src={appImagePreview} alt="" /> : <Banknote size={21} />}</div>
