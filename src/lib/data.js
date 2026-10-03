@@ -191,10 +191,11 @@ export async function createBonusLine(shiftId, { value, type = 'granted', notes 
   return data
 }
 
-export async function updateBonusLine(id, { type, notes }) {
+export async function updateBonusLine(id, { type, notes, value }) {
   const values = {}
   if (type !== undefined) Object.assign(values, bonusTypeFields(type))
   if (notes !== undefined) values.notas = notes?.trim() || null
+  if (value !== undefined) values.valor = Math.max(0, Number(value) || 0)
   const line = await updateRow('lineas_bonos', id, values)
   await recalculateBonusTotals(line.bono_id)
   return line

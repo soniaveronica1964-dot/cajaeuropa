@@ -488,6 +488,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
   const [mode, setMode] = useState('granted')
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [savingRecentId, setSavingRecentId] = useState(null)
   const [historyOpen, setHistoryOpen] = useState(false)
   const recentRows = rows.slice(0, 5)
   const modeOrder = ['granted', 'recovered', 'publicity']
@@ -518,6 +519,34 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
     }
   }
 
+  const saveRecentAmount = async (event, bonus) => {
+    if (event.key !== 'Enter') return
+    event.preventDefault()
+    const input = event.currentTarget
+    const amount = parseLocalizedAmount(input.value)
+    if (amount == null || amount < 0) {
+      setToast('Ingresá un monto válido')
+      return
+    }
+
+    setSavingRecentId(bonus.id)
+    try {
+      if (amount === 0) {
+        await deleteBonusLine(bonus.id)
+        setToast('Bono eliminado')
+      } else {
+        await updateBonusLine(bonus.id, { value: amount })
+        input.value = moneyWithCents.format(amount)
+        setToast('Bono actualizado')
+      }
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar el bono')
+    } finally {
+      setSavingRecentId(null)
+    }
+  }
+
   return <section className="panel bonus-quick-panel">
     <PanelTitle icon={Gift} title="Bonos del turno" meta={`${rows.length} registros`} />
     <div className="bonus-quick-controls">
@@ -533,8 +562,18 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
       <small>Últimos 5 bonos</small>
       {recentRows.map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
         <span>{bonusTypeLabels[bonusTypeOf(bonus)]}</span>
-        <time>{new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
-        <b>{moneyWithCents.format(bonus.valor)}</b>
+        <div className="bonus-recent-value">
+          <time>{new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
+          <span aria-hidden="true">-</span>
+          <input
+            aria-label={`Monto de bono ${bonusTypeLabels[bonusTypeOf(bonus)]}`}
+            defaultValue={moneyWithCents.format(bonus.valor)}
+            inputMode="decimal"
+            disabled={savingRecentId === bonus.id}
+            onFocus={event => { event.currentTarget.value = numberWithCents.format(bonus.valor); event.currentTarget.select() }}
+            onKeyDown={event => saveRecentAmount(event, bonus)}
+          />
+        </div>
       </div>)}
       {!recentRows.length && <span className="bonus-recent-empty">Sin bonos registrados</span>}
     </div>

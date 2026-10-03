@@ -410,6 +410,7 @@ CREATE TABLE bonos (
     UNIQUE (turno_id)
 );
 
+
 CREATE TABLE lineas_bonos (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     bono_id BIGINT NOT NULL REFERENCES bonos(id)
