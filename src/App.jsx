@@ -1024,7 +1024,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
           {options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}
         </select>
         : <input aria-label="Usuario" placeholder="Usuario" value={detail} onChange={(event) => setDetail(event.target.value)} disabled={saving} />}
-      <input aria-label="Monto" inputMode="decimal" placeholder="$ Monto" value={value} onChange={(event) => { if (kind !== 'expenses' || !event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (kind === 'expenses' && event.key === '-') event.preventDefault() }} disabled={saving} />
+      <input aria-label="Monto" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
       <input aria-label="Notas" placeholder="Notas" value={notes} onChange={(event) => setNotes(event.target.value)} disabled={saving} />
       <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}><Send size={14} /></button>
     </form>
@@ -1243,7 +1243,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
     <PanelTitle icon={Banknote} title="Cargas T.A." meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title="Ver cargas T.A." aria-label="Ver cargas T.A." onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
     <form className="operation-form" onSubmit={add}>
       <input aria-label="Usuario" placeholder="Usuario" value={user} onChange={event => setUser(event.target.value)} disabled={saving} />
-      <input aria-label="Monto de carga T.A." inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
+      <input aria-label="Monto de carga T.A." inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
       <input aria-label="Notas de carga T.A." placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       <button className="operation-submit" type="submit" title="Agregar carga T.A." aria-label="Agregar carga T.A." disabled={saving}><Send size={14} /></button>
     </form>
@@ -1292,7 +1292,7 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
       <select aria-label="Cuenta donde se encontró dinero" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
         {accounts.length ? accounts.map(account => <option value={account.id} key={account.id}>{accountName(account)}</option>) : <option value="">Sin cuentas</option>}
       </select>
-      <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
+      <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
       <input aria-label="Notas del dinero encontrado" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       <button className="operation-submit" type="submit" title="Agregar dinero encontrado" aria-label="Agregar dinero encontrado" disabled={saving || !accounts.length}><Send size={14} /></button>
     </form>

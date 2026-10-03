@@ -8,6 +8,13 @@ function requireSupabase() {
   if (!supabase) throw new Error('Supabase no está configurado')
 }
 
+function requireNonNegativeAmount(value) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) throw new Error('Ingresá un monto válido')
+  if (amount < 0) throw new Error('El monto no puede ser negativo')
+  return amount
+}
+
 async function query(table, columns, configure = () => {}) {
   requireSupabase()
   let request = supabase.from(table).select(columns)
@@ -219,7 +226,8 @@ export async function deleteBonusLine(id) {
 
 export async function createTip(shiftId, { value, user, notes }) {
   requireSupabase()
-  const { data, error } = await supabase.from('propinas').insert({ turno_id: shiftId, monto: Number(value) || 0, usuario_texto: user?.trim() || null, notas: notes?.trim() || null }).select().single()
+  const amount = requireNonNegativeAmount(value)
+  const { data, error } = await supabase.from('propinas').insert({ turno_id: shiftId, monto: amount, usuario_texto: user?.trim() || null, notas: notes?.trim() || null }).select().single()
   if (error) throw error
   return data
 }
@@ -227,8 +235,7 @@ export async function createTip(shiftId, { value, user, notes }) {
 export async function createExpense(shiftId, { typeId, value, notes }) {
   requireSupabase()
   if (!typeId) throw new Error('Seleccioná un tipo de gasto')
-  const amount = Number(value)
-  if (!Number.isFinite(amount) || amount < 0) throw new Error('El monto del gasto no puede ser negativo')
+  const amount = requireNonNegativeAmount(value)
   const { data, error } = await supabase.from('gastos').insert({ turno_id: shiftId, tipo_gasto_id: typeId, monto: amount, notas: notes?.trim() || null }).select().single()
   if (error) throw error
   return data
@@ -254,10 +261,11 @@ export async function deleteExpenseLine(id) {
 
 export async function createTaCharge(shiftId, { value, user, notes }) {
   requireSupabase()
+  const amount = requireNonNegativeAmount(value)
   const { data, error } = await supabase.from('cargas_ta').insert({
     turno_id: shiftId,
     usuario_texto: user?.trim() || null,
-    monto: Number(value) || 0,
+    monto: amount,
     notas: notes?.trim() || null,
   }).select().single()
   if (error) throw error
@@ -266,9 +274,10 @@ export async function createTaCharge(shiftId, { value, user, notes }) {
 
 export async function createFoundMoney({ accountShiftId, value, notes }) {
   requireSupabase()
+  const amount = requireNonNegativeAmount(value)
   const { data, error } = await supabase.from('dinero_encontrado').insert({
     cuenta_x_turno_id: accountShiftId,
-    monto: Number(value) || 0,
+    monto: amount,
     notas: notes?.trim() || null,
   }).select().single()
   if (error) throw error
