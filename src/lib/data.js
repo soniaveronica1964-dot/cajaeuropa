@@ -173,21 +173,24 @@ function bonusTypeFields(type) {
   return { recuperado: type === 'recovered', es_publicidad: type === 'publicity' }
 }
 
-export async function createBonusLine(shiftId, { value, type = 'granted', notes }) {
+export async function createBonusLine(shiftId, { value, type = 'granted', notes, bonusId }) {
   requireSupabase()
-  const { data: bonus, error: bonusError } = await supabase.from('bonos')
-    .upsert({ turno_id: shiftId }, { onConflict: 'turno_id' })
-    .select('id')
-    .single()
-  if (bonusError) throw bonusError
+  if (bonusId == null) {
+    const { data: bonus, error: bonusError } = await supabase.from('bonos')
+      .upsert({ turno_id: shiftId }, { onConflict: 'turno_id' })
+      .select('id')
+      .single()
+    if (bonusError) throw bonusError
+    bonusId = bonus.id
+  }
   const { data, error } = await supabase.from('lineas_bonos').insert({
-    bono_id: bonus.id,
+    bono_id: bonusId,
     valor: Math.max(0, Number(value) || 0),
     ...bonusTypeFields(type),
     notas: notes?.trim() || null,
   }).select().single()
   if (error) throw error
-  await recalculateBonusTotals(bonus.id)
+  await recalculateBonusTotals(bonusId)
   return data
 }
 

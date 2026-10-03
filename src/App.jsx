@@ -489,6 +489,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
   const [savingRecentId, setSavingRecentId] = useState(null)
+  const [hiddenRecentIds, setHiddenRecentIds] = useState(() => new Set())
   const [historyOpen, setHistoryOpen] = useState(false)
   const recentRows = rows.slice(0, 5)
   const modeOrder = ['granted', 'recovered', 'publicity']
@@ -507,7 +508,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
     const type = key === '+' ? 'recovered' : key === '-' ? 'publicity' : mode
     setSaving(true)
     try {
-      await createBonusLine(shiftId, { value: amount, type })
+      await createBonusLine(shiftId, { value: amount, type, bonusId: rows[0]?.bono_id })
       setValue('')
       setMode(type)
       setToast(`${bonusTypeLabels[type]} guardado`)
@@ -532,6 +533,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
     setSavingRecentId(bonus.id)
     try {
       if (amount === 0) {
+        setHiddenRecentIds(current => new Set(current).add(bonus.id))
         await deleteBonusLine(bonus.id)
         setToast('Bono eliminado')
       } else {
@@ -541,6 +543,13 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
       }
       onSaved()
     } catch (error) {
+      if (amount === 0) {
+        setHiddenRecentIds(current => {
+          const next = new Set(current)
+          next.delete(bonus.id)
+          return next
+        })
+      }
       setToast(error.message || 'No se pudo guardar el bono')
     } finally {
       setSavingRecentId(null)
@@ -560,7 +569,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
     </div>
     <div className="bonus-recent-list">
       <small>Últimos 5 bonos</small>
-      {recentRows.map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
+      {recentRows.filter(bonus => !hiddenRecentIds.has(bonus.id)).map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
         <span>{bonusTypeLabels[bonusTypeOf(bonus)]}</span>
         <div className="bonus-recent-value">
           <time>{new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
