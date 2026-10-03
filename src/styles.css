@@ -1400,6 +1400,7 @@ input[type="time"] { color-scheme: dark; }
 .operation-recent-row.bonus-type-publicity b { color: #82b8ff; }
 .operation-card .empty-inline { padding: 7px 2px; font-size: 9px; }
 .operation-total { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 8px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
+.operation-card > .operation-total { margin-top: auto; }
 .operation-total strong { color: var(--text); font: 10px 'DM Mono', monospace; }
 .operation-bonus-card { grid-row: span 2; min-height: 610px; }
 .operation-bonus-card .operation-recent-list { gap: 1px; }

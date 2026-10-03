@@ -996,7 +996,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
       <b>{money.format(row.monto)}</b>
     </div>)}
     {!rows.length && <EmptyInline text="No hay movimientos registrados." />}
-    <footer>Total <strong>{money.format(amount)}</strong></footer>
+    <footer className="operation-total">Total <strong>{money.format(amount)}</strong></footer>
     {historyOpen && (kind === 'expenses'
       ? <ExpenseHistoryModal rows={rows} options={options} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />
       : <OperationHistoryModal title="Propinas del turno" items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, label: row.usuario_texto || 'Propina', notes: row.notas, amount: row.monto }))} onClose={() => setHistoryOpen(false)} />)}
