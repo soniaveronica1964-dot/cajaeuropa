@@ -977,7 +977,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
     }
   }
   return <section className={`panel operation-card movement-card movement-card-${kind}`}>
-    <PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} action={kind === 'expenses' && <button className="icon-button" type="button" title="Ver gastos" aria-label="Ver gastos" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
+    <PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title={`Ver ${title.toLowerCase()}`} aria-label={`Ver ${title.toLowerCase()}`} onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
     <form className="entry-form" onSubmit={(event) => { event.preventDefault(); add() }}>
       {kind === 'expenses'
         ? <select aria-label="Tipo de gasto" value={typeId} onChange={(event) => setTypeId(event.target.value)} disabled={saving || !options.length}>
@@ -986,7 +986,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
         : <input aria-label="Usuario" placeholder="Usuario" value={detail} onChange={(event) => setDetail(event.target.value)} disabled={saving} />}
       <input aria-label="Monto" inputMode="decimal" placeholder="$ Monto" value={value} onChange={(event) => setValue(event.target.value)} disabled={saving} />
       <input aria-label="Notas" placeholder="Notas" value={notes} onChange={(event) => setNotes(event.target.value)} disabled={saving} />
-      <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}>{kind === 'expenses' ? <Send size={14} /> : <Plus size={14} />}</button>
+      <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}><Send size={14} /></button>
     </form>
     <small className="section-kicker">{kind === 'expenses' ? 'Últimos gastos' : 'Últimas propinas'}</small>
     {rows.slice(0, 10).map(row => <div className="movement-row" key={row.id}>
@@ -997,7 +997,9 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
     </div>)}
     {!rows.length && <EmptyInline text="No hay movimientos registrados." />}
     <footer>Total <strong>{money.format(amount)}</strong></footer>
-    {kind === 'expenses' && historyOpen && <ExpenseHistoryModal rows={rows} options={options} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />}
+    {historyOpen && (kind === 'expenses'
+      ? <ExpenseHistoryModal rows={rows} options={options} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />
+      : <OperationHistoryModal title="Propinas del turno" items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, label: row.usuario_texto || 'Propina', notes: row.notas, amount: row.monto }))} onClose={() => setHistoryOpen(false)} />)}
   </section>
 }
 
@@ -1104,11 +1106,31 @@ function ExpenseHistoryModal({ rows, options, onClose, onSaved, setToast }) {
   </div>
 }
 
+function OperationHistoryModal({ title, items, onClose }) {
+  return <div className="modal-backdrop operation-history-backdrop" onClick={onClose}>
+    <section className="bonus-history-modal operation-history-modal" role="dialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}>
+      <header>
+        <div><h2><Eye size={16} /> {title}</h2><span>{items.length} registros</span></div>
+        <button className="modal-close" type="button" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button>
+      </header>
+      <div className="operation-history-scroll">
+        {items.length ? items.map(item => <div className="operation-history-row" key={item.id}>
+          <time>{item.createdAt ? new Date(item.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '—'}</time>
+          <span>{[item.label, item.notes].filter(Boolean).join(' · ')}</span>
+          <b>{money.format(item.amount)}</b>
+        </div>) : <EmptyInline text="Todavía no hay registros." />}
+      </div>
+      <footer><button className="close-button" type="button" onClick={onClose}>Listo <Check size={15} /></button></footer>
+    </section>
+  </div>
+}
+
 function BonusOperationCard({ shiftId, rows, onSaved, setToast }) {
   const [value, setValue] = useState('')
   const [notes, setNotes] = useState('')
   const [type, setType] = useState('granted')
   const [saving, setSaving] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const add = async (event) => {
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
@@ -1127,7 +1149,7 @@ function BonusOperationCard({ shiftId, rows, onSaved, setToast }) {
     }
   }
   return <section className="panel operation-card operation-bonus-card">
-    <PanelTitle icon={Gift} title="Bonos" meta={`${rows.length} registros`} />
+    <PanelTitle icon={Gift} title="Bonos" meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title="Ver bonos" aria-label="Ver bonos" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
     <form className="operation-form" onSubmit={add}>
       <select aria-label="Tipo de bono" value={type} onChange={event => setType(event.target.value)} disabled={saving}>
         <option value="granted">Otorgado</option>
@@ -1136,7 +1158,7 @@ function BonusOperationCard({ shiftId, rows, onSaved, setToast }) {
       </select>
       <input aria-label="Monto del bono" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
       <input aria-label="Notas del bono" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
-      <button className="operation-submit" type="submit" title="Agregar bono" aria-label="Agregar bono" disabled={saving}><Plus size={14} /></button>
+      <button className="operation-submit" type="submit" title="Agregar bono" aria-label="Agregar bono" disabled={saving}><Send size={14} /></button>
     </form>
     <div className="operation-recent-list">
       <small>Últimos bonos</small>
@@ -1148,6 +1170,7 @@ function BonusOperationCard({ shiftId, rows, onSaved, setToast }) {
       {!rows.length && <EmptyInline text="Sin bonos registrados." />}
     </div>
     <footer className="operation-total">Bonos netos <strong>{money.format(bonusNetTotal(rows))}</strong></footer>
+    {historyOpen && <OperationHistoryModal title="Bonos del turno" items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, label: bonusTypeLabels[bonusTypeOf(row)], notes: row.notas, amount: row.valor }))} onClose={() => setHistoryOpen(false)} />}
   </section>
 }
 
@@ -1156,6 +1179,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
   const [value, setValue] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const add = async (event) => {
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
@@ -1176,12 +1200,12 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
   }
   const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
   return <section className="panel operation-card operation-ta-charges">
-    <PanelTitle icon={Banknote} title="Cargas T.A." meta={`${rows.length} registros`} />
+    <PanelTitle icon={Banknote} title="Cargas T.A." meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title="Ver cargas T.A." aria-label="Ver cargas T.A." onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
     <form className="operation-form" onSubmit={add}>
       <input aria-label="Usuario" placeholder="Usuario" value={user} onChange={event => setUser(event.target.value)} disabled={saving} />
       <input aria-label="Monto de carga T.A." inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
       <input aria-label="Notas de carga T.A." placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
-      <button className="operation-submit" type="submit" title="Agregar carga T.A." aria-label="Agregar carga T.A." disabled={saving}><Plus size={14} /></button>
+      <button className="operation-submit" type="submit" title="Agregar carga T.A." aria-label="Agregar carga T.A." disabled={saving}><Send size={14} /></button>
     </form>
     <div className="operation-recent-list">
       <small>Últimas cargas</small>
@@ -1192,6 +1216,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
     </div>
     <footer className="operation-total">Total <strong>{money.format(total)}</strong></footer>
+    {historyOpen && <OperationHistoryModal title="Cargas T.A. del turno" items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, label: row.usuario_texto || 'Carga T.A.', notes: row.notas, amount: row.monto }))} onClose={() => setHistoryOpen(false)} />}
   </section>
 }
 
@@ -1200,6 +1225,7 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
   const [value, setValue] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const accountName = account => `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}`
   const add = async (event) => {
     event.preventDefault()
@@ -1221,14 +1247,14 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
   }
   const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
   return <section className="panel operation-card operation-found-money">
-    <PanelTitle icon={Search} title="Dinero encontrado" meta={`${rows.length} registros`} />
+    <PanelTitle icon={Search} title="Dinero encontrado" meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title="Ver dinero encontrado" aria-label="Ver dinero encontrado" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
     <form className="operation-form" onSubmit={add}>
       <select aria-label="Cuenta donde se encontró dinero" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
         {accounts.length ? accounts.map(account => <option value={account.id} key={account.id}>{accountName(account)}</option>) : <option value="">Sin cuentas</option>}
       </select>
       <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
       <input aria-label="Notas del dinero encontrado" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
-      <button className="operation-submit" type="submit" title="Agregar dinero encontrado" aria-label="Agregar dinero encontrado" disabled={saving || !accounts.length}><Plus size={14} /></button>
+      <button className="operation-submit" type="submit" title="Agregar dinero encontrado" aria-label="Agregar dinero encontrado" disabled={saving || !accounts.length}><Send size={14} /></button>
     </form>
     <div className="operation-recent-list">
       <small>Últimos registros</small>
@@ -1239,6 +1265,11 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
     </div>
     <footer className="operation-total">Total <strong>{money.format(total)}</strong></footer>
+    {historyOpen && <OperationHistoryModal title="Dinero encontrado del turno" items={rows.map(row => {
+      const account = accounts.find(item => String(item.id) === String(row.cuenta_x_turno_id))
+      const label = account ? accountName(account) : 'Dinero encontrado'
+      return { id: row.id, createdAt: row.fecha_hora_creacion, label, notes: row.notas, amount: row.monto }
+    })} onClose={() => setHistoryOpen(false)} />}
   </section>
 }
 
