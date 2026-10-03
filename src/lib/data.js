@@ -232,6 +232,20 @@ export async function createTip(shiftId, { value, user, notes }) {
   return data
 }
 
+export async function updateTipLine(id, { user, value, notes }) {
+  const values = {}
+  if (user !== undefined) values.usuario_texto = user?.trim() || null
+  if (value !== undefined) values.monto = requireNonNegativeAmount(value)
+  if (notes !== undefined) values.notas = notes?.trim() || null
+  return updateRow('propinas', id, values)
+}
+
+export async function deleteTipLine(id) {
+  requireSupabase()
+  const { error } = await supabase.from('propinas').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createExpense(shiftId, { typeId, value, notes }) {
   requireSupabase()
   if (!typeId) throw new Error('Seleccioná un tipo de gasto')
@@ -272,6 +286,20 @@ export async function createTaCharge(shiftId, { value, user, notes }) {
   return data
 }
 
+export async function updateTaChargeLine(id, { user, value, notes }) {
+  const values = {}
+  if (user !== undefined) values.usuario_texto = user?.trim() || null
+  if (value !== undefined) values.monto = requireNonNegativeAmount(value)
+  if (notes !== undefined) values.notas = notes?.trim() || null
+  return updateRow('cargas_ta', id, values)
+}
+
+export async function deleteTaChargeLine(id) {
+  requireSupabase()
+  const { error } = await supabase.from('cargas_ta').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createFoundMoney({ accountShiftId, value, notes }) {
   requireSupabase()
   const amount = requireNonNegativeAmount(value)
@@ -282,6 +310,20 @@ export async function createFoundMoney({ accountShiftId, value, notes }) {
   }).select().single()
   if (error) throw error
   return data
+}
+
+export async function updateFoundMoneyLine(id, { accountShiftId, value, notes }) {
+  const values = {}
+  if (accountShiftId !== undefined) values.cuenta_x_turno_id = accountShiftId
+  if (value !== undefined) values.monto = requireNonNegativeAmount(value)
+  if (notes !== undefined) values.notas = notes?.trim() || null
+  return updateRow('dinero_encontrado', id, values)
+}
+
+export async function deleteFoundMoneyLine(id) {
+  requireSupabase()
+  const { error } = await supabase.from('dinero_encontrado').delete().eq('id', id)
+  if (error) throw error
 }
 
 export async function saveShiftNotes(shiftId, { general, inheritable }) {

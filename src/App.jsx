@@ -52,7 +52,13 @@ import {
   createShiftType,
   createTip,
   deleteExpenseLine,
+  deleteTipLine,
+  deleteTaChargeLine,
+  deleteFoundMoneyLine,
   updateExpenseLine,
+  updateTipLine,
+  updateTaChargeLine,
+  updateFoundMoneyLine,
   createTaCharge,
   createFoundMoney,
   createTransferMovement,
@@ -1017,7 +1023,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
     }
   }
   return <section className={`panel operation-card movement-card movement-card-${kind}`}>
-    <PanelTitle icon={Icon} title={title} meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title={`Ver ${title.toLowerCase()}`} aria-label={`Ver ${title.toLowerCase()}`} onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
+    <PanelTitle icon={Icon} title={title} action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title={`Ver ${title.toLowerCase()}`} aria-label={`Ver ${title.toLowerCase()}`} onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
     <form className="entry-form" onSubmit={(event) => { event.preventDefault(); add() }}>
       {kind === 'expenses'
         ? <select aria-label="Tipo de gasto" value={typeId} onChange={(event) => setTypeId(event.target.value)} disabled={saving || !options.length}>
@@ -1039,7 +1045,15 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
     <footer className="operation-total">Total <strong>{money.format(amount)}</strong></footer>
     {historyOpen && (kind === 'expenses'
       ? <ExpenseHistoryModal rows={rows} options={options} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />
-      : <OperationHistoryModal title="Propinas del turno" items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, label: row.usuario_texto || 'Propina', notes: row.notas, amount: row.monto }))} onClose={() => setHistoryOpen(false)} />)}
+      : <OperationHistoryModal
+        title="Propinas del turno"
+        items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, label: row.usuario_texto || 'Propina', detail: row.usuario_texto || '', notes: row.notas || '', amount: row.monto }))}
+        onSaveItem={(item, draft, amount) => updateTipLine(item.id, { user: draft.detail, value: amount, notes: draft.notes })}
+        onDeleteItem={item => deleteTipLine(item.id)}
+        onSaved={onSaved}
+        setToast={setToast}
+        onClose={() => setHistoryOpen(false)}
+      />)}
   </section>
 }
 
@@ -1146,21 +1160,117 @@ function ExpenseHistoryModal({ rows, options, onClose, onSaved, setToast }) {
   </div>
 }
 
-function OperationHistoryModal({ title, items, onClose }) {
-  return <div className="modal-backdrop operation-history-backdrop" onClick={onClose}>
+function OperationHistoryModal({ title, items, onClose, onSaveItem, onDeleteItem, onSaved, setToast, detailOptions = null, detailLabel = 'Usuario' }) {
+  const createDrafts = () => Object.fromEntries(items.map(item => [item.id, {
+    detail: item.detail || '',
+    detailId: item.detailId == null ? '' : String(item.detailId),
+    amount: numberWithCents.format(item.amount),
+    notes: item.notes || '',
+  }]))
+  const [drafts, setDrafts] = useState(createDrafts)
+  const [saving, setSaving] = useState(false)
+  const [savingId, setSavingId] = useState(null)
+  const savedDrafts = useRef(createDrafts())
+  const editable = Boolean(onSaveItem)
+
+  const changeDraft = (id, field, value) => {
+    setDrafts(current => ({ ...current, [id]: { ...current[id], [field]: value } }))
+  }
+
+  const saveAll = async () => {
+    const pending = items.flatMap(item => {
+      const draft = drafts[item.id]
+      const saved = savedDrafts.current[item.id]
+      if (!draft || (saved && saved.detail === draft.detail && saved.detailId === draft.detailId && saved.amount === draft.amount && saved.notes === draft.notes)) return []
+      return [{ item, draft, amount: parseLocalizedAmount(draft.amount) }]
+    })
+    if (pending.some(entry => entry.amount == null || entry.amount < 0)) {
+      setToast('Ingresá un monto válido, igual o mayor a cero')
+      return
+    }
+    if (detailOptions && pending.some(entry => !entry.draft.detailId)) {
+      setToast('Seleccioná una cuenta')
+      return
+    }
+    if (!pending.length) {
+      onClose()
+      return
+    }
+
+    setSaving(true)
+    try {
+      const results = await Promise.allSettled(pending.map(({ item, draft, amount }) => onSaveItem(item, draft, amount)))
+      const savedEntries = []
+      results.forEach((result, index) => {
+        if (result.status !== 'fulfilled') return
+        const { item, draft, amount } = pending[index]
+        const savedDraft = { ...draft, amount: numberWithCents.format(amount) }
+        savedDrafts.current[item.id] = savedDraft
+        savedEntries.push([item.id, savedDraft])
+      })
+      if (savedEntries.length) {
+        setDrafts(current => {
+          const next = { ...current }
+          savedEntries.forEach(([id, draft]) => { next[id] = draft })
+          return next
+        })
+        onSaved?.()
+      }
+      const failedResult = results.find(result => result.status === 'rejected')
+      if (failedResult) {
+        setToast(failedResult.reason?.message || 'No se pudieron guardar todos los cambios')
+        return
+      }
+      setToast('Cambios guardados')
+      onClose()
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const removeItem = async item => {
+    if (!onDeleteItem || !window.confirm('¿Querés borrar este registro? Esta acción no se puede deshacer.')) return
+    setSavingId(item.id)
+    try {
+      await onDeleteItem(item)
+      setToast('Registro eliminado')
+      onSaved?.()
+    } catch (error) {
+      setToast(error.message || 'No se pudo eliminar el registro')
+    } finally {
+      setSavingId(null)
+    }
+  }
+
+  return <div className="modal-backdrop operation-history-backdrop" onClick={() => !saving && !savingId && onClose()}>
     <section className="bonus-history-modal operation-history-modal" role="dialog" aria-modal="true" aria-label={title} onClick={event => event.stopPropagation()}>
       <header>
         <div><h2><Eye size={16} /> {title}</h2><span>{items.length} registros</span></div>
-        <button className="modal-close" type="button" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button>
+        <button className="modal-close" type="button" title="Cerrar" aria-label="Cerrar" onClick={onClose} disabled={saving || Boolean(savingId)}><X size={17} /></button>
       </header>
       <div className="operation-history-scroll">
-        {items.length ? items.map(item => <div className="operation-history-row" key={item.id}>
+        {items.length ? items.map(item => {
+          const draft = drafts[item.id] || { detail: item.detail || '', detailId: item.detailId == null ? '' : String(item.detailId), amount: numberWithCents.format(item.amount), notes: item.notes || '' }
+          return <div className={`operation-history-row ${editable ? 'editable' : ''}`} key={item.id}>
           <time>{item.createdAt ? new Date(item.createdAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '—'}</time>
-          <span>{[item.label, item.notes].filter(Boolean).join(' · ')}</span>
-          <b>{money.format(item.amount)}</b>
-        </div>) : <EmptyInline text="Todavía no hay registros." />}
+          {editable ? <>
+            {detailOptions
+              ? <select aria-label={detailLabel} value={draft.detailId} onChange={event => changeDraft(item.id, 'detailId', event.target.value)} disabled={saving || savingId === item.id}>
+                <option value="">Seleccionar cuenta</option>
+                {detailOptions.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}
+              </select>
+              : <input aria-label={detailLabel} placeholder={detailLabel} value={draft.detail} onChange={event => changeDraft(item.id, 'detail', event.target.value)} disabled={saving || savingId === item.id} />}
+            <input aria-label="Monto" inputMode="decimal" value={draft.amount} onChange={event => { if (!event.target.value.includes('-')) changeDraft(item.id, 'amount', event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving || savingId === item.id} />
+            <input aria-label="Notas" placeholder="Notas" value={draft.notes} onChange={event => changeDraft(item.id, 'notes', event.target.value)} disabled={saving || savingId === item.id} />
+            <button className="delete-button" type="button" title="Eliminar registro" aria-label="Eliminar registro" onClick={() => removeItem(item)} disabled={saving || savingId === item.id}><Trash2 size={14} /></button>
+          </> : <>
+            <span>{[item.label, item.notes].filter(Boolean).join(' · ')}</span>
+            <b>{money.format(item.amount)}</b>
+          </>}
+          </div>
+        }) : <EmptyInline text="Todavía no hay registros." />}
       </div>
-      <footer><button className="close-button" type="button" onClick={onClose}>Listo <Check size={15} /></button></footer>
+      <footer><button className="close-button" type="button" onClick={editable ? saveAll : onClose} disabled={saving || Boolean(savingId)}>{saving ? 'Guardando...' : 'Listo'} <Check size={15} /></button></footer>
     </section>
   </div>
 }
@@ -1189,7 +1299,7 @@ function BonusOperationCard({ shiftId, rows, onSaved, setToast }) {
     }
   }
   return <section className="panel operation-card operation-bonus-card">
-    <PanelTitle icon={Gift} title="Bonos" meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title="Ver bonos" aria-label="Ver bonos" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
+    <PanelTitle icon={Gift} title="Bonos" action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title="Ver bonos" aria-label="Ver bonos" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
     <form className="operation-form" onSubmit={add}>
       <select aria-label="Tipo de bono" value={type} onChange={event => setType(event.target.value)} disabled={saving}>
         <option value="granted">Otorgado</option>
@@ -1240,7 +1350,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
   }
   const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
   return <section className="panel operation-card operation-ta-charges">
-    <PanelTitle icon={Banknote} title="Cargas T.A." meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title="Ver cargas T.A." aria-label="Ver cargas T.A." onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
+    <PanelTitle icon={Banknote} title="Cargas T.A." action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title="Ver cargas T.A." aria-label="Ver cargas T.A." onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
     <form className="operation-form" onSubmit={add}>
       <input aria-label="Usuario" placeholder="Usuario" value={user} onChange={event => setUser(event.target.value)} disabled={saving} />
       <input aria-label="Monto de carga T.A." inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
@@ -1256,7 +1366,15 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
     </div>
     <footer className="operation-total">Total <strong>{money.format(total)}</strong></footer>
-    {historyOpen && <OperationHistoryModal title="Cargas T.A. del turno" items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, label: row.usuario_texto || 'Carga T.A.', notes: row.notas, amount: row.monto }))} onClose={() => setHistoryOpen(false)} />}
+    {historyOpen && <OperationHistoryModal
+      title="Cargas T.A. del turno"
+      items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, detail: row.usuario_texto || '', notes: row.notas || '', amount: row.monto }))}
+      onSaveItem={(item, draft, amount) => updateTaChargeLine(item.id, { user: draft.detail, value: amount, notes: draft.notes })}
+      onDeleteItem={item => deleteTaChargeLine(item.id)}
+      onSaved={onSaved}
+      setToast={setToast}
+      onClose={() => setHistoryOpen(false)}
+    />}
   </section>
 }
 
@@ -1287,7 +1405,7 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
   }
   const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
   return <section className="panel operation-card operation-found-money">
-    <PanelTitle icon={Search} title="Dinero encontrado" meta={`${rows.length} registros`} action={<button className="icon-button" type="button" title="Ver dinero encontrado" aria-label="Ver dinero encontrado" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>} />
+    <PanelTitle icon={Search} title="Dinero encontrado" action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title="Ver dinero encontrado" aria-label="Ver dinero encontrado" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
     <form className="operation-form" onSubmit={add}>
       <select aria-label="Cuenta donde se encontró dinero" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
         {accounts.length ? accounts.map(account => <option value={account.id} key={account.id}>{accountName(account)}</option>) : <option value="">Sin cuentas</option>}
@@ -1305,11 +1423,17 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
     </div>
     <footer className="operation-total">Total <strong>{money.format(total)}</strong></footer>
-    {historyOpen && <OperationHistoryModal title="Dinero encontrado del turno" items={rows.map(row => {
-      const account = accounts.find(item => String(item.id) === String(row.cuenta_x_turno_id))
-      const label = account ? accountName(account) : 'Dinero encontrado'
-      return { id: row.id, createdAt: row.fecha_hora_creacion, label, notes: row.notas, amount: row.monto }
-    })} onClose={() => setHistoryOpen(false)} />}
+    {historyOpen && <OperationHistoryModal
+      title="Dinero encontrado del turno"
+      items={rows.map(row => ({ id: row.id, createdAt: row.fecha_hora_creacion, detailId: row.cuenta_x_turno_id, detail: accountName(accounts.find(account => String(account.id) === String(row.cuenta_x_turno_id)) || {}), notes: row.notas || '', amount: row.monto }))}
+      detailLabel="Cuenta"
+      detailOptions={accounts.map(account => ({ value: String(account.id), label: accountName(account) }))}
+      onSaveItem={(item, draft, amount) => updateFoundMoneyLine(item.id, { accountShiftId: draft.detailId, value: amount, notes: draft.notes })}
+      onDeleteItem={item => deleteFoundMoneyLine(item.id)}
+      onSaved={onSaved}
+      setToast={setToast}
+      onClose={() => setHistoryOpen(false)}
+    />}
   </section>
 }
 
