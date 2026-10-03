@@ -1336,6 +1336,10 @@ input[type="time"] { color-scheme: dark; }
   min-width: 0;
   padding: 12px;
 }
+.movement-card-expenses,
+.movement-card-tips,
+.operation-ta-charges,
+.operation-found-money { min-height: 300px; }
 .operation-card .panel-title {
   gap: 8px;
   margin-bottom: 9px;
@@ -1395,7 +1399,7 @@ input[type="time"] { color-scheme: dark; }
 .operation-card .empty-inline { padding: 7px 2px; font-size: 9px; }
 .operation-total { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 8px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
 .operation-total strong { color: var(--text); font: 10px 'DM Mono', monospace; }
-.operation-bonus-card { grid-row: span 2; }
+.operation-bonus-card { grid-row: span 2; min-height: 610px; }
 .operation-bonus-card .operation-recent-list { gap: 1px; }
 .movement-card-expenses .entry-form select { padding-right: 5px; }
 .movement-card-expenses .send-button,
@@ -1454,7 +1458,7 @@ input[type="time"] { color-scheme: dark; }
   }
 
   .operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .operation-bonus-card { grid-row: auto; }
+  .operation-bonus-card { grid-row: auto; min-height: 300px; }
 }
 
 @media (max-width: 700px) {

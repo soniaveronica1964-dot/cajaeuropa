@@ -173,6 +173,7 @@ function App() {
   const [saveStatus, setSaveStatus] = useState('saved')
   const [lastSavedAt, setLastSavedAt] = useState(readLastSavedAt)
   const editStatusTimer = useRef(null)
+  const editStatusFrame = useRef(null)
 
   useEffect(() => {
     loadCurrentShiftData().then((freshData) => {
@@ -196,6 +197,10 @@ function App() {
         clearTimeout(editStatusTimer.current)
         editStatusTimer.current = null
       }
+      if (editStatusFrame.current) {
+        cancelAnimationFrame(editStatusFrame.current)
+        editStatusFrame.current = null
+      }
       setSaveStatus(status || 'saved')
       if (status !== 'saved' || !savedAt) return
       setLastSavedAt(savedAt)
@@ -209,6 +214,7 @@ function App() {
     return () => {
       globalThis.removeEventListener(DATABASE_SAVE_EVENT, handleSaveStatus)
       if (editStatusTimer.current) clearTimeout(editStatusTimer.current)
+      if (editStatusFrame.current) cancelAnimationFrame(editStatusFrame.current)
     }
   }, [])
 
@@ -218,11 +224,20 @@ function App() {
       clearTimeout(editStatusTimer.current)
       editStatusTimer.current = null
     }
-    setSaveStatus('saving')
+    if (!editStatusFrame.current) {
+      editStatusFrame.current = requestAnimationFrame(() => {
+        editStatusFrame.current = null
+        setSaveStatus('saving')
+      })
+    }
   }
 
   const finishFieldModification = (event) => {
     if (!event.target.matches('input, textarea, select')) return
+    if (editStatusFrame.current) {
+      cancelAnimationFrame(editStatusFrame.current)
+      editStatusFrame.current = null
+    }
     if (editStatusTimer.current) clearTimeout(editStatusTimer.current)
     editStatusTimer.current = setTimeout(() => {
       editStatusTimer.current = null
@@ -974,7 +989,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
       <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}>{kind === 'expenses' ? <Send size={14} /> : <Plus size={14} />}</button>
     </form>
     <small className="section-kicker">{kind === 'expenses' ? 'Últimos gastos' : 'Últimas propinas'}</small>
-    {rows.slice(0, 5).map(row => <div className="movement-row" key={row.id}>
+    {rows.slice(0, 10).map(row => <div className="movement-row" key={row.id}>
       <span>{kind === 'tips'
         ? [row.usuario_texto, row.notas].filter(Boolean).join(' · ') || 'Propina'
         : [row.tipos_gasto?.nombre, row.notas].filter(Boolean).join(' · ') || 'Gasto'}</span>
@@ -1125,7 +1140,7 @@ function BonusOperationCard({ shiftId, rows, onSaved, setToast }) {
     </form>
     <div className="operation-recent-list">
       <small>Últimos bonos</small>
-      {rows.slice(0, 10).map(row => <div className={`operation-recent-row bonus-type-${bonusTypeOf(row)}`} key={row.id}>
+      {rows.slice(0, 20).map(row => <div className={`operation-recent-row bonus-type-${bonusTypeOf(row)}`} key={row.id}>
         <span>{bonusTypeLabels[bonusTypeOf(row)]}</span>
         <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
         <b>{money.format(row.valor)}</b>
@@ -1160,7 +1175,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
     }
   }
   const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
-  return <section className="panel operation-card">
+  return <section className="panel operation-card operation-ta-charges">
     <PanelTitle icon={Banknote} title="Cargas T.A." meta={`${rows.length} registros`} />
     <form className="operation-form" onSubmit={add}>
       <input aria-label="Usuario" placeholder="Usuario" value={user} onChange={event => setUser(event.target.value)} disabled={saving} />
@@ -1170,7 +1185,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
     </form>
     <div className="operation-recent-list">
       <small>Últimas cargas</small>
-      {rows.slice(0, 4).map(row => <div className="operation-recent-row" key={row.id}>
+      {rows.slice(0, 9).map(row => <div className="operation-recent-row" key={row.id}>
         <span>{row.usuario_texto || row.notas || 'Carga T.A.'}</span>
         <b>{money.format(row.monto)}</b>
       </div>)}
@@ -1205,7 +1220,7 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
     }
   }
   const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
-  return <section className="panel operation-card">
+  return <section className="panel operation-card operation-found-money">
     <PanelTitle icon={Search} title="Dinero encontrado" meta={`${rows.length} registros`} />
     <form className="operation-form" onSubmit={add}>
       <select aria-label="Cuenta donde se encontró dinero" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
@@ -1217,7 +1232,7 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
     </form>
     <div className="operation-recent-list">
       <small>Últimos registros</small>
-      {rows.slice(0, 4).map(row => <div className="operation-recent-row" key={row.id}>
+      {rows.slice(0, 9).map(row => <div className="operation-recent-row" key={row.id}>
         <span>{accounts.find(account => String(account.id) === String(row.cuenta_x_turno_id)) ? accountName(accounts.find(account => String(account.id) === String(row.cuenta_x_turno_id))) : row.notas || 'Dinero encontrado'}</span>
         <b>{money.format(row.monto)}</b>
       </div>)}
