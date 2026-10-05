@@ -607,7 +607,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
           <FoundMoneyCard accounts={accounts} rows={data.foundMoney || []} onSaved={onSaved} setToast={setToast} />
           <ShiftNotesCard shiftId={data.shift.id} notes={data.shiftNotes} onSaved={onSaved} setToast={setToast} />
           <TransferMovementsCard shift={data.shift} boxes={data.boxes} accounts={accounts} rows={data.movements || []} onSaved={onSaved} setToast={setToast} />
-          <ChipControlCard chips={chips} onSaved={onSaved} setToast={setToast} />
+          <ChipControlCard chips={chips} onSaved={onSaved} onChipFinalSaved={onChipFinalSaved} setToast={setToast} />
         </div>
       </div>
     </div>
@@ -1470,6 +1470,7 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   const [notes, setNotes] = useState('')
   const [savings, setSavings] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showAllRows, setShowAllRows] = useState(false)
   const add = async (event) => {
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
@@ -1494,26 +1495,38 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
     const account = accounts.find(item => String(item.id) === String(id))
     return account ? `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}` : 'Cuenta'
   }
+  const swapBoxes = () => {
+    setFromBoxId(toBoxId)
+    setToBoxId(fromBoxId)
+  }
   return <section className="panel operation-card transfer-card">
-    <PanelTitle icon={ArrowLeftRight} title="Movimientos" meta={`${rows.length} registros`} />
+    <PanelTitle
+      icon={ArrowLeftRight}
+      title="Movimientos"
+      meta={`${rows.length} registros`}
+      action={<div className="operation-panel-actions">
+        <label className="savings-toggle"><span>Movimientos de ahorro</span><input type="checkbox" checked={savings} onChange={event => setSavings(event.target.checked)} disabled={saving} /></label>
+        <button className="icon-button" type="button" title={showAllRows ? 'Mostrar últimos movimientos' : 'Ver todos los movimientos'} aria-label={showAllRows ? 'Mostrar últimos movimientos' : 'Ver todos los movimientos'} onClick={() => setShowAllRows(current => !current)}><Eye size={15} /></button>
+      </div>}
+    />
     <form className="transfer-form" onSubmit={add}>
-      <select aria-label="Caja de origen" value={fromBoxId} onChange={event => { const nextFrom = event.target.value; setFromBoxId(nextFrom); if (nextFrom === toBoxId) setToBoxId(boxes.find(box => String(box.id) !== nextFrom)?.id?.toString() || '') }} disabled={saving || boxes.length < 2}>
+      <label className="transfer-field"><span>Desde</span><select aria-label="Caja de origen" value={fromBoxId} onChange={event => { const nextFrom = event.target.value; setFromBoxId(nextFrom); if (nextFrom === toBoxId) setToBoxId(boxes.find(box => String(box.id) !== nextFrom)?.id?.toString() || '') }} disabled={saving || boxes.length < 2}>
         {boxes.map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
-      </select>
-      <select aria-label="Caja de destino" value={toBoxId} onChange={event => setToBoxId(event.target.value)} disabled={saving || boxes.length < 2}>
+      </select></label>
+      <button className="transfer-swap" type="button" title="Intercambiar cajas" aria-label="Intercambiar caja de origen y destino" onClick={swapBoxes} disabled={saving || boxes.length < 2}><ArrowLeftRight size={16} /></button>
+      <label className="transfer-field"><span>Hasta</span><select aria-label="Caja de destino" value={toBoxId} onChange={event => setToBoxId(event.target.value)} disabled={saving || boxes.length < 2}>
         {boxes.filter(box => String(box.id) !== String(fromBoxId)).map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
-      </select>
-      <select aria-label="Cuenta del movimiento" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
+      </select></label>
+      <label className="transfer-field transfer-account"><span>Cuenta</span><select aria-label="Cuenta del movimiento" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
         {accounts.map(account => <option value={account.id} key={account.id}>{accountName(account.id)}</option>)}
-      </select>
-      <input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
-      <input aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
-      <label className="savings-toggle"><input type="checkbox" checked={savings} onChange={event => setSavings(event.target.checked)} disabled={saving} /><span>Ahorro</span></label>
-      <button className="operation-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !accounts.length}><Plus size={14} /></button>
+      </select></label>
+      <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
+      <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !accounts.length}><Send size={14} /></button>
+      <input className="transfer-notes" aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
     </form>
     <div className="operation-recent-list">
       <small>Últimos movimientos</small>
-      {rows.slice(0, 4).map(row => <div className="operation-recent-row" key={row.id}>
+      {(showAllRows ? rows : rows.slice(0, 4)).map(row => <div className="operation-recent-row" key={row.id}>
         <span>{row.es_ahorro ? 'Ahorro · ' : ''}{boxName(row.caja_desde_id)} &gt; {boxName(row.caja_hasta_id)} · {accountName(row.cuenta_x_turno_id)}</span>
         <b>{money.format(row.monto)}</b>
       </div>)}
@@ -1522,17 +1535,46 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   </section>
 }
 
-function ChipControlCard({ chips, onSaved, setToast }) {
+function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
   const [drafts, setDrafts] = useState({})
   const [savingId, setSavingId] = useState(null)
+  const [showLoadForms, setShowLoadForms] = useState(false)
+  const [showLoads, setShowLoads] = useState(true)
+  const formatValue = value => value == null ? '' : numberWithCents.format(value)
+  useEffect(() => {
+    setDrafts(Object.fromEntries(chips.map(chip => [chip.id, formatValue(chip.fichas_final)])))
+  }, [chips])
+  const saveFinal = async chip => {
+    const raw = drafts[chip.id] ?? formatValue(chip.fichas_final)
+    const normalized = raw.trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
+    const value = normalized ? Number(normalized) : null
+    if (value != null && (!Number.isFinite(value) || value < 0)) {
+      setToast('Ingresá un valor final válido, igual o mayor a cero')
+      setDrafts(current => ({ ...current, [chip.id]: formatValue(chip.fichas_final) }))
+      return
+    }
+    const savedValue = chip.fichas_final == null ? null : Number(chip.fichas_final)
+    if (value === savedValue) return
+    setSavingId(chip.id)
+    try {
+      await updateChipFinal(chip.id, value)
+      onChipFinalSaved(chip.id, value)
+      setToast('Ficha final guardada')
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar la ficha final')
+      setDrafts(current => ({ ...current, [chip.id]: formatValue(chip.fichas_final) }))
+    } finally {
+      setSavingId(null)
+    }
+  }
   const addLoad = async (event, chip) => {
     event.preventDefault()
-    const amount = parseLocalizedAmount(drafts[chip.id] || '')
+    const amount = parseLocalizedAmount(drafts[`load-${chip.id}`] || '')
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSavingId(chip.id)
     try {
       await createChipLoad(chip.id, amount)
-      setDrafts(current => ({ ...current, [chip.id]: '' }))
+      setDrafts(current => ({ ...current, [`load-${chip.id}`]: '' }))
       setToast('Carga de fichas guardada')
       onSaved()
     } catch (error) {
@@ -1541,24 +1583,34 @@ function ChipControlCard({ chips, onSaved, setToast }) {
       setSavingId(null)
     }
   }
+  const totalBalance = chips.reduce((sum, chip) => {
+    if (chip.fichas_final == null) return sum
+    return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
+  }, 0)
   return <section className="panel operation-card chip-control-card">
-    <PanelTitle icon={Boxes} title="Control de fichas" meta={`${chips.length} plataformas`} />
+    <PanelTitle icon={Boxes} title="Control de fichas" meta={`${chips.length} plataformas`} action={<div className="operation-panel-actions">
+      <button className={`icon-button ${showLoadForms ? 'selected' : ''}`} type="button" title={showLoadForms ? 'Ocultar formulario de carga' : 'Agregar carga'} aria-label={showLoadForms ? 'Ocultar formulario de carga' : 'Agregar carga'} onClick={() => setShowLoadForms(current => !current)}><Plus size={15} /></button>
+      <button className={`icon-button ${!showLoads ? 'selected' : ''}`} type="button" title={showLoads ? 'Ocultar cargas' : 'Mostrar cargas'} aria-label={showLoads ? 'Ocultar cargas' : 'Mostrar cargas'} onClick={() => setShowLoads(current => !current)}><Eye size={15} /></button>
+    </div>} />
     {chips.length ? <>
-      <div className="chip-control-head"><span>Plataforma</span><span>Inicial</span><span>Final</span><span>Cargas</span></div>
+      <div className="chip-control-head"><span>Plataforma</span><span>Inicial</span><span>Final</span><span>Saldo</span></div>
       <div className="chip-control-list">{chips.map(chip => {
         const loads = (chip.cargas_fichas || []).reduce((sum, load) => sum + Number(load.valor || 0), 0)
+        const balance = Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
         return <div className="chip-control-row" key={chip.id}>
           <strong>{chip.plataformas?.nombre || 'Plataforma'}</strong>
           <span>{money.format(chip.fichas_inicial)}</span>
-          <span>{chip.fichas_final == null ? '—' : money.format(chip.fichas_final)}</span>
-          <span>{money.format(loads)}</span>
-          <form className="chip-load-form" onSubmit={event => addLoad(event, chip)}>
-            <input aria-label={`Nueva carga para ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="Nueva carga" value={drafts[chip.id] || ''} onChange={event => setDrafts(current => ({ ...current, [chip.id]: event.target.value }))} disabled={savingId === chip.id} />
+          <input className="chip-final-input" aria-label={`Ficha final ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="$ 0,00" value={drafts[chip.id] ?? formatValue(chip.fichas_final)} onChange={event => setDrafts(current => ({ ...current, [chip.id]: event.target.value }))} onBlur={() => saveFinal(chip)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} disabled={savingId === chip.id} />
+          <span className={balance > 0 ? 'positive' : balance < 0 ? 'negative' : ''}>{chip.fichas_final == null ? '—' : money.format(balance)}</span>
+          {showLoads && <small className="chip-load-total">Cargas {money.format(loads)}</small>}
+          {showLoadForms && <form className="chip-load-form" onSubmit={event => addLoad(event, chip)}>
+            <input aria-label={`Nueva carga para ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="Nueva carga" value={drafts[`load-${chip.id}`] || ''} onChange={event => setDrafts(current => ({ ...current, [`load-${chip.id}`]: event.target.value }))} disabled={savingId === chip.id} />
             <button className="operation-submit" type="submit" title="Registrar carga" aria-label={`Registrar carga para ${chip.plataformas?.nombre || 'plataforma'}`} disabled={savingId === chip.id}><Plus size={13} /></button>
-          </form>
+          </form>}
         </div>
       })}</div>
     </> : <EmptyInline text="No hay fichas configuradas para este turno." />}
+    {Boolean(chips.length) && <footer className="operation-total chip-control-total">Total saldo <strong className={totalBalance > 0 ? 'positive' : totalBalance < 0 ? 'negative' : ''}>{money.format(totalBalance)}</strong></footer>}
   </section>
 }
 

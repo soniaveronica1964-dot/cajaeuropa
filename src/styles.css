@@ -1353,6 +1353,11 @@ input[type="time"] { color-scheme: dark; }
 .operation-card .panel-title small { overflow: hidden; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 .operation-panel-actions { display: inline-flex; align-items: center; gap: 6px; }
 .operation-panel-actions > small { color: var(--muted); font: 8px 'DM Mono', monospace; text-transform: uppercase; white-space: nowrap; }
+.operation-panel-actions .savings-toggle { display: inline-flex; flex-direction: row-reverse; align-items: center; gap: 6px; color: var(--muted); font-size: 8px; white-space: nowrap; }
+.operation-panel-actions .savings-toggle input { appearance: none; width: 28px; height: 15px; margin: 0; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); cursor: pointer; transition: 120ms ease; }
+.operation-panel-actions .savings-toggle input::before { content: ""; display: block; width: 9px; height: 9px; margin: 2px; border-radius: 50%; background: var(--muted); transition: 120ms ease; }
+.operation-panel-actions .savings-toggle input:checked { border-color: var(--accent-border); background: var(--accent-soft); }
+.operation-panel-actions .savings-toggle input:checked::before { transform: translateX(12px); background: var(--accent); }
 .operation-card .panel-action .icon-button { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
 .operation-card .panel-action .icon-button:hover { background: color-mix(in srgb, var(--accent) 24%, var(--panel-2)); }
 .operation-form {
@@ -1451,19 +1456,40 @@ input[type="time"] { color-scheme: dark; }
 .shift-notes-card > .panel-title { grid-column: 1 / -1; }
 .shift-note-field { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: 8px; text-transform: uppercase; }
 .shift-note-field textarea { width: 100%; height: 160px; min-height: 160px; padding: 7px; resize: vertical; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px Manrope, sans-serif; text-transform: none; }
-.transfer-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; margin-bottom: 8px; }
-.transfer-form .savings-toggle { display: flex; align-items: center; gap: 5px; min-width: 0; color: var(--muted); font-size: 9px; }
+.transfer-form { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) 30px; gap: 6px; align-items: end; margin-bottom: 10px; }
+.transfer-field { display: grid; gap: 4px; min-width: 0; color: var(--muted); font: 8px 'DM Mono', monospace; }
+.transfer-field select,
+.transfer-field input { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 10px 'DM Mono', monospace; }
+.transfer-field select:focus,
+.transfer-field input:focus { border-color: var(--accent); }
+.transfer-swap { display: grid; place-items: center; width: 28px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--muted-2); }
+.transfer-swap:hover { border-color: var(--accent-border); color: var(--accent); }
+.transfer-account { grid-column: 1 / 3; }
+.transfer-amount { grid-column: 3; }
+.transfer-submit { grid-column: 4; height: 34px; }
+.transfer-notes { grid-column: 1 / -1; width: 100%; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; }
+.transfer-notes:focus { border-color: var(--accent); }
+.transfer-notes::placeholder { color: var(--muted); }
 .savings-toggle input { width: 13px; height: 13px; accent-color: var(--accent); }
+.chip-control-card { min-width: 0; }
 .chip-control-head,
-.chip-control-row { display: grid; grid-template-columns: minmax(72px, 1.4fr) repeat(3, minmax(36px, .7fr)); align-items: center; gap: 5px; }
-.chip-control-head { padding-bottom: 5px; color: var(--muted); font: 7px 'DM Mono', monospace; text-transform: uppercase; }
+.chip-control-row { display: grid; grid-template-columns: minmax(74px, 1.15fr) minmax(68px, .9fr) minmax(85px, 1fr) minmax(68px, .8fr); align-items: center; gap: 8px; }
+.chip-control-head { padding: 0 0 7px; color: var(--muted); font: 8px 'DM Mono', monospace; text-transform: uppercase; }
 .chip-control-head span:not(:first-child),
 .chip-control-row > span { text-align: right; }
-.chip-control-list { display: grid; gap: 3px; }
-.chip-control-row { padding: 5px 0; border-top: 1px solid rgba(121, 146, 146, .16); color: var(--text); font: 8px 'DM Mono', monospace; }
-.chip-control-row > strong { overflow: hidden; font: 600 9px Manrope, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.chip-control-list { display: grid; }
+.chip-control-row { padding: 7px 0; border-top: 1px solid rgba(121, 146, 146, .16); color: var(--text); font: 9px 'DM Mono', monospace; }
+.chip-control-row > strong { overflow: hidden; font: 600 10px Manrope, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 .chip-control-row > span { color: var(--muted-2); white-space: nowrap; }
+.chip-control-row > span.positive,
+.chip-control-total strong.positive { color: var(--green); }
+.chip-control-row > span.negative,
+.chip-control-total strong.negative { color: var(--red); }
+.chip-control-row .chip-final-input { width: 100%; min-width: 0; height: 32px; padding: 0 7px; border: 1px solid var(--accent-border); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; text-align: right; }
+.chip-control-row .chip-final-input:focus { border-color: var(--accent); }
+.chip-control-row .chip-load-total { grid-column: 1 / -1; color: var(--muted); font: 8px 'DM Mono', monospace; text-align: right; }
 .chip-load-form { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) 30px; gap: 5px; }
+.chip-control-total { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(121, 146, 146, .2); }
 
 @media (max-width: 980px) {
   .top-panels {
