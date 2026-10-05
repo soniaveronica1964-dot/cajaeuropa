@@ -1414,8 +1414,12 @@ input[type="time"] { color-scheme: dark; }
 .operation-card > .operation-total { margin-top: auto; }
 .operation-total strong { color: var(--text); font: 10px 'DM Mono', monospace; }
 .operation-bonus-card { grid-row: span 2; min-height: 610px; }
-.operation-bonus-card > .operation-total { flex: 0 0 auto; width: 100%; min-height: 25px; margin-top: 0; padding: 9px 0 1px; border-top: 1px solid var(--line); }
+.operation-bonus-card > .operation-total { flex: 0 0 auto; width: 100%; min-height: 25px; margin-top: auto; padding: 9px 0 1px; border-top: 1px solid var(--line); }
 .operation-bonus-card .operation-recent-list { flex: 1 0 auto; gap: 1px; }
+.operation-bonus-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; gap: 8px; text-transform: none; }
+.operation-bonus-totals > div { display: grid; justify-items: start; gap: 3px; min-width: 0; color: var(--muted); font-size: 9px; }
+.operation-bonus-totals > div:last-child > span { color: #f2cf55; font-weight: 700; }
+.operation-bonus-totals > div > strong { color: var(--text); font: 600 10px 'DM Mono', monospace; white-space: nowrap; }
 .movement-card-expenses .entry-form select { padding-right: 5px; }
 .movement-card-expenses .send-button,
 .movement-card-expenses .panel-action .icon-button { border-color: var(--accent-border); background: var(--accent-soft); color: var(--accent); }
@@ -2266,8 +2270,8 @@ input[type="time"] { color-scheme: dark; }
 .bonus-placeholder-button { opacity: .75; }
 .bonus-recent-list { display: grid; gap: 2px; margin-top: 9px; }
 .bonus-recent-list > small { margin-bottom: 2px; color: var(--muted); font: 8px 'DM Mono', monospace; text-transform: uppercase; }
-.bonus-recent-row { display: grid; grid-template-columns: minmax(0, 1fr) 136px; gap: 6px; align-items: center; min-height: 15px; color: var(--bonus-type-color); font-size: 9px; }
-.bonus-recent-value { display: grid; grid-template-columns: 50px 6px minmax(70px, 1fr); align-items: center; gap: 2px; min-width: 0; }
+.bonus-recent-row { display: grid; grid-template-columns: minmax(0, 1fr) 158px; gap: 6px; align-items: center; min-height: 15px; color: var(--bonus-type-color); font-size: 9px; }
+.bonus-recent-value { display: grid; grid-template-columns: 58px 8px minmax(0, 1fr); align-items: center; gap: 3px; min-width: 0; }
 .bonus-recent-value time { color: var(--muted-2); font: 8px 'DM Mono', monospace; text-align: right; white-space: nowrap; }
 .bonus-recent-value > span { color: var(--muted-2); font: 8px 'DM Mono', monospace; text-align: center; }
 .bonus-recent-value input { width: 100%; min-width: 0; padding: 0; border: 0; border-bottom: 1px solid transparent; outline: 0; background: transparent; color: inherit; font: 600 9px 'DM Mono', monospace; text-align: right; white-space: nowrap; }
@@ -2297,7 +2301,7 @@ input[type="time"] { color-scheme: dark; }
 .bonus-history-empty { margin: 4px 0; color: var(--muted); font-size: 9px; text-align: center; }
 .operation-bonus-card .panel-title > div { flex-wrap: wrap; }
 .operation-bonus-card .panel-title > div > small { overflow: visible; font-size: 8px; text-overflow: clip; text-transform: none; white-space: normal; }
-.operation-bonus-card .operation-recent-row { grid-template-columns: minmax(0, 1fr) 52px 72px; }
+.operation-bonus-card .operation-recent-row { grid-template-columns: minmax(0, 1fr) 62px auto; }
 .operation-bonus-card .operation-recent-row time { text-align: center; }
 .operation-bonus-amount { display: block; max-width: 100%; font: 9px 'DM Mono', monospace !important; }
 .operation-bonus-amount input { width: 100%; max-width: 100%; padding: 0; border: 0; border-bottom: 1px solid transparent; outline: 0; background: transparent; color: inherit; font: inherit; text-align: right; cursor: text; }

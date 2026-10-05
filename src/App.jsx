@@ -1389,6 +1389,10 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
   const grantedCount = rows.filter(row => bonusTypeOf(row) === 'granted').length
   const recoveredCount = rows.filter(row => bonusTypeOf(row) === 'recovered').length
   const publicityCount = rows.filter(row => bonusTypeOf(row) === 'publicity').length
+  const bonusTotals = rows.reduce((totals, row) => {
+    totals[bonusTypeOf(row)] += Number(row.valor || 0)
+    return totals
+  }, { granted: 0, recovered: 0, publicity: 0 })
   const cycleType = () => setType(current => {
     const order = ['granted', 'recovered', 'publicity']
     return order[(order.indexOf(current) + 1) % order.length]
@@ -1462,7 +1466,12 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
       </div>)}
       {!rows.length && <EmptyInline text="Sin bonos registrados." />}
     </div>
-    <footer className="operation-total">Bonos netos <strong>{money.format(bonusNetTotal(rows))}</strong></footer>
+    <footer className="operation-total operation-bonus-totals">
+      <div><span>Otorgados</span><strong>{moneyWithCents.format(bonusTotals.granted)}</strong></div>
+      <div><span>Recuperados</span><strong>{moneyWithCents.format(bonusTotals.recovered)}</strong></div>
+      <div><span>Publicidad</span><strong>{moneyWithCents.format(bonusTotals.publicity)}</strong></div>
+      <div><span>Neto</span><strong>{moneyWithCents.format(bonusNetTotal(rows))}</strong></div>
+    </footer>
     {historyOpen && <BonusHistoryModal bonuses={rows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} editableAmounts showTotals />}
   </section>
 }
