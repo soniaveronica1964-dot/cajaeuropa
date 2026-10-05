@@ -846,6 +846,45 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
     }
   }
 
+  if (editableAmounts) {
+    return <div className="bonus-history-editable-list">
+      {bonuses.map(bonus => {
+        const type = bonusTypeOf(bonus)
+        const time = new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+        return <article className={`bonus-history-editable-row bonus-type-${type}`} key={bonus.id}>
+          <span>{bonusTypeLabels[type]}</span>
+          <time>{time}</time>
+          <label className="bonus-history-editable-amount">
+            <span>$</span>
+            <input
+              aria-label={`Editar monto ${bonusTypeLabels[type]}`}
+              inputMode="decimal"
+              title="Editar monto; presioná Enter o salí del campo para guardar"
+              value={amountDrafts[bonus.id] ?? numberWithCents.format(bonus.valor)}
+              onChange={event => setAmountDrafts(current => ({ ...current, [bonus.id]: event.target.value }))}
+              onFocus={event => event.currentTarget.select()}
+              onBlur={event => saveAmount(bonus, event.currentTarget.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  event.currentTarget.blur()
+                }
+                if (event.key === 'Escape') {
+                  const originalAmount = numberWithCents.format(bonus.valor)
+                  event.currentTarget.value = originalAmount
+                  setAmountDrafts(current => ({ ...current, [bonus.id]: originalAmount }))
+                  event.currentTarget.blur()
+                }
+              }}
+              disabled={savingId === bonus.id}
+            />
+          </label>
+        </article>
+      })}
+      {!bonuses.length && <p className="bonus-history-empty">Sin bonos</p>}
+    </div>
+  }
+
   return <div className={`bonus-history-grid ${editableAmounts ? 'bonus-history-grid-editable' : ''}`}>
     {groups.map(group => <section className="bonus-history-group" key={group.label}>
       <h3>{group.label}</h3>
@@ -1345,8 +1384,8 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
   const [value, setValue] = useState('')
   const [type, setType] = useState('granted')
   const [saving, setSaving] = useState(false)
+  const [savingRecentId, setSavingRecentId] = useState(null)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const [entryOpen, setEntryOpen] = useState(false)
   const grantedCount = rows.filter(row => bonusTypeOf(row) === 'granted').length
   const recoveredCount = rows.filter(row => bonusTypeOf(row) === 'recovered').length
   const publicityCount = rows.filter(row => bonusTypeOf(row) === 'publicity').length
@@ -1362,7 +1401,6 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
     try {
       await createBonusLine(shiftId, { value: amount, type, bonusId: rows[0]?.bono_id })
       setValue('')
-      setEntryOpen(false)
       setToast(`${bonusTypeLabels[type]} guardado`)
       onSaved()
     } catch (error) {
@@ -1371,21 +1409,56 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
       setSaving(false)
     }
   }
+  const saveRecentAmount = async (event, bonus) => {
+    if (event.type === 'keydown' && event.key !== 'Enter') return
+    if (event.type === 'keydown') event.preventDefault()
+    const input = event.currentTarget
+    const amount = parseLocalizedAmount(input.value)
+    if (amount == null || amount < 0) {
+      setToast('Ingresá un monto válido, igual o mayor a cero')
+      input.value = money.format(bonus.valor)
+      return
+    }
+    if (amount === Number(bonus.valor)) {
+      input.value = money.format(bonus.valor)
+      return
+    }
+    setSavingRecentId(bonus.id)
+    try {
+      await updateBonusLine(bonus.id, { value: amount })
+      input.value = money.format(amount)
+      setToast('Bono actualizado')
+      onSaved()
+    } catch (error) {
+      input.value = money.format(bonus.valor)
+      setToast(error.message || 'No se pudo guardar el monto del bono')
+    } finally {
+      setSavingRecentId(null)
+    }
+  }
   return <section className="panel operation-card operation-bonus-card">
     <PanelTitle icon={Gift} title="Bonos" meta={`Bonos: ${grantedCount} Otorgados | ${recoveredCount} Recuperados | ${publicityCount} Publicidad`} action={<div className="operation-panel-actions">
-      <button className={`icon-button ${entryOpen ? 'selected' : ''}`} type="button" title={entryOpen ? 'Cerrar carga de bono' : 'Agregar bono'} aria-label={entryOpen ? 'Cerrar carga de bono' : 'Agregar bono'} onClick={() => setEntryOpen(current => !current)}><Plus size={15} /></button>
+      <button className="icon-button" type="button" title="Agregar bono" aria-label="Agregar bono"><Plus size={15} /></button>
       <button className="icon-button" type="button" title="Ver bonos del turno" aria-label="Ver bonos del turno" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>
     </div>} />
-    {entryOpen && <form className={`bonus-inline-entry bonus-type-${type}`} onSubmit={add}>
-      <label><span>$</span><input aria-label="Monto del bono" inputMode="decimal" placeholder={`Insertar Bono ${bonusTypeLabels[type]}`} value={value} onChange={event => setValue(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} disabled={saving} autoFocus /></label>
+    <form className={`bonus-inline-entry bonus-type-${type}`} onSubmit={add}>
+      <label><span>$</span><input aria-label="Monto del bono" inputMode="decimal" placeholder={`Insertar Bono ${bonusTypeLabels[type]}`} value={value} onChange={event => setValue(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} disabled={saving} /></label>
       <button className={`bonus-mode-button bonus-type-${type}`} type="button" title={`Tipo: ${bonusTypeLabels[type]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[type]}`} onClick={cycleType} disabled={saving}><ArrowLeftRight size={14} /></button>
-    </form>}
+    </form>
     <div className="operation-recent-list">
       <small>Últimos bonos</small>
       {rows.slice(0, 20).map(row => <div className={`operation-recent-row bonus-type-${bonusTypeOf(row)}`} key={row.id}>
         <span>{bonusTypeLabels[bonusTypeOf(row)]}</span>
         <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
-        <b>{money.format(row.valor)}</b>
+        <b className="operation-bonus-amount"><input
+          aria-label={`Monto de bono ${bonusTypeLabels[bonusTypeOf(row)]}`}
+          defaultValue={money.format(row.valor)}
+          inputMode="decimal"
+          disabled={savingRecentId === row.id}
+          onFocus={event => { event.currentTarget.value = numberWithCents.format(row.valor); event.currentTarget.select() }}
+          onBlur={event => saveRecentAmount(event, row)}
+          onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }}
+        /></b>
       </div>)}
       {!rows.length && <EmptyInline text="Sin bonos registrados." />}
     </div>
