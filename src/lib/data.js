@@ -361,12 +361,42 @@ export async function createTransferMovement(shiftId, { fromBoxId, toBoxId, acco
 
 export async function createChipLoad(chipId, value) {
   requireSupabase()
-  const { data, error } = await supabase.from('cargas_fichas').insert({
+  const amount = Number(value)
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error('Ingresá un monto mayor a cero')
+  const { data: load, error: loadError } = await supabase.from('cargas_fichas').insert({
     fichas_id: chipId,
-    valor: Number(value) || 0,
+    valor: amount,
   }).select().single()
-  if (error) throw error
-  return data
+  if (loadError) throw loadError
+
+  try {
+    let updated = false
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const { data: chip, error: readError } = await supabase.from('fichas').select('fichas_inicial').eq('id', chipId).single()
+      if (readError) throw readError
+      const currentInitial = Number(chip.fichas_inicial || 0)
+      const { data, error: updateError } = await supabase
+        .from('fichas')
+        .update({ fichas_inicial: currentInitial + amount })
+        .eq('id', chipId)
+        .eq('fichas_inicial', currentInitial)
+        .select('id')
+        .maybeSingle()
+      if (updateError) throw updateError
+      if (data) {
+        updated = true
+        break
+      }
+    }
+    if (!updated) throw new Error('No se pudo actualizar el valor inicial de las fichas; intentá nuevamente')
+  } catch (error) {
+    const { error: rollbackError } = await supabase.from('cargas_fichas').delete().eq('id', load.id)
+    if (rollbackError) {
+      throw new Error(`${error.message || 'No se pudo actualizar el valor inicial de las fichas'}. Además, no se pudo revertir el registro de carga: ${rollbackError.message}`)
+    }
+    throw error
+  }
+  return load
 }
 
 function colorHex(color) {

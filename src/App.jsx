@@ -135,6 +135,16 @@ function sumMovementAmounts(rows = []) {
   return rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
 }
 
+function calculateChipDifference(chips = []) {
+  return chips.reduce((sum, chip) => {
+    if (chip.fichas_final == null) {
+      const loads = (chip.cargas_fichas || []).reduce((total, load) => total + Number(load.valor || 0), 0)
+      return sum + loads
+    }
+    return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
+  }, 0)
+}
+
 function signedExpenseImpact(rows = []) {
   return rows.reduce((sum, row) => {
     const amount = Number(row.monto || 0)
@@ -286,10 +296,7 @@ function App() {
   const activeBox = shift?.cajas?.nombre ?? selectedBox?.nombre ?? 'Sin caja'
   const accentColor = selectedBox?.colores?.hex || selectedBoxAccent
   const cashTotal = (appData?.accounts || []).reduce((sum, account) => sum + Number(account.valor || 0), 0)
-  const countedChipDifference = (appData?.chips || []).reduce((sum, chip) => {
-    if (chip.fichas_final == null) return sum
-    return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
-  }, 0)
+  const countedChipDifference = calculateChipDifference(appData?.chips || [])
   const savedCashDiscrepancy = calculateCashDiscrepancy({
     cashDifference: cashTotal - Number(shift?.caja_inicial || 0),
     countedChipDifference,
@@ -567,7 +574,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   const roundingValue = rounding === null ? (savedRounding ? numberCompact.format(savedRounding) : '') : rounding
   const roundingAmount = rounding === null ? savedRounding : parseLocalizedAmount(rounding) ?? savedRounding
   const cashInitial = Number(data.shift.caja_inicial || 0)
-  const countedChipDifference = chips.reduce((sum, chip) => chip.fichas_final == null ? sum : sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0), 0)
+  const countedChipDifference = calculateChipDifference(chips)
   const cashDifference = total - cashInitial
   const taChargesTotal = sumMovementAmounts(data.taCharges)
   const realDifference = cashDifference + signedExpenseImpact(data.expenses) + taChargesTotal
@@ -1536,14 +1543,18 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
 }
 
 function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
-  const [drafts, setDrafts] = useState({})
-  const [savingId, setSavingId] = useState(null)
-  const [showLoadForms, setShowLoadForms] = useState(false)
-  const [showLoads, setShowLoads] = useState(true)
   const formatValue = value => value == null ? '' : numberWithCents.format(value)
+  const [drafts, setDrafts] = useState(() => Object.fromEntries(chips.map(chip => [chip.id, formatValue(chip.fichas_final)])))
+  const chipFinalsKey = chips.map(chip => `${chip.id}:${chip.fichas_final ?? ''}`).join('|')
+  const [savingId, setSavingId] = useState(null)
+  const [showLoads, setShowLoads] = useState(true)
+  const [loadModalOpen, setLoadModalOpen] = useState(false)
+  const [loadPlatformId, setLoadPlatformId] = useState(chips[0]?.id?.toString() || '')
+  const [loadAmount, setLoadAmount] = useState('')
+  const savingLoad = savingId === 'load'
   useEffect(() => {
     setDrafts(Object.fromEntries(chips.map(chip => [chip.id, formatValue(chip.fichas_final)])))
-  }, [chips])
+  }, [chipFinalsKey])
   const saveFinal = async chip => {
     const raw = drafts[chip.id] ?? formatValue(chip.fichas_final)
     const normalized = raw.trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
@@ -1559,6 +1570,7 @@ function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
     try {
       await updateChipFinal(chip.id, value)
       onChipFinalSaved(chip.id, value)
+      setDrafts(current => ({ ...current, [chip.id]: formatValue(value) }))
       setToast('Ficha final guardada')
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la ficha final')
@@ -1567,14 +1579,19 @@ function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
       setSavingId(null)
     }
   }
-  const addLoad = async (event, chip) => {
+  const addLoad = async event => {
     event.preventDefault()
-    const amount = parseLocalizedAmount(drafts[`load-${chip.id}`] || '')
+    const amount = parseLocalizedAmount(loadAmount)
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
-    setSavingId(chip.id)
+    if (!chips.some(chip => String(chip.id) === String(loadPlatformId))) {
+      setToast('Seleccioná una plataforma')
+      return
+    }
+    setSavingId('load')
     try {
-      await createChipLoad(chip.id, amount)
-      setDrafts(current => ({ ...current, [`load-${chip.id}`]: '' }))
+      await createChipLoad(loadPlatformId, amount)
+      setLoadAmount('')
+      setLoadModalOpen(false)
       setToast('Carga de fichas guardada')
       onSaved()
     } catch (error) {
@@ -1584,12 +1601,14 @@ function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
     }
   }
   const totalBalance = chips.reduce((sum, chip) => {
-    if (chip.fichas_final == null) return sum
+    if (chip.fichas_final == null) {
+      return sum + (chip.cargas_fichas || []).reduce((loadSum, load) => loadSum + Number(load.valor || 0), 0)
+    }
     return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
   }, 0)
   return <section className="panel operation-card chip-control-card">
     <PanelTitle icon={Boxes} title="Control de fichas" meta={`${chips.length} plataformas`} action={<div className="operation-panel-actions">
-      <button className={`icon-button ${showLoadForms ? 'selected' : ''}`} type="button" title={showLoadForms ? 'Ocultar formulario de carga' : 'Agregar carga'} aria-label={showLoadForms ? 'Ocultar formulario de carga' : 'Agregar carga'} onClick={() => setShowLoadForms(current => !current)}><Plus size={15} /></button>
+      <button className="icon-button" type="button" title="Cargar fichas" aria-label="Cargar fichas" onClick={() => { setLoadPlatformId(chips[0]?.id?.toString() || ''); setLoadModalOpen(true) }} disabled={!chips.length}><Plus size={15} /></button>
       <button className={`icon-button ${!showLoads ? 'selected' : ''}`} type="button" title={showLoads ? 'Ocultar cargas' : 'Mostrar cargas'} aria-label={showLoads ? 'Ocultar cargas' : 'Mostrar cargas'} onClick={() => setShowLoads(current => !current)}><Eye size={15} /></button>
     </div>} />
     {chips.length ? <>
@@ -1600,17 +1619,30 @@ function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
         return <div className="chip-control-row" key={chip.id}>
           <strong>{chip.plataformas?.nombre || 'Plataforma'}</strong>
           <span>{money.format(chip.fichas_inicial)}</span>
-          <input className="chip-final-input" aria-label={`Ficha final ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="$ 0,00" value={drafts[chip.id] ?? formatValue(chip.fichas_final)} onChange={event => setDrafts(current => ({ ...current, [chip.id]: event.target.value }))} onBlur={() => saveFinal(chip)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} disabled={savingId === chip.id} />
-          <span className={balance > 0 ? 'positive' : balance < 0 ? 'negative' : ''}>{chip.fichas_final == null ? '—' : money.format(balance)}</span>
+          <input className="chip-final-input" aria-label={`Ficha final ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="$ 0,00" value={drafts[chip.id] ?? formatValue(chip.fichas_final)} onChange={event => setDrafts(current => ({ ...current, [chip.id]: event.target.value }))} onBlur={() => saveFinal(chip)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} disabled={savingId === chip.id || savingLoad} />
+          <span className={balance > 0 ? 'positive' : balance < 0 ? 'negative' : ''}>{chip.fichas_final == null ? (loads ? money.format(loads) : '—') : money.format(balance)}</span>
           {showLoads && <small className="chip-load-total">Cargas {money.format(loads)}</small>}
-          {showLoadForms && <form className="chip-load-form" onSubmit={event => addLoad(event, chip)}>
-            <input aria-label={`Nueva carga para ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="Nueva carga" value={drafts[`load-${chip.id}`] || ''} onChange={event => setDrafts(current => ({ ...current, [`load-${chip.id}`]: event.target.value }))} disabled={savingId === chip.id} />
-            <button className="operation-submit" type="submit" title="Registrar carga" aria-label={`Registrar carga para ${chip.plataformas?.nombre || 'plataforma'}`} disabled={savingId === chip.id}><Plus size={13} /></button>
-          </form>}
         </div>
       })}</div>
     </> : <EmptyInline text="No hay fichas configuradas para este turno." />}
     {Boolean(chips.length) && <footer className="operation-total chip-control-total">Total saldo <strong className={totalBalance > 0 ? 'positive' : totalBalance < 0 ? 'negative' : ''}>{money.format(totalBalance)}</strong></footer>}
+    {loadModalOpen && <div className="modal-backdrop chip-load-backdrop" onClick={() => !savingLoad && setLoadModalOpen(false)}>
+      <section className="modal chip-load-modal" role="dialog" aria-modal="true" aria-labelledby="chip-load-title" onClick={event => event.stopPropagation()}>
+        <button className="modal-close" type="button" title="Cerrar" aria-label="Cerrar" onClick={() => setLoadModalOpen(false)} disabled={savingLoad}><X size={17} /></button>
+        <h2 id="chip-load-title"><Boxes size={19} /> Carga de fichas</h2>
+        <p>Sumá fichas al inicio de este turno.</p>
+        <form onSubmit={addLoad}>
+          <label><span>Monto</span><div className="chip-load-amount"><b>$</b><input aria-label="Monto de la carga" inputMode="decimal" placeholder="0,00" value={loadAmount} onChange={event => { if (!event.target.value.includes('-')) setLoadAmount(event.target.value) }} disabled={savingLoad} autoFocus /></div></label>
+          <label><span>Plataforma</span><select aria-label="Plataforma para cargar fichas" value={loadPlatformId} onChange={event => setLoadPlatformId(event.target.value)} disabled={savingLoad}>
+            {chips.map(chip => <option value={chip.id} key={chip.id}>{chip.plataformas?.nombre || 'Plataforma'}</option>)}
+          </select></label>
+          <div className="chip-load-modal-actions">
+            <button className="secondary-button" type="button" onClick={() => setLoadModalOpen(false)} disabled={savingLoad}>Cancelar</button>
+            <button className="close-button" type="submit" disabled={savingLoad}>{savingLoad ? 'Cargando...' : 'Cargar'} <Check size={15} /></button>
+          </div>
+        </form>
+      </section>
+    </div>}
   </section>
 }
 

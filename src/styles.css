@@ -1488,8 +1488,24 @@ input[type="time"] { color-scheme: dark; }
 .chip-control-row .chip-final-input { width: 100%; min-width: 0; height: 32px; padding: 0 7px; border: 1px solid var(--accent-border); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; text-align: right; }
 .chip-control-row .chip-final-input:focus { border-color: var(--accent); }
 .chip-control-row .chip-load-total { grid-column: 1 / -1; color: var(--muted); font: 8px 'DM Mono', monospace; text-align: right; }
-.chip-load-form { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) 30px; gap: 5px; }
 .chip-control-total { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(121, 146, 146, .2); }
+.chip-load-backdrop { z-index: 100; }
+.chip-load-modal { width: min(420px, 100%); padding: 24px; }
+.chip-load-modal h2 { display: flex; align-items: center; gap: 9px; margin: 0 36px 5px 0; font-size: 18px; letter-spacing: -0.03em; }
+.chip-load-modal h2 svg { color: var(--accent); }
+.chip-load-modal > p { margin: 0 0 20px; color: var(--muted); font-size: 12px; }
+.chip-load-modal form { display: grid; gap: 12px; }
+.chip-load-modal form > label { display: grid; gap: 6px; color: var(--muted); font-size: 10px; }
+.chip-load-modal select,
+.chip-load-amount { width: 100%; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: rgba(12, 17, 20, .62); color: var(--text); }
+.chip-load-modal select { padding: 0 9px; font: 10px 'DM Mono', monospace; }
+.chip-load-amount { display: flex; align-items: center; gap: 8px; padding: 0 9px; }
+.chip-load-amount b { color: var(--muted); font: 10px 'DM Mono', monospace; }
+.chip-load-amount input { width: 100%; min-width: 0; height: 100%; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 10px 'DM Mono', monospace; text-align: right; }
+.chip-load-amount:focus-within,
+.chip-load-modal select:focus { border-color: var(--accent); outline: 2px solid color-mix(in srgb, var(--accent) 25%, transparent); }
+.chip-load-modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.chip-load-modal-actions > button { min-height: 34px; }
 
 @media (max-width: 980px) {
   .top-panels {
