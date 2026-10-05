@@ -771,8 +771,7 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
   const [amountDrafts, setAmountDrafts] = useState({})
   const groups = bonusHistoryGroups(bonuses, shift)
 
-  const saveAmount = async bonus => {
-    const draft = amountDrafts[bonus.id]
+  const saveAmount = async (bonus, draft) => {
     if (draft === undefined) return
     const amount = parseLocalizedAmount(draft)
     if (amount == null || amount < 0) {
@@ -864,7 +863,8 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
                 inputMode="decimal"
                 value={amountDrafts[bonus.id] ?? numberWithCents.format(bonus.valor)}
                 onChange={event => setAmountDrafts(current => ({ ...current, [bonus.id]: event.target.value }))}
-                onBlur={() => saveAmount(bonus)}
+                onFocus={event => event.currentTarget.select()}
+                onBlur={event => saveAmount(bonus, event.currentTarget.value)}
                 onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }}
                 disabled={savingId === bonus.id}
               />
@@ -881,23 +881,28 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
 }
 
 function BonusHistoryModal({ bonuses, shift, onClose, onSaved, setToast, editableAmounts = false, showTotals = false }) {
+  const counts = bonuses.reduce((result, bonus) => {
+    result[bonusTypeOf(bonus)] += 1
+    return result
+  }, { granted: 0, recovered: 0, publicity: 0 })
   const totals = bonuses.reduce((result, bonus) => {
     const type = bonusTypeOf(bonus)
     result[type] += Number(bonus.valor || 0)
     return result
   }, { granted: 0, recovered: 0, publicity: 0 })
+  const net = totals.granted - totals.recovered + totals.publicity
   return <div className="modal-backdrop bonus-history-backdrop" onClick={onClose}>
     <section className={`bonus-history-modal ${editableAmounts ? 'bonus-history-modal-detailed' : ''}`} role="dialog" aria-modal="true" aria-label="Bonos del turno" onClick={(event) => event.stopPropagation()}>
-      <header><div><h2>Bonos del turno</h2><span>Revisá y editá los registros del turno</span></div><button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button></header>
+      <header><div><h2>{editableAmounts ? 'Bonos' : 'Bonos del turno'}</h2><span>{editableAmounts ? `Bonos: ${counts.granted} Otorgados | ${counts.recovered} Recuperados | ${counts.publicity} Publicidad` : 'Revisá y editá los registros del turno'}</span></div><button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button></header>
       <div className="bonus-history-scroll"><BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} setToast={setToast} editableAmounts={editableAmounts} /></div>
       <footer>
         {showTotals && <div className="bonus-history-totals">
           <div><span>Otorgados</span><strong>{moneyWithCents.format(totals.granted)}</strong></div>
           <div><span>Recuperados</span><strong>{moneyWithCents.format(totals.recovered)}</strong></div>
           <div><span>Publicidad</span><strong>{moneyWithCents.format(totals.publicity)}</strong></div>
-          <div><span>Neto</span><strong>{moneyWithCents.format(totals.granted - totals.recovered + totals.publicity)}</strong></div>
+          <div><span>Neto</span><strong>{moneyWithCents.format(net)}</strong></div>
         </div>}
-        <button type="button" className="primary-button" onClick={onClose}>Listo <Check size={14} /></button>
+        {!showTotals && <button type="button" className="primary-button" onClick={onClose}>Listo <Check size={14} /></button>}
       </footer>
     </section>
   </div>
@@ -1338,7 +1343,6 @@ function OperationHistoryModal({ title, items, onClose, onSaveItem, onDeleteItem
 
 function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
   const [value, setValue] = useState('')
-  const [notes, setNotes] = useState('')
   const [type, setType] = useState('granted')
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -1346,15 +1350,18 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
   const grantedCount = rows.filter(row => bonusTypeOf(row) === 'granted').length
   const recoveredCount = rows.filter(row => bonusTypeOf(row) === 'recovered').length
   const publicityCount = rows.filter(row => bonusTypeOf(row) === 'publicity').length
+  const cycleType = () => setType(current => {
+    const order = ['granted', 'recovered', 'publicity']
+    return order[(order.indexOf(current) + 1) % order.length]
+  })
   const add = async (event) => {
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
-      await createBonusLine(shiftId, { value: amount, type, notes, bonusId: rows[0]?.bono_id })
+      await createBonusLine(shiftId, { value: amount, type, bonusId: rows[0]?.bono_id })
       setValue('')
-      setNotes('')
       setEntryOpen(false)
       setToast(`${bonusTypeLabels[type]} guardado`)
       onSaved()
@@ -1369,15 +1376,9 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
       <button className={`icon-button ${entryOpen ? 'selected' : ''}`} type="button" title={entryOpen ? 'Cerrar carga de bono' : 'Agregar bono'} aria-label={entryOpen ? 'Cerrar carga de bono' : 'Agregar bono'} onClick={() => setEntryOpen(current => !current)}><Plus size={15} /></button>
       <button className="icon-button" type="button" title="Ver bonos del turno" aria-label="Ver bonos del turno" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>
     </div>} />
-    {entryOpen && <form className="operation-form" onSubmit={add}>
-      <select aria-label="Tipo de bono" value={type} onChange={event => setType(event.target.value)} disabled={saving}>
-        <option value="granted">Otorgado</option>
-        <option value="recovered">Recuperado</option>
-        <option value="publicity">Publicidad</option>
-      </select>
-      <input aria-label="Monto del bono" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
-      <input aria-label="Notas del bono" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
-      <button className="operation-submit" type="submit" title="Agregar bono" aria-label="Agregar bono" disabled={saving}><Send size={14} /></button>
+    {entryOpen && <form className={`bonus-inline-entry bonus-type-${type}`} onSubmit={add}>
+      <label><span>$</span><input aria-label="Monto del bono" inputMode="decimal" placeholder={`Insertar Bono ${bonusTypeLabels[type]}`} value={value} onChange={event => setValue(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} disabled={saving} autoFocus /></label>
+      <button className={`bonus-mode-button bonus-type-${type}`} type="button" title={`Tipo: ${bonusTypeLabels[type]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[type]}`} onClick={cycleType} disabled={saving}><ArrowLeftRight size={14} /></button>
     </form>}
     <div className="operation-recent-list">
       <small>Últimos bonos</small>
