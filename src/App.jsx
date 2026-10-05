@@ -934,13 +934,13 @@ function BonusHistoryModal({ bonuses, shift, onClose, onSaved, setToast, editabl
     <section className={`bonus-history-modal ${editableAmounts ? 'bonus-history-modal-detailed' : ''}`} role="dialog" aria-modal="true" aria-label="Bonos del turno" onClick={(event) => event.stopPropagation()}>
       <header><div><h2>{editableAmounts ? 'Bonos' : 'Bonos del turno'}</h2><span>{editableAmounts ? `Bonos: ${counts.granted} Otorgados | ${counts.recovered} Recuperados | ${counts.publicity} Publicidad` : 'Revisá y editá los registros del turno'}</span></div><button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button></header>
       <div className="bonus-history-scroll"><BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} setToast={setToast} editableAmounts={editableAmounts} /></div>
-      <footer>
-        {showTotals && <div className="bonus-history-totals">
+      <footer className={showTotals ? 'bonus-history-modal-footer' : ''}>
+        {showTotals && <>
           <div><span>Otorgados</span><strong>{moneyWithCents.format(totals.granted)}</strong></div>
           <div><span>Recuperados</span><strong>{moneyWithCents.format(totals.recovered)}</strong></div>
           <div><span>Publicidad</span><strong>{moneyWithCents.format(totals.publicity)}</strong></div>
           <div><span>Neto</span><strong>{moneyWithCents.format(net)}</strong></div>
-        </div>}
+        </>}
         {!showTotals && <button type="button" className="primary-button" onClick={onClose}>Listo <Check size={14} /></button>}
       </footer>
     </section>
