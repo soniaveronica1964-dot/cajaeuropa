@@ -2294,6 +2294,22 @@ input[type="time"] { color-scheme: dark; }
 .bonus-note-editor textarea { min-width: 0; min-height: 34px; padding: 5px 6px; resize: vertical; border: 1px solid var(--line); border-radius: 4px; background: rgba(12, 17, 20, .7); color: var(--text); font-size: 9px; }
 .bonus-note-editor .icon-button { width: 25px; height: 25px; }
 .bonus-history-empty { margin: 4px 0; color: var(--muted); font-size: 9px; text-align: center; }
+.operation-bonus-card .panel-title > div { flex-wrap: wrap; }
+.operation-bonus-card .panel-title > div > small { font-size: 8px; text-transform: none; }
+.operation-bonus-card .operation-recent-row { grid-template-columns: minmax(0, 1fr) 62px auto; }
+.operation-bonus-card .operation-recent-row time { text-align: center; }
+.bonus-history-modal-detailed .bonus-history-item { padding: 3px 5px; }
+.bonus-history-modal-detailed .bonus-history-main { grid-template-columns: 48px 25px minmax(65px, 1fr) 25px 25px; gap: 5px; }
+.bonus-history-modal-detailed .bonus-history-main > time { text-align: center; }
+.bonus-history-amount { width: 100%; min-width: 0; height: 25px; padding: 0 3px; border: 0; border-radius: 3px; outline: 0; background: transparent; color: var(--bonus-type-color); font: 600 9px 'DM Mono', monospace; text-align: center; }
+.bonus-history-amount:focus { outline: 1px solid color-mix(in srgb, var(--bonus-type-color) 55%, transparent); background: rgba(12, 17, 20, .7); }
+.bonus-history-modal-detailed .bonus-history-item + .bonus-history-item { margin-top: 2px; }
+.bonus-history-modal-detailed > footer { justify-content: space-between; }
+.bonus-history-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); flex: 1; gap: 12px; }
+.bonus-history-totals > div { display: grid; gap: 3px; color: var(--muted); font-size: 10px; }
+.bonus-history-totals > div:last-child span { color: #f2cf55; font-weight: 700; }
+.bonus-history-totals strong { color: var(--text); font: 600 10px 'DM Mono', monospace; }
+.bonus-history-totals > div:last-child strong { color: var(--text); }
 
 @media (max-width: 900px) {
   .bonus-history-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -2321,6 +2337,7 @@ input[type="time"] { color-scheme: dark; }
   .bonus-history-modal > header, .bonus-history-modal > footer { padding: 11px 12px; }
   .bonus-history-scroll { padding: 9px; }
   .bonus-history-grid { grid-template-columns: minmax(0, 1fr); }
+  .bonus-history-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 }
 
 @media (max-width: 500px) {
