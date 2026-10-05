@@ -15,6 +15,12 @@ function requireNonNegativeAmount(value) {
   return amount
 }
 
+function requireFiniteAmount(value) {
+  const amount = Number(value)
+  if (!Number.isFinite(amount)) throw new Error('Ingresá un monto válido')
+  return amount
+}
+
 async function query(table, columns, configure = () => {}) {
   requireSupabase()
   let request = supabase.from(table).select(columns)
@@ -275,7 +281,7 @@ export async function deleteExpenseLine(id) {
 
 export async function createTaCharge(shiftId, { value, user, notes }) {
   requireSupabase()
-  const amount = requireNonNegativeAmount(value)
+  const amount = requireFiniteAmount(value)
   const { data, error } = await supabase.from('cargas_ta').insert({
     turno_id: shiftId,
     usuario_texto: user?.trim() || null,
@@ -289,7 +295,7 @@ export async function createTaCharge(shiftId, { value, user, notes }) {
 export async function updateTaChargeLine(id, { user, value, notes }) {
   const values = {}
   if (user !== undefined) values.usuario_texto = user?.trim() || null
-  if (value !== undefined) values.monto = requireNonNegativeAmount(value)
+  if (value !== undefined) values.monto = requireFiniteAmount(value)
   if (notes !== undefined) values.notas = notes?.trim() || null
   return updateRow('cargas_ta', id, values)
 }

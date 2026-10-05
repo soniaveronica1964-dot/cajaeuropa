@@ -1160,7 +1160,7 @@ function ExpenseHistoryModal({ rows, options, onClose, onSaved, setToast }) {
   </div>
 }
 
-function OperationHistoryModal({ title, items, onClose, onSaveItem, onDeleteItem, onSaved, setToast, detailOptions = null, detailLabel = 'Usuario' }) {
+function OperationHistoryModal({ title, items, onClose, onSaveItem, onDeleteItem, onSaved, setToast, detailOptions = null, detailLabel = 'Usuario', allowNegativeAmounts = false }) {
   const createDrafts = () => Object.fromEntries(items.map(item => [item.id, {
     detail: item.detail || '',
     detailId: item.detailId == null ? '' : String(item.detailId),
@@ -1184,8 +1184,8 @@ function OperationHistoryModal({ title, items, onClose, onSaveItem, onDeleteItem
       if (!draft || (saved && saved.detail === draft.detail && saved.detailId === draft.detailId && saved.amount === draft.amount && saved.notes === draft.notes)) return []
       return [{ item, draft, amount: parseLocalizedAmount(draft.amount) }]
     })
-    if (pending.some(entry => entry.amount == null || entry.amount < 0)) {
-      setToast('Ingresá un monto válido, igual o mayor a cero')
+    if (pending.some(entry => entry.amount == null || (!allowNegativeAmounts && entry.amount < 0))) {
+      setToast(allowNegativeAmounts ? 'Ingresá un monto válido' : 'Ingresá un monto válido, igual o mayor a cero')
       return
     }
     if (detailOptions && pending.some(entry => !entry.draft.detailId)) {
@@ -1260,7 +1260,7 @@ function OperationHistoryModal({ title, items, onClose, onSaveItem, onDeleteItem
                 {detailOptions.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}
               </select>
               : <input aria-label={detailLabel} placeholder={detailLabel} value={draft.detail} onChange={event => changeDraft(item.id, 'detail', event.target.value)} disabled={saving || savingId === item.id} />}
-            <input aria-label="Monto" inputMode="decimal" value={draft.amount} onChange={event => { if (!event.target.value.includes('-')) changeDraft(item.id, 'amount', event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving || savingId === item.id} />
+            <input aria-label="Monto" inputMode="decimal" value={draft.amount} onChange={event => { if (allowNegativeAmounts || !event.target.value.includes('-')) changeDraft(item.id, 'amount', event.target.value) }} onKeyDown={event => { if (!allowNegativeAmounts && event.key === '-') event.preventDefault() }} disabled={saving || savingId === item.id} />
             <input aria-label="Notas" placeholder="Notas" value={draft.notes} onChange={event => changeDraft(item.id, 'notes', event.target.value)} disabled={saving || savingId === item.id} />
             <button className="delete-button" type="button" title="Eliminar registro" aria-label="Eliminar registro" onClick={() => removeItem(item)} disabled={saving || savingId === item.id}><Trash2 size={14} /></button>
           </> : <>
@@ -1333,7 +1333,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
   const add = async (event) => {
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
-    if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
+    if (amount == null || amount === 0) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
       await createTaCharge(shiftId, { value: amount, user, notes })
@@ -1353,7 +1353,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
     <PanelTitle icon={Banknote} title="Cargas T.A." action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title="Ver cargas T.A." aria-label="Ver cargas T.A." onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
     <form className="operation-form" onSubmit={add}>
       <input aria-label="Usuario" placeholder="Usuario" value={user} onChange={event => setUser(event.target.value)} disabled={saving} />
-      <input aria-label="Monto de carga T.A." inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
+      <input aria-label="Monto de carga T.A." inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
       <input aria-label="Notas de carga T.A." placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       <button className="operation-submit" type="submit" title="Agregar carga T.A." aria-label="Agregar carga T.A." disabled={saving}><Send size={14} /></button>
     </form>
@@ -1373,6 +1373,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
       onDeleteItem={item => deleteTaChargeLine(item.id)}
       onSaved={onSaved}
       setToast={setToast}
+      allowNegativeAmounts
       onClose={() => setHistoryOpen(false)}
     />}
   </section>
