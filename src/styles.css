@@ -2301,7 +2301,9 @@ input[type="time"] { color-scheme: dark; }
 .bonus-history-empty { margin: 4px 0; color: var(--muted); font-size: 9px; text-align: center; }
 .operation-bonus-card .panel-title > div { flex-wrap: wrap; }
 .operation-bonus-card .panel-title > div > small { overflow: visible; font-size: 8px; text-overflow: clip; text-transform: none; white-space: normal; }
-.operation-bonus-card .operation-recent-row { grid-template-columns: minmax(0, 1fr) 62px auto; }
+.operation-bonus-card .operation-recent-list { align-content: start; }
+.operation-bonus-card .operation-recent-row { grid-template-columns: minmax(0, 1fr) 62px auto; min-height: 25px; padding: 3px 0; border-bottom: 1px solid rgba(121, 146, 146, .18); }
+.operation-bonus-card .operation-recent-row:last-of-type { border-bottom: 0; }
 .operation-bonus-card .operation-recent-row time { text-align: center; }
 .operation-bonus-amount { display: block; max-width: 100%; font: 9px 'DM Mono', monospace !important; }
 .operation-bonus-amount input { width: 100%; max-width: 100%; padding: 0; border: 0; border-bottom: 1px solid transparent; outline: 0; background: transparent; color: inherit; font: inherit; text-align: right; cursor: text; }

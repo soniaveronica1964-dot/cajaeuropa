@@ -147,7 +147,7 @@ function signedExpenseImpact(rows = []) {
 }
 
 function calculateCashDiscrepancy({ cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney }) {
-  const bonusImpact = bonuses.reduce((sum, bonus) => sum + (bonus.recuperado ? -Number(bonus.valor || 0) : Number(bonus.valor || 0)), 0)
+  const bonusImpact = bonusNetTotal(bonuses)
   return cashDifference
     - countedChipDifference
     + rounding
@@ -625,7 +625,11 @@ function bonusTypeOf(bonus) {
 const bonusTypeLabels = { granted: 'Otorgado', recovered: 'Recuperado', publicity: 'Publicidad' }
 
 function bonusNetTotal(rows) {
-  return rows.reduce((sum, bonus) => sum + (bonus.recuperado ? -Number(bonus.valor || 0) : Number(bonus.valor || 0)), 0)
+  return rows.reduce((net, bonus) => {
+    const amount = Number(bonus.valor || 0)
+    const type = bonusTypeOf(bonus)
+    return net + (type === 'recovered' ? -amount : amount)
+  }, 0)
 }
 
 function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
@@ -1397,15 +1401,16 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
     const order = ['granted', 'recovered', 'publicity']
     return order[(order.indexOf(current) + 1) % order.length]
   })
-  const add = async (event) => {
+  const add = async (event, submittedType = type) => {
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
-      await createBonusLine(shiftId, { value: amount, type, bonusId: rows[0]?.bono_id })
+      await createBonusLine(shiftId, { value: amount, type: submittedType, bonusId: rows[0]?.bono_id })
       setValue('')
-      setToast(`${bonusTypeLabels[type]} guardado`)
+      setType(submittedType)
+      setToast(`${bonusTypeLabels[submittedType]} guardado`)
       onSaved()
     } catch (error) {
       setToast(error.message || 'No se pudo guardar el bono')
@@ -1446,7 +1451,15 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
       <button className="icon-button" type="button" title="Ver bonos del turno" aria-label="Ver bonos del turno" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>
     </div>} />
     <form className={`bonus-inline-entry bonus-type-${type}`} onSubmit={add}>
-      <label><span>$</span><input aria-label="Monto del bono" inputMode="decimal" placeholder={`Insertar Bono ${bonusTypeLabels[type]}`} value={value} onChange={event => setValue(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.form.requestSubmit() } }} disabled={saving} /></label>
+      <label><span>$</span><input aria-label="Monto del bono" inputMode="decimal" placeholder={`Insertar Bono ${bonusTypeLabels[type]}`} value={value} onChange={event => setValue(event.target.value)} onKeyDown={event => {
+        if (event.key === '+') {
+          event.preventDefault()
+          add(event, 'recovered')
+        } else if (event.key === '-') {
+          event.preventDefault()
+          add(event, 'publicity')
+        }
+      }} disabled={saving} /></label>
       <button className={`bonus-mode-button bonus-type-${type}`} type="button" title={`Tipo: ${bonusTypeLabels[type]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[type]}`} onClick={cycleType} disabled={saving}><ArrowLeftRight size={14} /></button>
     </form>
     <div className="operation-recent-list">
@@ -1809,7 +1822,7 @@ function ConfigList({ title, items, select }) { return <section className="panel
 function LiveStatistics({ data }) {
   const tips = data.tips.reduce((sum, row) => sum + Number(row.monto || 0), 0)
   const expenses = data.expenses.reduce((sum, row) => sum + Number(row.monto || 0), 0)
-  const bonuses = data.bonuses.reduce((sum, row) => sum + (row.recuperado ? -Number(row.valor || 0) : Number(row.valor || 0)), 0)
+  const bonuses = bonusNetTotal(data.bonuses)
   return <><section className="panel stats-toolbar"><div><span className="eyebrow">Turno actual</span><h2>{data.shift ? new Date(data.shift.fecha_hora_inicio).toLocaleString('es-AR') : 'Sin turno abierto'}</h2></div><div className="stats-filters"><span className="muted-copy">Las estadísticas históricas estarán disponibles cuando existan turnos cerrados.</span></div></section><div className="stats-grid"><section className="panel stat-card featured"><div className="stat-head"><h2>Turno actual</h2><small>1 turno</small></div><h3>GENERAL</h3><div className="stat-line"><span>Caja inicial</span><b>{money.format(data.shift?.caja_inicial || 0)}</b></div><div className="stat-line"><span>Propinas</span><b>{money.format(tips)}</b></div><div className="stat-line"><span>Gastos</span><b>{money.format(expenses)}</b></div><h3>BONOS</h3><div className="stat-line"><span>Bonos netos</span><b>{money.format(bonuses)}</b></div><h3>DATOS</h3><div className="stat-line"><span>Cuentas activas</span><b>{data.accounts.length}</b></div><div className="stat-line"><span>Movimientos</span><b>{data.tips.length + data.expenses.length + data.bonuses.length}</b></div></section><section className="panel stat-card"><EmptyInline text="No hay otros turnos cerrados en el rango cargado." /></section></div></>
 }
 
