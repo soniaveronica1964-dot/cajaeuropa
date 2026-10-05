@@ -43,6 +43,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   outline-offset: 2px;
 }
 
+@media (min-width: 701px) {
+  html { zoom: 0.9; }
+}
+
 .app-shell {
   --cyan: var(--accent);
   --lavender: var(--accent);
