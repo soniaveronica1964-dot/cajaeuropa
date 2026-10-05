@@ -136,13 +136,7 @@ function sumMovementAmounts(rows = []) {
 }
 
 function calculateChipDifference(chips = []) {
-  return chips.reduce((sum, chip) => {
-    if (chip.fichas_final == null) {
-      const loads = (chip.cargas_fichas || []).reduce((total, load) => total + Number(load.valor || 0), 0)
-      return sum + loads
-    }
-    return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
-  }, 0)
+  return chips.reduce((sum, chip) => sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0), 0)
 }
 
 function signedExpenseImpact(rows = []) {
@@ -1601,15 +1595,12 @@ function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
     }
   }
   const totalBalance = chips.reduce((sum, chip) => {
-    if (chip.fichas_final == null) {
-      return sum + (chip.cargas_fichas || []).reduce((loadSum, load) => loadSum + Number(load.valor || 0), 0)
-    }
     return sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0)
   }, 0)
   return <section className="panel operation-card chip-control-card">
     <PanelTitle icon={Boxes} title="Control de fichas" meta={`${chips.length} plataformas`} action={<div className="operation-panel-actions">
       <button className="icon-button" type="button" title="Cargar fichas" aria-label="Cargar fichas" onClick={() => { setLoadPlatformId(chips[0]?.id?.toString() || ''); setLoadModalOpen(true) }} disabled={!chips.length}><Plus size={15} /></button>
-      <button className={`icon-button ${!showLoads ? 'selected' : ''}`} type="button" title={showLoads ? 'Ocultar cargas' : 'Mostrar cargas'} aria-label={showLoads ? 'Ocultar cargas' : 'Mostrar cargas'} onClick={() => setShowLoads(current => !current)}><Eye size={15} /></button>
+      <button className={`icon-button ${!showLoads ? 'selected' : ''}`} type="button" title={showLoads ? 'Ocultar cargas registradas' : 'Mostrar cargas registradas'} aria-label={showLoads ? 'Ocultar cargas registradas' : 'Mostrar cargas registradas'} onClick={() => setShowLoads(current => !current)}><Eye size={15} /></button>
     </div>} />
     {chips.length ? <>
       <div className="chip-control-head"><span>Plataforma</span><span>Inicial</span><span>Final</span><span>Saldo</span></div>
@@ -1620,8 +1611,8 @@ function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
           <strong>{chip.plataformas?.nombre || 'Plataforma'}</strong>
           <span>{money.format(chip.fichas_inicial)}</span>
           <input className="chip-final-input" aria-label={`Ficha final ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="$ 0,00" value={drafts[chip.id] ?? formatValue(chip.fichas_final)} onChange={event => setDrafts(current => ({ ...current, [chip.id]: event.target.value }))} onBlur={() => saveFinal(chip)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} disabled={savingId === chip.id || savingLoad} />
-          <span className={balance > 0 ? 'positive' : balance < 0 ? 'negative' : ''}>{chip.fichas_final == null ? (loads ? money.format(loads) : '—') : money.format(balance)}</span>
-          {showLoads && <small className="chip-load-total">Cargas {money.format(loads)}</small>}
+          <span className={balance > 0 ? 'positive' : balance < 0 ? 'negative' : ''}>{money.format(balance)}</span>
+          {showLoads && <small className="chip-load-total">Cargas registradas {money.format(loads)}</small>}
         </div>
       })}</div>
     </> : <EmptyInline text="No hay fichas configuradas para este turno." />}

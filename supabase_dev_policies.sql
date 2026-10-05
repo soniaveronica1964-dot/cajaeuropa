@@ -67,7 +67,7 @@ BEGIN
   END LOOP;
 END $$;
 
--- Inserción temporal para el asistente de primer acceso y cargas de fichas.
+-- Inserción temporal para el asistente de primer acceso.
 DO $$
 DECLARE
   table_name text;
@@ -75,7 +75,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'colores', 'tipos_billetera', 'tipos_cuenta', 'tipos_gasto', 'cajas', 'billeteras', 'titulares',
     'titulares_x_caja', 'billeteras_x_caja', 'tipos_turno', 'dias_turno', 'turnos',
-    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'cargas_fichas'
+    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_insert_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_insert_%I ON public.%I FOR INSERT TO anon WITH CHECK (true)', table_name, table_name);
