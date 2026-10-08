@@ -1,6 +1,8 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
+  ArrowLeft,
   ArrowLeftRight,
+  ArrowRight,
   BarChart3,
   Banknote,
   Bell,
@@ -18,7 +20,9 @@ import {
   GripVertical,
   LayoutGrid,
   LockKeyhole,
+  Megaphone,
   Plus,
+  Percent,
   RefreshCw,
   Search,
   Send,
@@ -92,6 +96,7 @@ import {
   updateAccountValue,
   updateBonusLine,
   updateAdvertisingLine,
+  updateAdvertisingDistribution,
   updateChipFinal,
   updateColor,
   updateWalletType,
@@ -597,7 +602,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
     </section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
-        <div className="top-panels"><Publicity rows={data.advertising} setToast={setToast} onSaved={onSaved} /><BonusList shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
+        <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard /><UsersCard users={data.users} /></div>
         <div className="operations-grid">
@@ -615,7 +620,87 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   </>
 }
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
-function Publicity({ rows, setToast, onSaved }) { const fields = [['Total', 'total_llegados'], ['Nuevos', 'nuevos'], ['Repetidos', 'repetidos'], ['Sin respuesta', 'sin_respuesta']]; const change = (row, field, value) => updateAdvertisingLine(row.id, field, Math.max(0, value)).then(onSaved).catch(() => setToast('No se pudo guardar publicidad')); return <section className="panel publicity"><PanelTitle icon={Bell} title="Publicidad" action={<Copy size={15} />} /><div className="publicity-rows">{rows.length ? rows.map(row => <div className="publicity-row" key={row.id}><strong><FileText size={13} /> Línea {row.id}</strong>{fields.map(([label, field]) => <label key={field}><small>{label}</small><span><button aria-label={`Disminuir ${label}`} onClick={() => change(row, field, Number(row[field]) - 1)}>−</button><b>{row[field] ?? 0}</b><button aria-label={`Aumentar ${label}`} onClick={() => change(row, field, Number(row[field]) + 1)}>+</button></span></label>)}<em>{row.total_derivados ?? 0} derivados</em></div>) : <EmptyInline text="No hay líneas de publicidad para este turno." />}</div></section> }
+function Publicity({ rows, boxes, setToast, onSaved }) {
+  const [savingCell, setSavingCell] = useState('')
+  const change = async (row, key, update) => {
+    setSavingCell(key)
+    try {
+      await update()
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar publicidad')
+    } finally {
+      setSavingCell('')
+    }
+  }
+  const getDistribution = (row, boxId) => Number(
+    row.lineas_publicidad_x_caja?.find(item => Number(item.caja_id) === Number(boxId))?.num_derivado || 0,
+  )
+  const summary = rows.map((row, index) => {
+    const total = Number(row.total_llegados || 0)
+    const derived = boxes.reduce((sum, box) => sum + getDistribution(row, box.id), 0)
+    const label = `Publicidad ${String.fromCharCode(65 + index)}`
+    return [
+      label,
+      `Efectividad: ${total ? Math.round((derived / total) * 100) : 0}%`,
+      `Llegados: ${total}`,
+      `Nuevos: ${Number(row.nuevos || 0)}`,
+      `Repetidos: ${Number(row.repetidos || 0)}`,
+      `S/Respuesta: ${total - Number(row.nuevos || 0) - Number(row.repetidos || 0)}`,
+      `Derivados: ${derived}`,
+      ...boxes.map(box => `${box.nombre}: ${getDistribution(row, box.id)}`),
+    ].join('\n')
+  }).join('\n\n')
+  const copySummary = async () => {
+    try {
+      await navigator.clipboard.writeText(`Conteo de publicidad\n\n${summary}`)
+      setToast('Conteo de publicidad copiado')
+    } catch (error) {
+      setToast(error.message || 'No se pudo copiar el conteo de publicidad')
+    }
+  }
+  const countFields = [
+    ['Total LL', 'total_llegados'],
+    ['Nuevos', 'nuevos'],
+    ['Repetidos', 'repetidos'],
+  ]
+  return <section className="panel publicity">
+    <PanelTitle icon={Megaphone} title="Publicidad" action={<button className="icon-button publicity-copy" type="button" title="Copiar conteo de publicidad" aria-label="Copiar conteo de publicidad" onClick={copySummary}><Copy size={15} /></button>} />
+    <div className="publicity-rows">{rows.map((row, index) => {
+      const total = Number(row.total_llegados || 0)
+      const newCount = Number(row.nuevos || 0)
+      const repeated = Number(row.repetidos || 0)
+      const derived = boxes.reduce((sum, box) => sum + getDistribution(row, box.id), 0)
+      const lineName = `Publicidad ${String.fromCharCode(65 + index)}`
+      const stepper = (field, label, value) => {
+        const key = `${row.id}:${field}`
+        return <label key={field}><small>{label}</small><span className="publicity-stepper">
+          <button type="button" title={`Disminuir ${label}`} aria-label={`Disminuir ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => change(row, key, () => updateAdvertisingLine(row.id, field, Math.max(0, value - 1)))}><ArrowLeft size={11} /></button>
+          <b>{value}</b>
+          <button type="button" title={`Aumentar ${label}`} aria-label={`Aumentar ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => change(row, key, () => updateAdvertisingLine(row.id, field, value + 1))}><ArrowRight size={11} /></button>
+        </span></label>
+      }
+      return <div className="publicity-row" key={row.id}>
+        <strong><FileText size={13} /> {lineName}</strong>
+        <div className="publicity-counts">
+          {countFields.map(([label, field]) => stepper(field, label, Number(row[field] || 0)))}
+          <label><small>S/Resp</small><b>{total - newCount - repeated}</b></label>
+        </div>
+        <div className="publicity-total"><small>Total D</small><b>{derived}</b></div>
+        <div className="publicity-distributions">{boxes.map(box => {
+          const value = getDistribution(row, box.id)
+          const key = `${row.id}:box:${box.id}`
+          return <label key={box.id}><small>{box.nombre}</small><span className="publicity-stepper">
+            <button type="button" title={`Disminuir derivados de ${box.nombre}`} aria-label={`Disminuir derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => change(row, key, () => updateAdvertisingDistribution(row.id, box.id, Math.max(0, value - 1)))}><ArrowLeft size={11} /></button>
+            <b>{value}</b>
+            <button type="button" title={`Aumentar derivados de ${box.nombre}`} aria-label={`Aumentar derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => change(row, key, () => updateAdvertisingDistribution(row.id, box.id, value + 1))}><ArrowRight size={11} /></button>
+          </span></label>
+        })}</div>
+        <strong className="publicity-rate"><Percent size={12} />{total ? Math.round((derived / total) * 100) : 0}%</strong>
+      </div>
+    })}</div>
+  </section>
+}
 function bonusTypeOf(bonus) {
   if (bonus.recuperado) return 'recovered'
   if (bonus.es_publicidad) return 'publicity'

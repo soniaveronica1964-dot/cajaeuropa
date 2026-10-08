@@ -925,27 +925,43 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .publicity {
+  position: relative;
   display: flex;
   flex-direction: column;
+  padding-bottom: 6px;
 }
 
 .publicity-rows {
   display: grid;
-  gap: 6px;
+  gap: 2px;
+  padding: 8px 42px 8px 8px;
 }
 
 .publicity-row {
   display: grid;
-  grid-template-columns: minmax(90px, .7fr) repeat(4, minmax(0, 1fr)) auto;
-  gap: 8px;
+  grid-template-columns: minmax(112px, .75fr) minmax(0, 1.45fr) minmax(44px, .35fr) minmax(0, 1fr) 72px;
+  gap: 12px;
   align-items: center;
-  min-height: 40px;
-  padding: 4px 0;
+  min-height: 48px;
+  padding: 3px 6px;
   border-top: 1px solid rgba(121, 146, 146, 0.18);
 }
 
 .publicity-row:first-child {
   border-top: 0;
+}
+
+.publicity-row .publicity-counts,
+.publicity-row .publicity-distributions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 9px;
+  min-width: 0;
+}
+
+.publicity-row .publicity-distributions {
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 8px;
 }
 
 .publicity-row > strong {
@@ -957,52 +973,109 @@ input[type="time"] { color-scheme: dark; }
   white-space: nowrap;
 }
 
-.publicity-row label {
+.publicity-row label,
+.publicity-total {
   display: grid;
   gap: 3px;
   min-width: 0;
   text-align: center;
 }
 
-.publicity-row label small {
+.publicity-row label small,
+.publicity-total small {
   color: var(--muted);
   font-size: 8px;
-  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.publicity-row label span {
-  display: inline-flex;
+.publicity-stepper {
+  display: grid;
+  grid-template-columns: 17px minmax(18px, 1fr) 17px;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
   min-width: 0;
-  border: 1px solid rgba(121, 146, 146, 0.25);
-  border-radius: 4px;
-  background: rgba(17, 23, 24, 0.9);
-  padding: 4px 2px;
 }
 
-.publicity-row label button {
-  width: 18px;
-  height: 18px;
+.publicity-stepper button {
   display: grid;
   place-items: center;
-  border: 1px solid var(--line);
+  width: 17px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(102, 114, 118, 0.32);
   border-radius: 3px;
   background: transparent;
   color: var(--muted);
 }
 
-.publicity-row label b {
-  font: 11px 'DM Mono';
-  color: var(--text);
+.publicity-stepper button:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
-.publicity-row em {
-  color: var(--muted);
-  font: 9px 'DM Mono';
-  text-align: right;
-  font-style: normal;
+.publicity-stepper button:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.publicity-row label b,
+.publicity-total b {
+  min-width: 0;
+  font: 12px 'DM Mono';
+  color: var(--text);
+  text-align: center;
+}
+
+.publicity-total {
+  align-content: center;
+  padding-left: 8px;
+  border-left: 1px solid rgba(82, 101, 103, .45);
+}
+
+.publicity-rate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 72px;
+  padding: 4px 5px;
+  border-radius: 999px;
+  background: #2f3352;
+  color: #93c5fd;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.publicity-rate svg {
+  color: #b79cff;
+}
+
+.publicity .panel-title {
+  min-height: 51px;
+  margin: 0;
+  padding: 10px 12px 9px;
+}
+
+.publicity .panel-title h2 {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.publicity .panel-title > div > svg {
+  color: #a78bfa;
+}
+
+.publicity-copy {
+  position: absolute;
+  top: calc(50% + 18px);
+  right: 9px;
+  z-index: 3;
+  transform: translateY(-50%);
+}
+
+.publicity .empty-inline {
+  margin: 0;
+  padding: 8px 14px;
 }
 
 .account-panel {
@@ -1538,11 +1611,32 @@ input[type="time"] { color-scheme: dark; }
 @media (max-width: 700px) {
   .publicity-row {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .publicity-row > strong {
     border-bottom: 1px solid rgba(121, 146, 146, 0.18);
     padding-bottom: 6px;
+  }
+
+  .publicity-row .publicity-counts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .publicity-row .publicity-distributions {
+    grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  }
+
+  .publicity-total {
+    display: flex;
+    justify-content: space-between;
+    border-left: 0;
+    padding-left: 0;
+  }
+
+  .publicity-rate {
+    justify-self: start;
   }
 
   .entry-form {
