@@ -21,6 +21,7 @@ ALTER TABLE titulares_x_caja ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billeteras_x_caja ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cuentas_x_caja ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lineas_publicidad ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lineas_publicidad_x_caja ENABLE ROW LEVEL SECURITY;
 ALTER TABLE publicidad ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lineas_bonos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bonos ENABLE ROW LEVEL SECURITY;
@@ -56,7 +57,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'cajas', 'turnos', 'dias_turno', 'tipos_turno', 'colores', 'tipos_billetera', 'tipos_cuenta',
     'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja', 'cuentas_x_caja',
-    'lineas_publicidad', 'publicidad', 'lineas_bonos', 'bonos',
+    'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario',
     'paneles_x_usuario', 'paneles', 'subobjetivos_x_turno', 'subobjetivos',
@@ -75,7 +76,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'colores', 'tipos_billetera', 'tipos_cuenta', 'tipos_gasto', 'cajas', 'billeteras', 'titulares',
     'titulares_x_caja', 'billeteras_x_caja', 'tipos_turno', 'dias_turno', 'turnos',
-    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos'
+    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_insert_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_insert_%I ON public.%I FOR INSERT TO anon WITH CHECK (true)', table_name, table_name);
@@ -90,7 +91,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'cajas', 'turnos', 'dias_turno', 'tipos_turno', 'colores', 'tipos_billetera', 'tipos_cuenta',
     'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja',
-    'cuentas_x_caja', 'lineas_publicidad', 'publicidad', 'lineas_bonos', 'bonos',
+    'cuentas_x_caja', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica', 'usuarios',
     'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'paneles',
     'subobjetivos_x_turno', 'subobjetivos', 'objetivos', 'fichas', 'plataformas', 'cargas_fichas',
