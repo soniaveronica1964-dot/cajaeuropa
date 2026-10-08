@@ -26,7 +26,7 @@ SELECT 'Regular', FALSE
 WHERE NOT EXISTS (SELECT 1 FROM condiciones_bono WHERE nombre = 'Regular');
 
 INSERT INTO tipos_estado (nombre, cantidad_porcentaje)
-SELECT 'Regular', 100
+SELECT 'Regular', 1
 WHERE NOT EXISTS (SELECT 1 FROM tipos_estado WHERE nombre = 'Regular');
 
 -- Caja demo.

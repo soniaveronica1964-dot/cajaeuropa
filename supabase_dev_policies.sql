@@ -61,7 +61,7 @@ BEGIN
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario',
     'paneles_x_usuario', 'paneles', 'subobjetivos_x_turno', 'subobjetivos',
-    'objetivos', 'fichas', 'plataformas', 'cargas_fichas', 'app_config'
+    'objetivos', 'fichas', 'plataformas', 'cargas_fichas', 'condiciones_bono', 'tipos_estado', 'app_config'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_read_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_read_%I ON public.%I FOR SELECT TO anon USING (true)', table_name, table_name);
@@ -76,7 +76,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'colores', 'tipos_billetera', 'tipos_cuenta', 'tipos_gasto', 'cajas', 'billeteras', 'titulares',
     'titulares_x_caja', 'billeteras_x_caja', 'tipos_turno', 'dias_turno', 'turnos',
-    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos'
+    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'condiciones_bono', 'tipos_estado'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_insert_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_insert_%I ON public.%I FOR INSERT TO anon WITH CHECK (true)', table_name, table_name);

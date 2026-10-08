@@ -42,6 +42,7 @@ import {
   createAccountType,
   createBonusLine,
   createBonusCondition,
+  createBonusType,
   createColor,
   createBox,
   createDayShifts,
@@ -72,6 +73,7 @@ import {
   deleteAccountType,
   deleteBonusLine,
   deleteBonusCondition,
+  deleteBonusType,
   deleteColor,
   deleteBox,
   deleteDayShift,
@@ -101,6 +103,7 @@ import {
   updateColor,
   updateWalletType,
   updateBonusCondition,
+  updateBonusType,
   updateBox,
   updateDayShift,
   updateExpenseType,
@@ -2106,8 +2109,9 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
           return { id: platform.id, nombre: platform.nombre || 'Plataforma', colorId: platform.color_id, colorHex: color?.hex || null }
         }),
       bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
+      bonusTypes: (localData.bonusTypes || []).map((type) => ({ id: type.id, name: type.nombre || 'Tipo', percentageCount: Number(type.cantidad_porcentaje ?? 1) })),
     }
-  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions, currentBoxId])
+  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.expenseTypes, localData.bonusConditions, localData.bonusTypes, currentBoxId])
 
   const [tab, setTab] = useState('boxes')
   const [draft, setDraft] = useState(buildDefaultConfig)
@@ -2834,25 +2838,65 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       {tab === 'bonuses' && <>
         <div className="config-two-columns">
           <section className="config-card">
+            <div className="config-list-head"><h3>Tipos de bono (tipos de estado)</h3><span>{draft.bonusTypes.length} elementos</span></div>
+            {draft.bonusTypes.map((type, index) => (
+              <div className="config-list-row bonus-type-config-row" key={type.id || index}>
+                <input value={type.name} aria-label="Nombre del tipo de bono" onChange={event => setDraft(current => ({
+                  ...current,
+                  bonusTypes: current.bonusTypes.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item),
+                }))} onBlur={event => {
+                  const name = event.target.value.trim()
+                  const target = localData.bonusTypes?.find(item => item.id === type.id)
+                  if (!target || !name || name === target.nombre) return
+                  persistUpdate(() => updateBonusType(target.id, { name, percentageCount: type.percentageCount }), 'Tipo de bono actualizado')
+                }} placeholder="Nombre del tipo" />
+                <input type="number" min="0" step="1" value={type.percentageCount} aria-label={`Cantidad de porcentajes para ${type.name}`} title="Cantidad de porcentajes distintos que puede almacenar un bono" onChange={event => setDraft(current => ({
+                  ...current,
+                  bonusTypes: current.bonusTypes.map((item, itemIndex) => itemIndex === index ? { ...item, percentageCount: event.target.value } : item),
+                }))} onBlur={event => {
+                  const percentageCount = Number(event.target.value)
+                  const target = localData.bonusTypes?.find(item => item.id === type.id)
+                  if (!target) return
+                  if (!Number.isInteger(percentageCount) || percentageCount < 0) {
+                    setToast('La cantidad de porcentajes debe ser un entero igual o mayor a cero')
+                    setDraft(current => ({
+                      ...current,
+                      bonusTypes: current.bonusTypes.map(item => item.id === type.id ? { ...item, percentageCount: Number(target.cantidad_porcentaje ?? 1) } : item),
+                    }))
+                    return
+                  }
+                  if (percentageCount === Number(target.cantidad_porcentaje)) return
+                  persistUpdate(() => updateBonusType(target.id, { name: type.name, percentageCount }), 'Cantidad de porcentajes actualizada')
+                }} />
+                <button type="button" className="delete-button" title="Eliminar tipo de bono" aria-label={`Eliminar tipo ${type.name}`} onClick={() => {
+                  const target = localData.bonusTypes?.find(item => item.id === type.id)
+                  if (target) persistUpdate(() => deleteBonusType(target.id), 'Tipo de bono eliminado')
+                }}><Trash2 size={14} /></button>
+              </div>
+            ))}
+            <button type="button" className="config-add" onClick={() => persistUpdate(() => createBonusType({ name: 'Nuevo tipo', percentageCount: 1 }), 'Tipo de bono creado')}><Plus size={15} /> Agregar tipo</button>
+          </section>
+
+          <section className="config-card">
             <div className="config-list-head"><h3>Condiciones de bono</h3><span>{draft.bonusConditions.length} elementos</span></div>
             {draft.bonusConditions.map((condition, index) => (
               <div className="config-list-row" key={condition.id || index}>
                 <input value={condition.label} onChange={(event) => setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, label: event.target.value } : item) }))} onBlur={async (event) => {
                   const value = event.target.value.trim()
-                  const target = data.bonusConditions?.find(item => item.nombre === condition.label)
+                  const target = localData.bonusConditions?.find(item => item.id === condition.id)
                   if (!value || !target) return
                   await persistUpdate(() => updateBonusCondition(target.id, { name: value, platform: condition.allow }), 'Condición de bono guardada en Supabase')
                 }} placeholder="Etiqueta" />
                 <label className="toggle-cell" aria-label={`Habilitar ${condition.label}`}>
                   <input type="checkbox" checked={condition.allow} onChange={async () => {
                     setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, allow: !item.allow } : item) }))
-                    const target = data.bonusConditions?.find(item => item.nombre === condition.label)
+                    const target = localData.bonusConditions?.find(item => item.id === condition.id)
                     if (target) await persistUpdate(() => updateBonusCondition(target.id, { name: condition.label, platform: !condition.allow }), 'Condición de bono actualizada en Supabase')
                   }} />
                   <span />
                 </label>
                 <button type="button" className="delete-button" title="Eliminar condición" onClick={async () => {
-                  const target = data.bonusConditions?.find(item => item.nombre === condition.label)
+                  const target = localData.bonusConditions?.find(item => item.id === condition.id)
                   if (!target) return
                   await persistUpdate(() => deleteBonusCondition(target.id), 'Condición de bono eliminada de Supabase')
                 }}><X size={14} /></button>

@@ -76,8 +76,8 @@ CREATE TABLE tipos_cuenta (
 CREATE TABLE tipos_estado (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
-    cantidad_porcentaje NUMERIC(5,2)
-        CHECK (cantidad_porcentaje BETWEEN 0 AND 100)
+    cantidad_porcentaje INTEGER NOT NULL DEFAULT 1
+        CHECK (cantidad_porcentaje >= 0)
 );
 
 CREATE TABLE condiciones_bono (

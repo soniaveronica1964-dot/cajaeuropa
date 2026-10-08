@@ -1923,6 +1923,12 @@ input[type="time"] { color-scheme: dark; }
   font-size: 11px;
 }
 .config-list-row input { flex: 1; }
+.bonus-type-config-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, .9fr) 28px;
+  gap: 8px;
+}
+.bonus-type-config-row input[type="number"] { min-width: 0; }
 .config-list-row .delete-button,
 .wallet-config-row .delete-button,
 .delete-button {
