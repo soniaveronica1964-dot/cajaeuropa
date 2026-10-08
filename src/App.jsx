@@ -784,7 +784,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
     try {
       await createBonusLine(shiftId, { value: amount, type, bonusId: rows[0]?.bono_id })
       setValue('')
-      setMode(type)
+      setMode('granted')
       setToast(`${bonusTypeLabels[type]} guardado`)
       onSaved()
     } catch (error) {
@@ -1536,7 +1536,7 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
     try {
       await createBonusLine(shiftId, { value: amount, type: submittedType, bonusId: rows[0]?.bono_id })
       setValue('')
-      setType(submittedType)
+      setType('granted')
       setToast(`${bonusTypeLabels[submittedType]} guardado`)
       onSaved()
     } catch (error) {
