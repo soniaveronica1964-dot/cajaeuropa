@@ -622,6 +622,12 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
 function Publicity({ rows, boxes, setToast, onSaved }) {
   const [savingCell, setSavingCell] = useState('')
+  const [countDrafts, setCountDrafts] = useState({})
+  const [distributionDrafts, setDistributionDrafts] = useState({})
+  useEffect(() => {
+    setCountDrafts({})
+    setDistributionDrafts({})
+  }, [rows])
   const change = async (row, key, update) => {
     setSavingCell(key)
     try {
@@ -633,20 +639,39 @@ function Publicity({ rows, boxes, setToast, onSaved }) {
       setSavingCell('')
     }
   }
-  const getDistribution = (row, boxId) => Number(
-    row.lineas_publicidad_x_caja?.find(item => Number(item.caja_id) === Number(boxId))?.num_derivado || 0,
-  )
+  const getCount = (row, field) => {
+    const key = `${row.id}:${field}`
+    return Number(countDrafts[key] ?? row[field] ?? 0) || 0
+  }
+  const getDistribution = (row, boxId) => {
+    const key = `${row.id}:box:${boxId}`
+    const saved = row.lineas_publicidad_x_caja?.find(item => Number(item.caja_id) === Number(boxId))?.num_derivado
+    return Number(distributionDrafts[key] ?? saved ?? 0) || 0
+  }
+  const commitNumber = (row, key, rawValue, save) => {
+    const value = Number(rawValue)
+    if (!Number.isInteger(value) || value < 0) {
+      setToast('Ingresá una cantidad entera igual o mayor a cero')
+      if (key.includes(':box:')) {
+        setDistributionDrafts(current => { const next = { ...current }; delete next[key]; return next })
+      } else {
+        setCountDrafts(current => { const next = { ...current }; delete next[key]; return next })
+      }
+      return
+    }
+    change(row, key, () => save(value))
+  }
   const summary = rows.map((row, index) => {
-    const total = Number(row.total_llegados || 0)
+    const total = getCount(row, 'total_llegados')
     const derived = boxes.reduce((sum, box) => sum + getDistribution(row, box.id), 0)
     const label = `Publicidad ${String.fromCharCode(65 + index)}`
     return [
       label,
       `Efectividad: ${total ? Math.round((derived / total) * 100) : 0}%`,
       `Llegados: ${total}`,
-      `Nuevos: ${Number(row.nuevos || 0)}`,
-      `Repetidos: ${Number(row.repetidos || 0)}`,
-      `S/Respuesta: ${total - Number(row.nuevos || 0) - Number(row.repetidos || 0)}`,
+      `Nuevos: ${getCount(row, 'nuevos')}`,
+      `Repetidos: ${getCount(row, 'repetidos')}`,
+      `S/Respuesta: ${total - getCount(row, 'nuevos') - getCount(row, 'repetidos')}`,
       `Derivados: ${derived}`,
       ...boxes.map(box => `${box.nombre}: ${getDistribution(row, box.id)}`),
     ].join('\n')
@@ -667,23 +692,31 @@ function Publicity({ rows, boxes, setToast, onSaved }) {
   return <section className="panel publicity">
     <PanelTitle icon={Megaphone} title="Publicidad" action={<button className="icon-button publicity-copy" type="button" title="Copiar conteo de publicidad" aria-label="Copiar conteo de publicidad" onClick={copySummary}><Copy size={15} /></button>} />
     <div className="publicity-rows">{rows.map((row, index) => {
-      const total = Number(row.total_llegados || 0)
-      const newCount = Number(row.nuevos || 0)
-      const repeated = Number(row.repetidos || 0)
+      const total = getCount(row, 'total_llegados')
+      const newCount = getCount(row, 'nuevos')
+      const repeated = getCount(row, 'repetidos')
       const derived = boxes.reduce((sum, box) => sum + getDistribution(row, box.id), 0)
       const lineName = `Publicidad ${String.fromCharCode(65 + index)}`
       const stepper = (field, label, value) => {
         const key = `${row.id}:${field}`
         return <label key={field}><small>{label}</small><span className="publicity-stepper">
-          <button type="button" title={`Disminuir ${label}`} aria-label={`Disminuir ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => change(row, key, () => updateAdvertisingLine(row.id, field, Math.max(0, value - 1)))}><ArrowLeft size={11} /></button>
-          <b>{value}</b>
-          <button type="button" title={`Aumentar ${label}`} aria-label={`Aumentar ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => change(row, key, () => updateAdvertisingLine(row.id, field, value + 1))}><ArrowRight size={11} /></button>
+          <button type="button" title={`Disminuir ${label}`} aria-label={`Disminuir ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => {
+            const next = Math.max(0, value - 1)
+            setCountDrafts(current => ({ ...current, [key]: next }))
+            change(row, key, () => updateAdvertisingLine(row.id, field, next))
+          }}><ArrowLeft size={11} /></button>
+          <input type="number" min="0" step="1" aria-label={`${label} de ${lineName}`} value={countDrafts[key] ?? value} disabled={savingCell === key} onChange={event => setCountDrafts(current => ({ ...current, [key]: event.target.value }))} onBlur={event => commitNumber(row, key, event.currentTarget.value, next => updateAdvertisingLine(row.id, field, next))} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} />
+          <button type="button" title={`Aumentar ${label}`} aria-label={`Aumentar ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => {
+            const next = value + 1
+            setCountDrafts(current => ({ ...current, [key]: next }))
+            change(row, key, () => updateAdvertisingLine(row.id, field, next))
+          }}><ArrowRight size={11} /></button>
         </span></label>
       }
       return <div className="publicity-row" key={row.id}>
         <strong><FileText size={13} /> {lineName}</strong>
         <div className="publicity-counts">
-          {countFields.map(([label, field]) => stepper(field, label, Number(row[field] || 0)))}
+          {countFields.map(([label, field]) => stepper(field, label, getCount(row, field)))}
           <label><small>S/Resp</small><b>{total - newCount - repeated}</b></label>
         </div>
         <div className="publicity-total"><small>Total D</small><b>{derived}</b></div>
@@ -691,9 +724,17 @@ function Publicity({ rows, boxes, setToast, onSaved }) {
           const value = getDistribution(row, box.id)
           const key = `${row.id}:box:${box.id}`
           return <label key={box.id}><small>{box.nombre}</small><span className="publicity-stepper">
-            <button type="button" title={`Disminuir derivados de ${box.nombre}`} aria-label={`Disminuir derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => change(row, key, () => updateAdvertisingDistribution(row.id, box.id, Math.max(0, value - 1)))}><ArrowLeft size={11} /></button>
-            <b>{value}</b>
-            <button type="button" title={`Aumentar derivados de ${box.nombre}`} aria-label={`Aumentar derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => change(row, key, () => updateAdvertisingDistribution(row.id, box.id, value + 1))}><ArrowRight size={11} /></button>
+            <button type="button" title={`Disminuir derivados de ${box.nombre}`} aria-label={`Disminuir derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => {
+              const next = Math.max(0, value - 1)
+              setDistributionDrafts(current => ({ ...current, [key]: next }))
+              change(row, key, () => updateAdvertisingDistribution(row.id, box.id, next))
+            }}><ArrowLeft size={11} /></button>
+            <input type="number" min="0" step="1" aria-label={`Derivados de ${box.nombre} en ${lineName}`} value={distributionDrafts[key] ?? value} disabled={savingCell === key} onChange={event => setDistributionDrafts(current => ({ ...current, [key]: event.target.value }))} onBlur={event => commitNumber(row, key, event.currentTarget.value, next => updateAdvertisingDistribution(row.id, box.id, next))} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} />
+            <button type="button" title={`Aumentar derivados de ${box.nombre}`} aria-label={`Aumentar derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => {
+              const next = value + 1
+              setDistributionDrafts(current => ({ ...current, [key]: next }))
+              change(row, key, () => updateAdvertisingDistribution(row.id, box.id, next))
+            }}><ArrowRight size={11} /></button>
           </span></label>
         })}</div>
         <strong className="publicity-rate"><Percent size={12} />{total ? Math.round((derived / total) * 100) : 0}%</strong>
@@ -800,6 +841,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
       <button type="button" className="icon-button" title="Ver bonos del turno" aria-label="Ver bonos del turno" onClick={() => setHistoryOpen(true)}><Eye size={14} /></button>
     </div>
     <div className="bonus-recent-list">
+      <small className="bonus-recent-heading">Últimos 5 bonos</small>
       {recentRows.filter(bonus => !hiddenRecentIds.has(bonus.id)).map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
         <span>{bonusTypeLabels[bonusTypeOf(bonus)]}</span>
         <div className="bonus-recent-value">

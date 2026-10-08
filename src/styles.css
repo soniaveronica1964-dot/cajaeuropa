@@ -772,12 +772,11 @@ input[type="time"] { color-scheme: dark; }
   grid-column: 2;
 }
 
-.top-panels .bonus-quick-panel { grid-column: 2; align-self: start; min-height: 150px; }
+.top-panels .bonus-quick-panel { grid-column: 2; min-height: 150px; }
 
 .top-panels .chip-summary {
   grid-column: 3;
-  align-self: start;
-  min-height: 150px;
+  min-height: 0;
 }
 
 .mini-card,
@@ -1016,6 +1015,32 @@ input[type="time"] { color-scheme: dark; }
 .publicity-stepper button:disabled {
   cursor: wait;
   opacity: .55;
+}
+
+.publicity-stepper input {
+  width: 100%;
+  min-width: 0;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: #202a2c;
+  color: var(--text);
+  font: 11px 'DM Mono', monospace;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.publicity-stepper input::-webkit-inner-spin-button,
+.publicity-stepper input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.publicity-stepper input:focus {
+  border-color: var(--accent);
+  outline: 0;
 }
 
 .publicity-row label b,
