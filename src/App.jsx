@@ -3144,13 +3144,13 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               }}>
                 {draft.platforms.map(platform => <option value={String(platform.id)} key={platform.id}>{platform.nombre}</option>)}
               </select>
-              <select value={subplatform.colorId == null ? '' : String(subplatform.colorId)} aria-label="Color de subplataforma" onChange={(event) => {
+              <select value={String(subplatform.colorId ?? draft.platforms.find(platform => String(platform.id) === String(subplatform.platformId))?.colorId ?? '')} aria-label="Color de subplataforma" onChange={(event) => {
                 const nextColorId = event.target.value || null
                 const selectedColor = localData.colors?.find(color => String(color.id) === nextColorId)
                 setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || draft.platforms.find(platform => String(platform.id) === String(item.platformId))?.colorHex || null } : item) }))
                 persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId: subplatform.platformId, colorId: nextColorId }), 'Color de subplataforma actualizado en Supabase')
               }}>
-                <option value="">Color de plataforma</option>
+                <option value="">Sin color</option>
                 {(localData.colors || []).map(color => <option value={String(color.id)} key={color.id}>{color.nombre}</option>)}
               </select>
               <button type="button" className="delete-button" title="Eliminar subplataforma" onClick={async () => {
@@ -3163,7 +3163,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
           <button type="button" className="config-add" disabled={!draft.platforms.length} onClick={async () => {
             const parentPlatform = draft.platforms[0]
             if (!parentPlatform) return
-            await persistUpdate(() => createSubplatform({ name: 'Nueva subplataforma', platformId: parentPlatform.id, colorId: null }), 'Subplataforma creada en Supabase')
+            await persistUpdate(() => createSubplatform({ name: 'Nueva subplataforma', platformId: parentPlatform.id, colorId: parentPlatform.colorId }), 'Subplataforma creada en Supabase')
           }}><Plus size={15} /> Agregar subplataforma</button>
         </section>
       </div>}
