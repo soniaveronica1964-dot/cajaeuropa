@@ -1859,33 +1859,35 @@ input[type="time"] { color-scheme: dark; }
   align-items: start;
   gap: 14px;
 }
-.subplatform-config-row {
+.config-list-row.subplatform-config-row {
   display: grid;
-  grid-template-columns: 12px minmax(150px, 1.6fr) minmax(92px, .8fr) minmax(92px, .8fr) 28px;
-  gap: 7px;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(100px, 140px) 28px;
+  gap: 9px;
   align-items: center;
   margin-bottom: 0;
   padding: 8px 0;
   border-bottom: 1px solid rgba(121, 146, 146, 0.18);
 }
-.subplatform-config-row .box-config-dot {
+.config-list-row.subplatform-config-row .box-config-dot {
+  display: block;
   width: 9px;
-  height: 9px;
   min-width: 9px;
+  height: 9px;
   aspect-ratio: 1;
-  flex: none;
+  justify-self: center;
   border-radius: 50%;
 }
-.subplatform-config-row input,
-.subplatform-config-row select {
+.config-list-row.subplatform-config-row input,
+.config-list-row.subplatform-config-row select {
   width: 100%;
   min-width: 0;
 }
-.subplatform-config-row input {
+.config-list-row.subplatform-config-row input {
   min-height: 36px;
+  padding: 8px 10px;
   font-size: 13px;
 }
-.subplatform-config-row select {
+.config-list-row.subplatform-config-row select {
   padding-right: 20px;
 }
 .config-list,

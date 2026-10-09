@@ -3139,19 +3139,10 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               <select value={String(subplatform.platformId)} aria-label="Plataforma asociada" onChange={(event) => {
                 const platformId = event.target.value
                 const parentPlatform = draft.platforms.find(platform => String(platform.id) === platformId)
-                setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, platformId, colorHex: item.colorId == null ? parentPlatform?.colorHex || null : item.colorHex } : item) }))
-                persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId, colorId: subplatform.colorId }), 'Plataforma asociada actualizada en Supabase')
+                setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, platformId, colorId: parentPlatform?.colorId ?? null, colorHex: parentPlatform?.colorHex || null } : item) }))
+                persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId, colorId: parentPlatform?.colorId ?? null }), 'Plataforma asociada actualizada en Supabase')
               }}>
                 {draft.platforms.map(platform => <option value={String(platform.id)} key={platform.id}>{platform.nombre}</option>)}
-              </select>
-              <select value={String(subplatform.colorId ?? draft.platforms.find(platform => String(platform.id) === String(subplatform.platformId))?.colorId ?? '')} aria-label="Color de subplataforma" onChange={(event) => {
-                const nextColorId = event.target.value || null
-                const selectedColor = localData.colors?.find(color => String(color.id) === nextColorId)
-                setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || draft.platforms.find(platform => String(platform.id) === String(item.platformId))?.colorHex || null } : item) }))
-                persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId: subplatform.platformId, colorId: nextColorId }), 'Color de subplataforma actualizado en Supabase')
-              }}>
-                <option value="">Sin color</option>
-                {(localData.colors || []).map(color => <option value={String(color.id)} key={color.id}>{color.nombre}</option>)}
               </select>
               <button type="button" className="delete-button" title="Eliminar subplataforma" onClick={async () => {
                 if (!window.confirm(`¿Eliminar "${subplatform.nombre}"? También se eliminarán las líneas de estados y asignaciones vinculadas a esta subplataforma.`)) return
