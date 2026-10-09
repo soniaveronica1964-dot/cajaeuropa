@@ -43,7 +43,7 @@ export async function loadCurrentShiftData(boxId = null) {
   const { data: shift, error: shiftError } = await shiftRequest.maybeSingle()
   if (shiftError) throw shiftError
   if (!shift) {
-    const [holders, wallets, walletTypes, accountTypes, expenseTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, platforms, bonusConditions, bonusTypes] = await Promise.all([
+    const [holders, wallets, walletTypes, accountTypes, expenseTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, platforms, subplatforms, bonusConditions, bonusTypes] = await Promise.all([
       query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
       query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
       query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
@@ -55,15 +55,16 @@ export async function loadCurrentShiftData(boxId = null) {
       query('app_config', 'id, nombre, icono, imagen, imagen_mini, tema, ver_notas, singleton'),
       query('turnos', 'id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, dia_turno_id, dias_turno(id, nombre, dia_semana, hora_inicio, hora_fin, tipos_turno(id, nombre, caja_id, cajas(nombre)))', request => request.eq('abierto', true).order('fecha_hora_inicio', { ascending: false })),
       query('plataformas', 'id, nombre, caja_id, color_id', request => request.order('id', { ascending: true })),
+      query('subplataformas', 'id, nombre, plataforma_id, color_id', request => request.order('id', { ascending: true })),
       query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
       query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     ])
-    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users: [], goals: [], chips: [], holders, wallets, platforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
+    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users: [], goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
   await ensureAdvertisingLines(shift.id)
 
-  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes, movements] = await Promise.all([
+  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes, movements] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, lineas_publicidad_x_caja(caja_id, num_derivado), publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id).order('id', { ascending: true })),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
@@ -77,6 +78,7 @@ export async function loadCurrentShiftData(boxId = null) {
     query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('plataformas', 'id, nombre, caja_id, color_id', request => request.order('id', { ascending: true })),
+    query('subplataformas', 'id, nombre, plataforma_id, color_id', request => request.order('id', { ascending: true })),
     query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
     query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
@@ -101,7 +103,7 @@ export async function loadCurrentShiftData(boxId = null) {
 
   const logisticsWithAccounts = logistics.map(line => ({ ...line, cuentas_x_turno: { cuentas: accountById.get(accountLinks.find(link => link.id === line.cuenta_x_turno_id)?.cuenta_id) || null } }))
 
-  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
+  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
 
 export async function loadConfigurationData() {
@@ -1058,6 +1060,35 @@ export async function updatePlatform(id, { name, colorId = null }) {
 export async function deletePlatform(id) {
   requireSupabase()
   const { error } = await supabase.from('plataformas').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createSubplatform({ name, platformId, colorId = null }) {
+  requireSupabase()
+  if (platformId == null) throw new Error('Seleccioná una plataforma para asociar la subplataforma')
+  const { data, error } = await supabase.from('subplataformas')
+    .insert({ nombre: name.trim(), plataforma_id: platformId, color_id: colorId })
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function updateSubplatform(id, { name, platformId, colorId = null }) {
+  requireSupabase()
+  if (platformId == null) throw new Error('Seleccioná una plataforma para asociar la subplataforma')
+  const { data, error } = await supabase.from('subplataformas')
+    .update({ nombre: name.trim(), plataforma_id: platformId, color_id: colorId })
+    .eq('id', id)
+    .select()
+    .single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteSubplatform(id) {
+  requireSupabase()
+  const { error } = await supabase.from('subplataformas').delete().eq('id', id)
   if (error) throw error
 }
 

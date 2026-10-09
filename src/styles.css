@@ -1853,6 +1853,26 @@ input[type="time"] { color-scheme: dark; }
   gap: 20px;
   margin-bottom: 18px;
 }
+.chip-platforms-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+.subplatform-config-row {
+  display: grid;
+  grid-template-columns: 10px minmax(80px, 1fr) minmax(105px, .9fr) 110px 28px;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(121, 146, 146, 0.18);
+}
+.subplatform-config-row input,
+.subplatform-config-row select {
+  width: 100%;
+  min-width: 0;
+}
 .config-list,
 .config-card {
   padding: 20px 18px;
@@ -2267,6 +2287,9 @@ input[type="time"] { color-scheme: dark; }
   .app-color-row {
     grid-template-columns: minmax(0, 1fr) 72px auto;
   }
+}
+@media (max-width: 900px) {
+  .chip-platforms-grid { grid-template-columns: minmax(0, 1fr); }
   .app-color-row input[type="color"] {
     width: 72px;
   }
