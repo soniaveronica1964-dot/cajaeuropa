@@ -168,16 +168,36 @@ function stateImageExtension(file) {
   return extension
 }
 
-async function uploadStateImage(stateId, file) {
-  const extension = stateImageExtension(file)
-  const path = `estados/${stateId}/${crypto.randomUUID()}.${extension}`
-  const { error } = await supabase.storage.from(APP_CONFIG_BUCKET).upload(path, file, {
-    contentType: file.type,
-    upsert: false,
-    cacheControl: '3600',
-  })
-  if (error) throw error
-  return path
+async function uploadStateImages(stateId, original, imageMini) {
+  const extension = stateImageExtension(original)
+  if (imageMini?.type !== 'image/webp') throw new Error('No se pudo generar la miniatura WEBP del estado')
+  const basePath = `estados/${stateId}/${crypto.randomUUID()}`
+  const paths = {
+    original: `${basePath}.${extension}`,
+    imageMini: `${basePath}-mini.webp`,
+  }
+  const uploads = await Promise.all([
+    supabase.storage.from(APP_CONFIG_BUCKET).upload(paths.original, original, {
+      contentType: original.type,
+      upsert: false,
+      cacheControl: '3600',
+    }),
+    supabase.storage.from(APP_CONFIG_BUCKET).upload(paths.imageMini, imageMini, {
+      contentType: 'image/webp',
+      upsert: false,
+      cacheControl: '3600',
+    }),
+  ])
+  const failedUpload = uploads.find(({ error }) => error)
+  if (failedUpload) {
+    const uploadedPaths = uploads.flatMap((result, index) => result.error ? [] : [index === 0 ? paths.original : paths.imageMini])
+    if (uploadedPaths.length) {
+      const { error: cleanupError } = await supabase.storage.from(APP_CONFIG_BUCKET).remove(uploadedPaths)
+      if (cleanupError) throw new Error(`${failedUpload.error.message}. También falló la limpieza: ${cleanupError.message}`)
+    }
+    throw failedUpload.error
+  }
+  return paths
 }
 
 async function removeStateImage(path) {
@@ -186,7 +206,7 @@ async function removeStateImage(path) {
   if (error) throw error
 }
 
-export async function createState({ name, typeId, lines, imageFile }) {
+export async function createState({ name, typeId, lines, imageFile, imageMiniFile }) {
   requireSupabase()
   const trimmedName = String(name || '').trim()
   const parsedTypeId = Number(typeId)
@@ -194,18 +214,21 @@ export async function createState({ name, typeId, lines, imageFile }) {
   if (!Number.isInteger(parsedTypeId) || parsedTypeId <= 0) throw new Error('Seleccioná un tipo de estado')
   const validLines = requireStateLines(lines)
   await validateStateLineCount(parsedTypeId, validLines)
-  if (imageFile) stateImageExtension(imageFile)
+  if (imageFile) {
+    stateImageExtension(imageFile)
+    if (!imageMiniFile) throw new Error('No se generó la miniatura del estado')
+  }
   const { data: state, error } = await supabase.from('estados')
     .insert({ nombre: trimmedName, tipo_estado_id: parsedTypeId })
     .select()
     .single()
   if (error) throw error
 
-  let imagePath = null
+  let imagePaths = null
   try {
     if (imageFile) {
-      imagePath = await uploadStateImage(state.id, imageFile)
-      const { error: imageError } = await supabase.from('estados').update({ imagen: imagePath, imagen_mini: imagePath }).eq('id', state.id)
+      imagePaths = await uploadStateImages(state.id, imageFile, imageMiniFile)
+      const { error: imageError } = await supabase.from('estados').update({ imagen: imagePaths.original, imagen_mini: imagePaths.imageMini }).eq('id', state.id)
       if (imageError) throw imageError
     }
     if (validLines.length) {
@@ -218,9 +241,9 @@ export async function createState({ name, typeId, lines, imageFile }) {
     const cleanupErrors = []
     const { error: stateCleanupError } = await supabase.from('estados').delete().eq('id', state.id)
     if (stateCleanupError) cleanupErrors.push(stateCleanupError)
-    if (imagePath) {
+    if (imagePaths) {
       try {
-        await removeStateImage(imagePath)
+        await Promise.all([removeStateImage(imagePaths.original), removeStateImage(imagePaths.imageMini)])
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError)
       }
@@ -230,7 +253,7 @@ export async function createState({ name, typeId, lines, imageFile }) {
   }
 }
 
-export async function updateState(id, { name, typeId, lines, imageFile }) {
+export async function updateState(id, { name, typeId, lines, imageFile, imageMiniFile }) {
   requireSupabase()
   const trimmedName = String(name || '').trim()
   const parsedTypeId = Number(typeId)
@@ -238,7 +261,10 @@ export async function updateState(id, { name, typeId, lines, imageFile }) {
   if (!Number.isInteger(parsedTypeId) || parsedTypeId <= 0) throw new Error('Seleccioná un tipo de estado')
   const validLines = requireStateLines(lines)
   await validateStateLineCount(parsedTypeId, validLines)
-  if (imageFile) stateImageExtension(imageFile)
+  if (imageFile) {
+    stateImageExtension(imageFile)
+    if (!imageMiniFile) throw new Error('No se generó la miniatura del estado')
+  }
   const { data: oldState, error: loadStateError } = await supabase.from('estados')
     .select('id, nombre, tipo_estado_id, imagen, imagen_mini')
     .eq('id', id)
@@ -249,14 +275,14 @@ export async function updateState(id, { name, typeId, lines, imageFile }) {
     .eq('estado_id', id)
   if (loadLinesError) throw loadLinesError
 
-  let imagePath = oldState.imagen || null
-  let uploadedImagePath = null
+  let imagePaths = { original: oldState.imagen || null, imageMini: oldState.imagen_mini || null }
+  let uploadedImagePaths = null
   let insertedLineIds = []
   let stateUpdated = false
   try {
     if (imageFile) {
-      uploadedImagePath = await uploadStateImage(id, imageFile)
-      imagePath = uploadedImagePath
+      uploadedImagePaths = await uploadStateImages(id, imageFile, imageMiniFile)
+      imagePaths = uploadedImagePaths
     }
     if (validLines.length) {
       const { data: insertedLines, error: insertLinesError } = await supabase.from('lineas_estado')
@@ -266,7 +292,7 @@ export async function updateState(id, { name, typeId, lines, imageFile }) {
       insertedLineIds = (insertedLines || []).map(line => line.id)
     }
     const { error: updateError } = await supabase.from('estados')
-      .update({ nombre: trimmedName, tipo_estado_id: parsedTypeId, imagen: imagePath, ...(uploadedImagePath ? { imagen_mini: imagePath } : {}) })
+      .update({ nombre: trimmedName, tipo_estado_id: parsedTypeId, imagen: imagePaths.original, imagen_mini: imagePaths.imageMini })
       .eq('id', id)
     if (updateError) throw updateError
     stateUpdated = true
@@ -287,9 +313,9 @@ export async function updateState(id, { name, typeId, lines, imageFile }) {
       const { error: lineCleanupError } = await supabase.from('lineas_estado').delete().in('id', insertedLineIds)
       if (lineCleanupError) cleanupErrors.push(lineCleanupError)
     }
-    if (uploadedImagePath) {
+    if (uploadedImagePaths) {
       try {
-        await removeStateImage(uploadedImagePath)
+        await Promise.all([removeStateImage(uploadedImagePaths.original), removeStateImage(uploadedImagePaths.imageMini)])
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError)
       }
@@ -297,15 +323,15 @@ export async function updateState(id, { name, typeId, lines, imageFile }) {
     if (cleanupErrors.length) throw new Error(`${error.message || 'No se pudo actualizar el estado'}. También falló la limpieza: ${cleanupErrors.map(item => item.message).join('; ')}`)
     throw error
   }
-  const oldImagePaths = [...new Set([oldState.imagen, oldState.imagen_mini].filter(path => path && path !== imagePath))]
-  if (uploadedImagePath && oldImagePaths.length) {
+  const oldImagePaths = [...new Set([oldState.imagen, oldState.imagen_mini].filter(path => path && path !== imagePaths.original && path !== imagePaths.imageMini))]
+  if (uploadedImagePaths && oldImagePaths.length) {
     try {
       for (const path of oldImagePaths) await removeStateImage(path)
     } catch (error) {
       throw new Error(`El estado se guardó, pero no se pudo eliminar la imagen anterior: ${error.message}`)
     }
   }
-  return { id, nombre: trimmedName, tipo_estado_id: parsedTypeId, imagen: imagePath }
+  return { id, nombre: trimmedName, tipo_estado_id: parsedTypeId, imagen: imagePaths.original, imagen_mini: imagePaths.imageMini }
 }
 
 export async function deleteState(id, { image, imageMini } = {}) {

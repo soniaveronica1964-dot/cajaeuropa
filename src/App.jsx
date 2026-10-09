@@ -1044,11 +1044,12 @@ function LiveStates({ setToast }) {
       saving={saving}
       onClose={() => !saving && setEditingState(null)}
       onSave={save}
+      onImageError={message => setToast(message)}
     />}
   </section>
 }
 
-function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, saving, onClose, onSave }) {
+function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, saving, onClose, onSave, onImageError }) {
   const existingLines = [...(state?.lineas_estado || [])].sort((left, right) => Number(left.id) - Number(right.id))
   const [draft, setDraft] = useState(() => {
     const typeId = String(state?.tipo_estado_id || bonusTypes[0]?.id || '')
@@ -1057,6 +1058,7 @@ function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, savi
       name: state?.nombre || '',
       typeId,
       imageFile: null,
+      imageMiniFile: null,
       lines: Array.from({ length: lineCount }, (_, index) => {
         const line = existingLines[index]
         return {
@@ -1072,13 +1074,23 @@ function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, savi
   const lineCount = Number(selectedType?.cantidad_porcentaje || 0)
 
   useEffect(() => {
-    if (draft.imageFile) {
-      const objectUrl = URL.createObjectURL(draft.imageFile)
+    if (draft.imageMiniFile) {
+      const objectUrl = URL.createObjectURL(draft.imageMiniFile)
       setImagePreview(objectUrl)
       return () => URL.revokeObjectURL(objectUrl)
     }
     setImagePreview(state ? getStoragePublicUrl(state.imagen_mini || state.imagen) : '')
-  }, [draft.imageFile, state])
+  }, [draft.imageMiniFile, state])
+
+  const selectImage = async (file) => {
+    if (!file) return
+    try {
+      const imagePayload = await createAppImagePayload(file)
+      setDraft(current => ({ ...current, imageFile: imagePayload.original, imageMiniFile: imagePayload.imageMini }))
+    } catch (error) {
+      onImageError(error.message || 'No se pudo procesar la imagen')
+    }
+  }
 
   const setType = (typeId) => {
     const nextType = bonusTypes.find(type => String(type.id) === typeId)
@@ -1104,6 +1116,7 @@ function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, savi
       name: draft.name,
       typeId: draft.typeId,
       imageFile: draft.imageFile,
+      imageMiniFile: draft.imageMiniFile,
       lines: draft.lines.map(line => ({
         percentage: line.percentage,
         conditionId: line.conditionId,
@@ -1118,7 +1131,7 @@ function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, savi
       <div className="state-form-fields">
         <label className="state-image-picker"><span>Imagen</span>
           {imagePreview && <img src={imagePreview} alt="Vista previa del estado" />}
-          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onChange={event => setDraft(current => ({ ...current, imageFile: event.target.files?.[0] || null }))} />
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onChange={event => selectImage(event.target.files?.[0])} />
         </label>
         <label><span>Nombre</span><input required maxLength="100" value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} autoFocus /></label>
         <div className="state-configuration-row">
