@@ -2407,7 +2407,6 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
         .sort((a, b) => a.id - b.id)
         .map((subplatform) => {
           const color = localData.colors?.find((item) => item.id === subplatform.color_id)
-            || localData.colors?.find((item) => item.id === localData.platforms?.find(platform => String(platform.id) === String(subplatform.plataforma_id))?.color_id)
           return { id: subplatform.id, nombre: subplatform.nombre || 'Subplataforma', platformId: subplatform.plataforma_id, colorId: subplatform.color_id, colorHex: color?.hex || null }
         }),
       bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
@@ -3133,26 +3132,24 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               <span className="box-config-dot" style={{ backgroundColor: subplatform.colorHex || '#879598' }} />
               <input value={subplatform.nombre} onChange={(event) => setDraft((current) => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, nombre: event.target.value } : item) }))} onBlur={async (event) => {
                 const value = event.target.value.trim()
-                if (!value || value === subplatform.nombre) return
+                const savedName = localData.subplatforms?.find(item => String(item.id) === String(subplatform.id))?.nombre
+                if (!value || value === savedName) return
                 await persistUpdate(() => updateSubplatform(subplatform.id, { name: value, platformId: subplatform.platformId, colorId: subplatform.colorId }), 'Subplataforma actualizada en Supabase')
               }} placeholder="Nombre de subplataforma" aria-label="Nombre de subplataforma" />
               <select value={String(subplatform.platformId)} aria-label="Plataforma asociada" onChange={(event) => {
                 const platformId = event.target.value
-                const parentPlatform = draft.platforms.find(platform => String(platform.id) === platformId)
-                setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, platformId, colorId: parentPlatform?.colorId ?? null, colorHex: parentPlatform?.colorHex || null } : item) }))
-                persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId, colorId: parentPlatform?.colorId ?? null }), 'Plataforma asociada actualizada en Supabase')
+                setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, platformId } : item) }))
+                persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId, colorId: subplatform.colorId }), 'Plataforma asociada actualizada en Supabase')
               }}>
                 {draft.platforms.map(platform => <option value={String(platform.id)} key={platform.id}>{platform.nombre}</option>)}
               </select>
-              <select value={subplatform.colorId == null ? '' : String(subplatform.colorId)} aria-label="Color de subplataforma" onChange={(event) => {
+              <select value={String(subplatform.colorId ?? [...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id))[0]?.id ?? '')} aria-label="Color de subplataforma" onChange={(event) => {
                 const nextColorId = event.target.value || null
                 const selectedColor = localData.colors?.find(color => String(color.id) === nextColorId)
-                const parentPlatform = draft.platforms.find(platform => String(platform.id) === String(subplatform.platformId))
-                setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || (nextColorId ? null : parentPlatform?.colorHex || null) } : item) }))
+                setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || null } : item) }))
                 persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId: subplatform.platformId, colorId: nextColorId }), 'Color de subplataforma actualizado en Supabase')
               }}>
-                <option value="">Color de plataforma</option>
-                {(localData.colors || []).map(color => <option value={String(color.id)} key={color.id}>{color.nombre}</option>)}
+                {[...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id)).map(color => <option value={String(color.id)} key={color.id}>{color.nombre}</option>)}
               </select>
               <button type="button" className="delete-button" title="Eliminar subplataforma" onClick={async () => {
                 if (!window.confirm(`¿Eliminar "${subplatform.nombre}"? También se eliminarán las líneas de estados y asignaciones vinculadas a esta subplataforma.`)) return
@@ -3164,7 +3161,8 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
           <button type="button" className="config-add" disabled={!draft.platforms.length} onClick={async () => {
             const parentPlatform = draft.platforms[0]
             if (!parentPlatform) return
-            await persistUpdate(() => createSubplatform({ name: 'Nueva subplataforma', platformId: parentPlatform.id, colorId: parentPlatform.colorId }), 'Subplataforma creada en Supabase')
+            const defaultColor = [...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id))[0]
+            await persistUpdate(() => createSubplatform({ name: 'Nueva subplataforma', platformId: parentPlatform.id, colorId: defaultColor?.id ?? null }), 'Subplataforma creada en Supabase')
           }}><Plus size={15} /> Agregar subplataforma</button>
         </section>
       </div>}
