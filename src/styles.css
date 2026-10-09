@@ -1861,7 +1861,7 @@ input[type="time"] { color-scheme: dark; }
 }
 .config-list-row.subplatform-config-row {
   display: grid;
-  grid-template-columns: 12px minmax(0, 1fr) minmax(100px, 140px) 28px;
+  grid-template-columns: 12px minmax(0, 1fr) minmax(88px, 112px) minmax(92px, 112px) 28px;
   gap: 9px;
   align-items: center;
   margin-bottom: 0;
@@ -1885,7 +1885,7 @@ input[type="time"] { color-scheme: dark; }
 .config-list-row.subplatform-config-row input {
   min-height: 36px;
   padding: 8px 10px;
-  font-size: 13px;
+  font-size: 11px;
 }
 .config-list-row.subplatform-config-row select {
   padding-right: 20px;

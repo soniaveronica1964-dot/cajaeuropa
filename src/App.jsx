@@ -3144,6 +3144,16 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               }}>
                 {draft.platforms.map(platform => <option value={String(platform.id)} key={platform.id}>{platform.nombre}</option>)}
               </select>
+              <select value={subplatform.colorId == null ? '' : String(subplatform.colorId)} aria-label="Color de subplataforma" onChange={(event) => {
+                const nextColorId = event.target.value || null
+                const selectedColor = localData.colors?.find(color => String(color.id) === nextColorId)
+                const parentPlatform = draft.platforms.find(platform => String(platform.id) === String(subplatform.platformId))
+                setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || (nextColorId ? null : parentPlatform?.colorHex || null) } : item) }))
+                persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId: subplatform.platformId, colorId: nextColorId }), 'Color de subplataforma actualizado en Supabase')
+              }}>
+                <option value="">Color de plataforma</option>
+                {(localData.colors || []).map(color => <option value={String(color.id)} key={color.id}>{color.nombre}</option>)}
+              </select>
               <button type="button" className="delete-button" title="Eliminar subplataforma" onClick={async () => {
                 if (!window.confirm(`¿Eliminar "${subplatform.nombre}"? También se eliminarán las líneas de estados y asignaciones vinculadas a esta subplataforma.`)) return
                 await persistUpdate(() => deleteSubplatform(subplatform.id), 'Subplataforma eliminada de Supabase')
