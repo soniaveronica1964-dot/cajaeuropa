@@ -26,9 +26,40 @@
   --box-soft: #1d302f;
   --box-line: rgba(124, 155, 150, 0.4);
   --danger: #e74c3c;
+  --scrollbar-track: #111719;
+  --scrollbar-thumb: #354447;
+  --scrollbar-thumb-hover: #4a5d60;
 }
 
 * { box-sizing: border-box; }
+html {
+  color-scheme: dark;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  scrollbar-width: thin;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+*::-webkit-scrollbar-thumb {
+  border: 2px solid var(--scrollbar-track);
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+input[type="number"] {
+  color-scheme: dark;
+}
 html, body, #root { min-height: 100%; }
 body {
   margin: 0;
@@ -2238,6 +2269,10 @@ input[type="time"] { color-scheme: dark; }
   }
 }
 .app-shell[data-theme='light'] {
+  color-scheme: light;
+  --scrollbar-track: #e8efec;
+  --scrollbar-thumb: #b9c7c2;
+  --scrollbar-thumb-hover: #91a49d;
   --bg: #f1f5f3;
   --bg-2: #e8efec;
   --surface: #f8fbfa;
@@ -2258,6 +2293,12 @@ input[type="time"] { color-scheme: dark; }
   --box-soft: #e0eeea;
   background: var(--bg);
   color: var(--text);
+}
+html:has(.app-shell[data-theme='light']) {
+  color-scheme: light;
+  --scrollbar-track: #e8efec;
+  --scrollbar-thumb: #b9c7c2;
+  --scrollbar-thumb-hover: #91a49d;
 }
 .app-shell[data-theme='light'] .topbar {
   background: rgba(255, 255, 255, 0.96);
@@ -2295,7 +2336,8 @@ input[type="time"] { color-scheme: dark; }
   background: #f7faf8;
   color: var(--text);
 }
-.app-shell[data-theme='light'] input[type="time"] { color-scheme: light; }
+.app-shell[data-theme='light'] input[type="time"],
+.app-shell[data-theme='light'] input[type="number"] { color-scheme: light; }
 .app-shell[data-theme='light'] .secondary-button:not(.app-format-button),
 .app-shell[data-theme='light'] .config-add,
 .app-shell[data-theme='light'] .icon-button:not(:hover):not(.selected),
