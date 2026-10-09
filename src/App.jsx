@@ -1072,6 +1072,7 @@ function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, savi
   const [imagePreview, setImagePreview] = useState(state ? getStoragePublicUrl(state.imagen_mini || state.imagen) : '')
   const selectedType = bonusTypes.find(type => String(type.id) === draft.typeId)
   const lineCount = Number(selectedType?.cantidad_porcentaje || 0)
+  const requiresSubplatform = draft.lines.some(line => bonusConditions.find(condition => String(condition.id) === line.conditionId)?.plataforma)
 
   useEffect(() => {
     if (draft.imageMiniFile) {
@@ -1120,7 +1121,9 @@ function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, savi
       lines: draft.lines.map(line => ({
         percentage: line.percentage,
         conditionId: line.conditionId,
-        subplatformId: line.subplatformId || subplatforms[0]?.id,
+        subplatformId: bonusConditions.find(condition => String(condition.id) === line.conditionId)?.plataforma
+          ? line.subplatformId
+          : null,
       })),
     })
   }
@@ -1134,31 +1137,29 @@ function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, savi
           <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onChange={event => selectImage(event.target.files?.[0])} />
         </label>
         <label><span>Nombre</span><input required maxLength="100" value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} autoFocus /></label>
-        <div className="state-configuration-row">
-          <label className="state-type-field"><span>Tipo de estado</span><select required disabled={!bonusTypes.length} value={draft.typeId} onChange={event => setType(event.target.value)}>
-            {bonusTypes.map(type => <option value={String(type.id)} key={type.id}>{type.nombre}</option>)}
-          </select></label>
-          <div className="state-lines-editor">
-            <span>Porcentajes y condiciones</span>
-            {lineCount === 0 ? <p className="state-form-hint">Este tipo no requiere porcentajes.</p>
-              : <div className="state-line-list">{draft.lines.map((line, index) => {
-                const condition = bonusConditions.find(item => String(item.id) === line.conditionId)
-                return <div className={`state-line-editor ${condition?.plataforma ? 'has-platform' : ''}`} key={`${draft.typeId}-${index}`}>
-                  <label><span className="sr-only">Porcentaje {index + 1}</span><div className="state-percentage-input"><span>%</span><input type="number" min="0" max="100" step="0.01" required value={line.percentage} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, percentage: event.target.value } : item) }))} /></div></label>
-                  <label><span className="sr-only">Condición {index + 1}</span><select required disabled={!bonusConditions.length} value={line.conditionId} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, conditionId: event.target.value, subplatformId: item.subplatformId || String(subplatforms[0]?.id || '') } : item) }))}>
-                    {bonusConditions.map(item => <option value={String(item.id)} key={item.id}>{item.nombre}</option>)}
-                  </select></label>
-                  {condition?.plataforma && <label><span className="sr-only">Plataforma {index + 1}</span><select required disabled={!subplatforms.length} value={line.subplatformId} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, subplatformId: event.target.value } : item) }))}>
-                    {subplatforms.map(item => <option value={String(item.id)} key={item.id}>{item.plataformas?.nombre ? `${item.plataformas.nombre} · ${item.nombre}` : item.nombre}</option>)}
-                  </select></label>}
-                </div>
-              })}</div>}
-          </div>
+        <label className="state-type-field"><span>Tipo de estado</span><select required disabled={!bonusTypes.length} value={draft.typeId} onChange={event => setType(event.target.value)}>
+          {bonusTypes.map(type => <option value={String(type.id)} key={type.id}>{type.nombre}</option>)}
+        </select></label>
+        <div className="state-lines-editor">
+          <span>Porcentajes y condiciones</span>
+          {lineCount === 0 ? <p className="state-form-hint">Este tipo no requiere porcentajes.</p>
+            : <div className="state-line-list">{draft.lines.map((line, index) => {
+              const condition = bonusConditions.find(item => String(item.id) === line.conditionId)
+              return <div className={`state-line-editor ${condition?.plataforma ? 'has-platform' : ''}`} key={`${draft.typeId}-${index}`}>
+                <label><span className="state-line-label">Porcentaje {index + 1}</span><div className="state-percentage-input"><span>%</span><input type="number" min="0" max="100" step="0.01" required value={line.percentage} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, percentage: event.target.value } : item) }))} /></div></label>
+                <label><span className="state-line-label">Condición</span><select required disabled={!bonusConditions.length} value={line.conditionId} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, conditionId: event.target.value, subplatformId: item.subplatformId || String(subplatforms[0]?.id || '') } : item) }))}>
+                  {bonusConditions.map(item => <option value={String(item.id)} key={item.id}>{item.nombre}</option>)}
+                </select></label>
+                {condition?.plataforma && <label><span className="state-line-label">Plataforma</span><select required disabled={!subplatforms.length} value={line.subplatformId} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, subplatformId: event.target.value } : item) }))}>
+                  {subplatforms.map(item => <option value={String(item.id)} key={item.id}>{item.plataformas?.nombre ? `${item.plataformas.nombre} · ${item.nombre}` : item.nombre}</option>)}
+                </select></label>}
+              </div>
+            })}</div>}
         </div>
         {lineCount > 0 && !bonusConditions.length && <p className="state-form-error">Agregá al menos una condición en Configuración → Estados.</p>}
-        {lineCount > 0 && !subplatforms.length && <p className="state-form-error">Se necesita al menos una subplataforma para guardar las líneas del estado.</p>}
+        {requiresSubplatform && !subplatforms.length && <p className="state-form-error">La condición seleccionada requiere una subplataforma. Configurá una desde Control de fichas.</p>}
       </div>
-      <footer><button type="button" className="secondary-button" onClick={onClose} disabled={saving}>Cancelar</button><button type="submit" className="primary-button" disabled={saving || !bonusTypes.length || (lineCount > 0 && (!bonusConditions.length || !subplatforms.length))}>{saving ? 'Guardando...' : 'Guardar'} <Check size={14} /></button></footer>
+      <footer><button type="button" className="secondary-button" onClick={onClose} disabled={saving}>Cancelar</button><button type="submit" className="primary-button" disabled={saving || !bonusTypes.length || (lineCount > 0 && !bonusConditions.length) || (requiresSubplatform && !subplatforms.length)}>{saving ? 'Guardando...' : 'Guardar'} <Check size={14} /></button></footer>
     </form>
   </div>
 }

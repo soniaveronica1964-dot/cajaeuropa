@@ -601,7 +601,7 @@ CREATE TABLE lineas_estado (
     condicion_bono_id BIGINT NOT NULL
         REFERENCES condiciones_bono(id)
         ON DELETE RESTRICT,
-    subplataforma_id BIGINT NOT NULL
+    subplataforma_id BIGINT
         REFERENCES subplataformas(id)
         ON DELETE CASCADE,
     estado_id BIGINT NOT NULL REFERENCES estados(id)

@@ -139,26 +139,43 @@ function requireStateLines(lines) {
   return lines.map((line) => {
     const percentage = Number(line.percentage)
     const conditionId = Number(line.conditionId)
-    const subplatformId = Number(line.subplatformId)
+    const subplatformId = line.subplatformId ? Number(line.subplatformId) : null
     if (String(line.percentage).trim() === '' || !Number.isFinite(percentage) || percentage < 0 || percentage > 100 || Math.abs(Math.round(percentage * 100) - percentage * 100) > 1e-8) {
       throw new Error('Cada porcentaje debe estar entre 0 y 100, con hasta dos decimales')
     }
     if (!Number.isInteger(conditionId) || conditionId <= 0) throw new Error('Seleccioná una condición para cada porcentaje')
-    if (!Number.isInteger(subplatformId) || subplatformId <= 0) throw new Error('No hay una subplataforma válida para asociar al estado')
+    if (subplatformId !== null && (!Number.isInteger(subplatformId) || subplatformId <= 0)) throw new Error('Seleccioná una subplataforma válida')
     return { porcentaje: percentage, condicion_bono_id: conditionId, subplataforma_id: subplatformId }
   })
 }
 
-async function validateStateLineCount(typeId, lines) {
-  const { data: type, error } = await supabase.from('tipos_estado')
-    .select('cantidad_porcentaje')
-    .eq('id', typeId)
-    .maybeSingle()
-  if (error) throw error
+async function validateStateLines(typeId, lines) {
+  const [typeResult, conditionsResult] = await Promise.all([
+    supabase.from('tipos_estado')
+      .select('cantidad_porcentaje')
+      .eq('id', typeId)
+      .maybeSingle(),
+    lines.length
+      ? supabase.from('condiciones_bono')
+        .select('id, nombre, plataforma')
+        .in('id', [...new Set(lines.map(line => line.condicion_bono_id))])
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (typeResult.error) throw typeResult.error
+  if (conditionsResult.error) throw conditionsResult.error
+  const type = typeResult.data
+  const conditions = conditionsResult.data
   if (!type) throw new Error('El tipo de estado seleccionado ya no existe')
   if (lines.length !== Number(type.cantidad_porcentaje)) {
     throw new Error('La cantidad de porcentajes no coincide con el tipo de estado')
   }
+  const conditionsById = new Map((conditions || []).map(condition => [Number(condition.id), condition]))
+  return lines.map(line => {
+    const condition = conditionsById.get(line.condicion_bono_id)
+    if (!condition) throw new Error('Una de las condiciones seleccionadas ya no existe')
+    if (condition.plataforma && !line.subplataforma_id) throw new Error(`La condición "${condition.nombre || 'seleccionada'}" requiere una plataforma`)
+    return { ...line, subplataforma_id: condition.plataforma ? line.subplataforma_id : null }
+  })
 }
 
 function stateImageExtension(file) {
@@ -212,8 +229,7 @@ export async function createState({ name, typeId, lines, imageFile, imageMiniFil
   const parsedTypeId = Number(typeId)
   if (!trimmedName) throw new Error('El nombre del estado es obligatorio')
   if (!Number.isInteger(parsedTypeId) || parsedTypeId <= 0) throw new Error('Seleccioná un tipo de estado')
-  const validLines = requireStateLines(lines)
-  await validateStateLineCount(parsedTypeId, validLines)
+  const validLines = await validateStateLines(parsedTypeId, requireStateLines(lines))
   if (imageFile) {
     stateImageExtension(imageFile)
     if (!imageMiniFile) throw new Error('No se generó la miniatura del estado')
@@ -259,8 +275,7 @@ export async function updateState(id, { name, typeId, lines, imageFile, imageMin
   const parsedTypeId = Number(typeId)
   if (!trimmedName) throw new Error('El nombre del estado es obligatorio')
   if (!Number.isInteger(parsedTypeId) || parsedTypeId <= 0) throw new Error('Seleccioná un tipo de estado')
-  const validLines = requireStateLines(lines)
-  await validateStateLineCount(parsedTypeId, validLines)
+  const validLines = await validateStateLines(parsedTypeId, requireStateLines(lines))
   if (imageFile) {
     stateImageExtension(imageFile)
     if (!imageMiniFile) throw new Error('No se generó la miniatura del estado')
