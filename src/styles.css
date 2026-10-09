@@ -2647,14 +2647,19 @@ html:has(.app-shell[data-theme='light']) {
 }
 .state-configuration-row {
   display: grid;
-  grid-template-columns: minmax(100px, max-content) minmax(0, 1fr);
-  align-items: end;
+  grid-template-columns: minmax(130px, .8fr) minmax(0, 1.6fr);
+  align-items: start;
   gap: 10px;
 }
+.state-form-fields .state-type-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
 .state-type-field select {
-  width: max-content;
-  min-width: 100px;
-  max-width: 160px;
+  width: 100%;
+  min-width: 0;
+  max-width: 180px;
 }
 .state-lines-editor { gap: 6px; }
 .state-lines-editor > span { color: var(--muted); font-size: 10px; }
@@ -2708,8 +2713,8 @@ html:has(.app-shell[data-theme='light']) {
   .state-filter-panel { grid-template-columns: 1fr; }
   .state-card-grid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
   .state-card-image { height: 160px; }
-  .state-configuration-row { grid-template-columns: minmax(92px, max-content) minmax(0, 1fr); gap: 7px; }
-  .state-type-field select { min-width: 92px; }
+  .state-configuration-row { grid-template-columns: minmax(110px, .8fr) minmax(0, 1.6fr); gap: 8px; }
+  .state-type-field select { max-width: none; }
   .state-line-editor { flex-basis: 170px; grid-template-columns: 58px minmax(100px, 1fr); }
   .state-line-editor.has-platform { flex-basis: 280px; grid-template-columns: 58px minmax(100px, 1fr) minmax(105px, 1fr); }
 }
