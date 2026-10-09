@@ -14,6 +14,7 @@ import {
   CircleDollarSign,
   Clock3,
   Copy,
+  Download,
   Eye,
   FileText,
   Gift,
@@ -21,6 +22,7 @@ import {
   LayoutGrid,
   LockKeyhole,
   Megaphone,
+  Pencil,
   Plus,
   Percent,
   RefreshCw,
@@ -84,7 +86,10 @@ import {
   deleteShiftType,
   deleteWallet,
   closeShift,
+  createState,
+  deleteState,
   formatDatabase,
+  loadBonusCatalog,
   loadCurrentShiftData,
   deleteAppImage,
   getStoragePublicUrl,
@@ -110,6 +115,7 @@ import {
   updateHolder,
   updatePlatform,
   updateShiftRounding,
+  updateState,
   updateShiftType,
   updateWallet,
 } from './lib/data'
@@ -198,7 +204,7 @@ const navItems = [
   ['stats', 'Estadísticas', BarChart3],
   ['logistics', 'Logística', WalletCards],
   ['users', 'Usuarios', Users],
-  ['bonuses', 'Bonos', Gift],
+  ['bonuses', 'Estados', Gift],
   ['settings', 'Configuración', Settings2],
 ]
 
@@ -387,13 +393,13 @@ function App() {
       <div className="workspace">
         <aside className="sidebar">
           <p className="sidebar-label">Operación</p>
-          {navItems.map(([id, label, Icon]) => <button key={id} className={`side-link ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={16} /><span>{label}</span>{id === 'bonuses' && appData && <b className="nav-count">{appData.bonuses.length}</b>}</button>)}
+          {navItems.map(([id, label, Icon]) => <button key={id} className={`side-link ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={16} /><span>{label}</span></button>)}
           <div className="sidebar-bottom"><div className="operator"><span>MR</span><div><strong>Marina Ríos</strong><small>Operadora</small></div><ChevronDown size={14} /></div></div>
         </aside>
 
         <main className="main-content">
           <section className="page-heading">
-            <div><span className="eyebrow">{shift ? `Turno iniciado · ${new Date(shift.fecha_hora_inicio).toLocaleString('es-AR')}` : 'Sin turno abierto'}</span><h1>{activeLabel === 'Caja' ? `${shiftName} / ${shiftTime}` : activeLabel}</h1><p>{shift ? new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Seleccioná una caja con un turno abierto'} · {activeBox}</p></div>
+            <div><span className="eyebrow">{view === 'bonuses' ? 'Catálogo de estados' : shift ? `Turno iniciado · ${new Date(shift.fecha_hora_inicio).toLocaleString('es-AR')}` : 'Sin turno abierto'}</span><h1>{activeLabel === 'Caja' ? `${shiftName} / ${shiftTime}` : activeLabel}</h1><p>{view === 'bonuses' ? 'Administrá imágenes, tipos, porcentajes y condiciones' : shift ? `${new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${activeBox}` : 'Seleccioná una caja con un turno abierto'}</p></div>
             {view === 'dashboard' && shift && <div className="shift-discrepancy" aria-label={`Sobrante o faltante: ${cashDiscrepancyLabel}`}><span>Sobrante / Faltante</span><strong className={cashDiscrepancyTone}>{cashDiscrepancyLabel}</strong></div>}
           </section>
 
@@ -405,7 +411,7 @@ function App() {
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
-          {!loadError && appData && view === 'bonuses' && <LiveBonuses bonuses={appData.bonuses} shift={appData.shift} onSaved={reloadData} setToast={setToast} />}
+          {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} />}
         </main>
       </div>
@@ -866,11 +872,279 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
   </section>
 }
 
-function LiveBonuses({ bonuses, shift, onSaved, setToast }) {
-  return <section className="panel bonus-library">
-    <PanelTitle icon={Gift} title="Bonos del turno" meta={`${bonuses.length} registros`} />
-    <BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} setToast={setToast} />
+function LiveStates({ setToast }) {
+  const [catalog, setCatalog] = useState({ states: [], bonusTypes: [], bonusConditions: [], subplatforms: [] })
+  const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState('')
+  const [search, setSearch] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
+  const [sortBy, setSortBy] = useState('percentage')
+  const [groupBy, setGroupBy] = useState('type')
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [editingState, setEditingState] = useState(null)
+  const [saving, setSaving] = useState(false)
+
+  const refresh = async () => {
+    setLoading(true)
+    setLoadError('')
+    try {
+      setCatalog(await loadBonusCatalog())
+    } catch (error) {
+      setLoadError(error.message || 'No se pudo cargar el catálogo de estados')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => { refresh() }, [])
+
+  const filteredStates = useMemo(() => {
+    const normalizedSearch = search.trim().toLocaleLowerCase('es')
+    return catalog.states
+      .filter(state => !typeFilter || String(state.tipo_estado_id) === typeFilter)
+      .filter(state => {
+        if (!normalizedSearch) return true
+        const searchable = [
+          state.nombre,
+          state.tipos_estado?.nombre,
+          ...(state.lineas_estado || []).flatMap(line => [
+            line.porcentaje,
+            line.condiciones_bono?.nombre,
+            line.subplataformas?.nombre,
+            line.subplataformas?.plataformas?.nombre,
+          ]),
+        ].join(' ').toLocaleLowerCase('es')
+        return searchable.includes(normalizedSearch)
+      })
+      .sort((left, right) => {
+        if (sortBy === 'name') return left.nombre.localeCompare(right.nombre, 'es')
+        if (sortBy === 'type') return (left.tipos_estado?.nombre || '').localeCompare(right.tipos_estado?.nombre || '', 'es')
+        const leftPercentage = Math.min(...(left.lineas_estado || []).map(line => Number(line.porcentaje)), Infinity)
+        const rightPercentage = Math.min(...(right.lineas_estado || []).map(line => Number(line.porcentaje)), Infinity)
+        return leftPercentage - rightPercentage || left.nombre.localeCompare(right.nombre, 'es')
+      })
+  }, [catalog.states, search, sortBy, typeFilter])
+
+  const groups = useMemo(() => {
+    if (groupBy === 'none') return [{ key: 'all', title: 'Estados', items: filteredStates }]
+    const grouped = new Map()
+    for (const state of filteredStates) {
+      const typeName = state.tipos_estado?.nombre || 'Sin tipo'
+      if (!grouped.has(typeName)) grouped.set(typeName, [])
+      grouped.get(typeName).push(state)
+    }
+    return [...grouped.entries()].map(([title, items]) => ({ key: title, title, items }))
+  }, [filteredStates, groupBy])
+
+  const save = async (values) => {
+    setSaving(true)
+    try {
+      if (editingState) {
+        await updateState(editingState.id, values)
+        setToast('Estado actualizado')
+      } else {
+        await createState(values)
+        setToast('Estado creado')
+      }
+      setEditingState(null)
+      await refresh()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar el estado')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const remove = async (state) => {
+    if (!window.confirm(`¿Eliminar el estado "${state.nombre}"? Esta acción no se puede deshacer.`)) return
+    try {
+      await deleteState(state.id, { image: state.imagen, imageMini: state.imagen_mini })
+      setToast('Estado eliminado')
+      await refresh()
+    } catch (error) {
+      setToast(error.message || 'No se pudo eliminar el estado')
+    }
+  }
+
+  const download = async (state, imageUrl) => {
+    try {
+      const response = await fetch(imageUrl)
+      if (!response.ok) throw new Error(`No se pudo descargar la imagen (${response.status})`)
+      const blob = await response.blob()
+      const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' })[blob.type] || 'img'
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = `${state.nombre.replace(/[\\/:*?"<>|]/g, '-') || 'estado'}.${extension}`
+      document.body.append(link)
+      link.click()
+      link.remove()
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    } catch (error) {
+      setToast(error.message || 'No se pudo descargar la imagen')
+    }
+  }
+
+  return <section className="panel state-catalog">
+    <header className="state-catalog-toolbar">
+      <div className="state-catalog-title"><Gift size={17} /><div><h2>Estados</h2><span>{catalog.states.length} registros</span></div></div>
+      <div className="state-catalog-controls">
+        <label className="state-search"><Search size={14} /><input aria-label="Buscar estado" placeholder="Buscar estado, porcentaje o condición" value={search} onChange={event => setSearch(event.target.value)} /></label>
+        <button type="button" className={`icon-button state-filter-trigger ${filtersOpen ? 'selected' : ''}`} title="Filtros" aria-label="Filtros" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal size={15} /></button>
+        <button type="button" className="icon-button state-add-button" title="Nuevo estado" aria-label="Nuevo estado" onClick={() => setEditingState(false)}><Plus size={17} /></button>
+      </div>
+    </header>
+
+    {filtersOpen && <div className="state-filter-panel">
+      <label><span>TIPO</span><select aria-label="Filtrar por tipo" value={typeFilter} onChange={event => setTypeFilter(event.target.value)}>
+        <option value="">Todos los tipos</option>
+        {catalog.bonusTypes.map(type => <option value={String(type.id)} key={type.id}>{type.nombre}</option>)}
+      </select></label>
+      <label><span>ORDENAR POR</span><select aria-label="Ordenar estados" value={sortBy} onChange={event => setSortBy(event.target.value)}>
+        <option value="percentage">Porcentaje</option><option value="name">Nombre</option><option value="type">Tipo de estado</option>
+      </select></label>
+      <label><span>AGRUPAR POR</span><select aria-label="Agrupar estados" value={groupBy} onChange={event => setGroupBy(event.target.value)}>
+        <option value="type">Tipo de estado</option><option value="none">Sin agrupar</option>
+      </select></label>
+    </div>}
+
+    {loadError ? <div className="empty-state"><strong>Error al cargar estados</strong><p>{loadError}</p><button type="button" className="secondary-button" onClick={refresh}>Reintentar</button></div>
+      : loading ? <div className="empty-state">Cargando estados...</div>
+        : filteredStates.length ? <div className="state-groups">{groups.map(group => <section className="state-group" key={group.key}>
+          <header><h3>{group.title}</h3><span>{group.items.length} estados</span></header>
+          <div className="state-card-grid">{group.items.map(state => {
+            const image = getStoragePublicUrl(state.imagen_mini || state.imagen)
+            const lines = [...(state.lineas_estado || [])].sort((left, right) => Number(left.porcentaje) - Number(right.porcentaje))
+            return <article className="state-card" key={state.id}>
+              {image ? <img className="state-card-image" src={image} alt={`Imagen de ${state.nombre}`} /> : <div className="state-card-image state-card-placeholder"><Gift size={30} /></div>}
+              <div className="state-card-body">
+                <h4>{state.nombre}</h4>
+                <span className="state-card-type">{state.tipos_estado?.nombre || 'Sin tipo'}</span>
+                <div className="state-card-lines">{lines.length ? lines.map(line => <p key={line.id}>
+                  <strong>{numberCompact.format(Number(line.porcentaje))}%</strong>
+                  <span>{line.condiciones_bono?.nombre || 'Sin condición'}</span>
+                  {line.condiciones_bono?.plataforma && <small>{line.subplataformas?.nombre || line.subplataformas?.plataformas?.nombre || 'Plataforma'}</small>}
+                </p>) : <small>Sin porcentajes configurados</small>}</div>
+                <div className="state-card-actions">
+                  <button type="button" className="icon-button" title="Editar estado" aria-label={`Editar ${state.nombre}`} onClick={() => setEditingState(state)}><Pencil size={14} /></button>
+                  <button type="button" className="icon-button" title="Descargar imagen" aria-label={`Descargar imagen de ${state.nombre}`} disabled={!image} onClick={() => image && download(state, image)}><Download size={14} /></button>
+                  <button type="button" className="delete-button" title="Eliminar estado" aria-label={`Eliminar ${state.nombre}`} onClick={() => remove(state)}><Trash2 size={14} /></button>
+                </div>
+              </div>
+            </article>
+          })}</div>
+        </section>)}</div>
+          : <div className="empty-state"><strong>{catalog.states.length ? 'No hay resultados' : 'Todavía no hay estados'}</strong><p>{catalog.states.length ? 'Probá cambiar la búsqueda o los filtros.' : 'Creá un estado para empezar a armar el catálogo.'}</p></div>}
+
+    {editingState !== null && <StateFormModal
+      state={editingState || null}
+      bonusTypes={catalog.bonusTypes}
+      bonusConditions={catalog.bonusConditions}
+      subplatforms={catalog.subplatforms}
+      saving={saving}
+      onClose={() => !saving && setEditingState(null)}
+      onSave={save}
+    />}
   </section>
+}
+
+function StateFormModal({ state, bonusTypes, bonusConditions, subplatforms, saving, onClose, onSave }) {
+  const existingLines = [...(state?.lineas_estado || [])].sort((left, right) => Number(left.id) - Number(right.id))
+  const [draft, setDraft] = useState(() => {
+    const typeId = String(state?.tipo_estado_id || bonusTypes[0]?.id || '')
+    const lineCount = Number(bonusTypes.find(type => String(type.id) === typeId)?.cantidad_porcentaje || 0)
+    return {
+      name: state?.nombre || '',
+      typeId,
+      imageFile: null,
+      lines: Array.from({ length: lineCount }, (_, index) => {
+        const line = existingLines[index]
+        return {
+          percentage: line ? String(line.porcentaje) : '',
+          conditionId: String(line?.condicion_bono_id || line?.condiciones_bono?.id || bonusConditions[0]?.id || ''),
+          subplatformId: String(line?.subplataforma_id || line?.subplataformas?.id || subplatforms[0]?.id || ''),
+        }
+      }),
+    }
+  })
+  const [imagePreview, setImagePreview] = useState(state ? getStoragePublicUrl(state.imagen_mini || state.imagen) : '')
+  const selectedType = bonusTypes.find(type => String(type.id) === draft.typeId)
+  const lineCount = Number(selectedType?.cantidad_porcentaje || 0)
+
+  useEffect(() => {
+    if (draft.imageFile) {
+      const objectUrl = URL.createObjectURL(draft.imageFile)
+      setImagePreview(objectUrl)
+      return () => URL.revokeObjectURL(objectUrl)
+    }
+    setImagePreview(state ? getStoragePublicUrl(state.imagen_mini || state.imagen) : '')
+  }, [draft.imageFile, state])
+
+  const setType = (typeId) => {
+    const nextType = bonusTypes.find(type => String(type.id) === typeId)
+    const count = Number(nextType?.cantidad_porcentaje || 0)
+    setDraft(current => ({
+      ...current,
+      typeId,
+      lines: Array.from({ length: count }, (_, index) => current.lines[index] || {
+        percentage: '',
+        conditionId: String(bonusConditions[0]?.id || ''),
+        subplatformId: String(subplatforms[0]?.id || ''),
+      }),
+    }))
+  }
+
+  const submit = (event) => {
+    event.preventDefault()
+    if (!draft.name.trim()) return
+    if (!draft.typeId) return
+    if (draft.lines.length !== lineCount) return
+    if (draft.lines.some(line => !line.conditionId || (bonusConditions.find(condition => String(condition.id) === line.conditionId)?.plataforma && !line.subplatformId))) return
+    onSave({
+      name: draft.name,
+      typeId: draft.typeId,
+      imageFile: draft.imageFile,
+      lines: draft.lines.map(line => ({
+        percentage: line.percentage,
+        conditionId: line.conditionId,
+        subplatformId: line.subplatformId || subplatforms[0]?.id,
+      })),
+    })
+  }
+
+  return <div className="modal-backdrop state-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget) onClose() }}>
+    <form className="modal state-form-modal" role="dialog" aria-modal="true" aria-label={state ? 'Editar estado' : 'Nuevo estado'} onSubmit={submit}>
+      <header><div className="modal-icon"><Gift size={20} /></div><h2>{state ? 'Editar estado' : 'Nuevo estado'}</h2><button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button></header>
+      <div className="state-form-fields">
+        <label className="state-image-picker"><span>Imagen</span>
+          {imagePreview && <img src={imagePreview} alt="Vista previa del estado" />}
+          <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/avif" onChange={event => setDraft(current => ({ ...current, imageFile: event.target.files?.[0] || null }))} />
+        </label>
+        <label><span>Nombre</span><input required maxLength="100" value={draft.name} onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} autoFocus /></label>
+        <label><span>Tipo de estado</span><select required value={draft.typeId} onChange={event => setType(event.target.value)}>
+          <option value="">Seleccionar tipo</option>{bonusTypes.map(type => <option value={String(type.id)} key={type.id}>{type.nombre}</option>)}
+        </select></label>
+        <div className="state-lines-editor"><span>Porcentajes y condiciones</span>
+          {lineCount === 0 ? <p className="state-form-hint">Este tipo no requiere porcentajes.</p>
+            : draft.lines.map((line, index) => {
+              const condition = bonusConditions.find(item => String(item.id) === line.conditionId)
+              return <div className="state-line-editor" key={`${draft.typeId}-${index}`}>
+                <label><span className="sr-only">Porcentaje {index + 1}</span><div className="state-percentage-input"><span>%</span><input type="number" min="0" max="100" step="0.01" required value={line.percentage} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, percentage: event.target.value } : item) }))} /></div></label>
+                <label><span className="sr-only">Condición {index + 1}</span><select required value={line.conditionId} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, conditionId: event.target.value, subplatformId: item.subplatformId || String(subplatforms[0]?.id || '') } : item) }))}>
+                  <option value="">Condición</option>{bonusConditions.map(item => <option value={String(item.id)} key={item.id}>{item.nombre}</option>)}
+                </select></label>
+                {condition?.plataforma && <label><span className="sr-only">Plataforma {index + 1}</span><select required value={line.subplatformId} onChange={event => setDraft(current => ({ ...current, lines: current.lines.map((item, lineIndex) => lineIndex === index ? { ...item, subplatformId: event.target.value } : item) }))}>
+                  <option value="">Plataforma</option>{subplatforms.map(item => <option value={String(item.id)} key={item.id}>{item.plataformas?.nombre ? `${item.plataformas.nombre} · ${item.nombre}` : item.nombre}</option>)}
+                </select></label>}
+              </div>
+            })}
+          {lineCount > 0 && !bonusConditions.length && <p className="state-form-error">Agregá al menos una condición en Configuración → Estados.</p>}
+          {lineCount > 0 && !subplatforms.length && <p className="state-form-error">Se necesita al menos una subplataforma para guardar las líneas del estado.</p>}
+        </div>
+      </div>
+      <footer><button type="button" className="secondary-button" onClick={onClose} disabled={saving}>Cancelar</button><button type="submit" className="primary-button" disabled={saving || !bonusTypes.length || (lineCount > 0 && (!bonusConditions.length || !subplatforms.length))}>{saving ? 'Guardando...' : 'Guardar'} <Check size={14} /></button></footer>
+    </form>
+  </div>
 }
 
 function bonusHistoryGroups(bonuses, shift) {
@@ -2407,14 +2681,14 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
         {renderTabButton('expenses', 'Gastos', FileText)}
         {renderTabButton('platforms', 'Control de fichas', Boxes)}
         {renderTabButton('users', 'Usuarios', Users)}
-        {renderTabButton('bonuses', 'Bonos', Gift)}
+        {renderTabButton('bonuses', 'Estados', Gift)}
         {renderTabButton('goals', 'Objetivos', Target)}
         {renderTabButton('app', 'Aplicación', Settings2)}
       </div>
 
       <section className="settings-intro">
         <span className="eyebrow">Configuración</span>
-        <h2>{tab === 'boxes' ? 'Cajas' : tab === 'turns' ? 'Turnos' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Bonos' : tab === 'goals' ? 'Objetivos' : 'Aplicación'}</h2>
+        <h2>{tab === 'boxes' ? 'Cajas' : tab === 'turns' ? 'Turnos' : tab === 'accounts' ? 'Matriz de cuentas' : tab === 'expenses' ? 'Gastos' : tab === 'platforms' ? 'Control de fichas' : tab === 'users' ? 'Usuarios' : tab === 'bonuses' ? 'Estados' : tab === 'goals' ? 'Objetivos' : 'Aplicación'}</h2>
       </section>
 
       {tab === 'boxes' && <>
@@ -2838,7 +3112,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       {tab === 'bonuses' && <>
         <div className="config-two-columns">
           <section className="config-card">
-            <div className="config-list-head"><h3>Tipos de bono (tipos de estado)</h3><span>{draft.bonusTypes.length} elementos</span></div>
+            <div className="config-list-head"><h3>Tipos de estado</h3><span>{draft.bonusTypes.length} elementos</span></div>
             {draft.bonusTypes.map((type, index) => (
               <div className="config-list-row bonus-type-config-row" key={type.id || index}>
                 <input value={type.name} aria-label="Nombre del tipo de bono" onChange={event => setDraft(current => ({

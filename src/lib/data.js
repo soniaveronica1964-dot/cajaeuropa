@@ -125,7 +125,199 @@ export async function loadConfigurationData() {
 }
 
 export async function loadBonusCatalog() {
-  return query('estados', 'id, nombre, imagen, imagen_mini, tipo_estado_id, tipos_estado(nombre, cantidad_porcentaje), lineas_estado(porcentaje, condiciones_bono(nombre, plataforma), subplataformas(nombre))')
+  const [states, bonusTypes, bonusConditions, subplatforms] = await Promise.all([
+    query('estados', 'id, nombre, imagen, imagen_mini, tipo_estado_id, tipos_estado(nombre, cantidad_porcentaje), lineas_estado(id, porcentaje, condicion_bono_id, subplataforma_id, condiciones_bono(id, nombre, plataforma), subplataformas(id, nombre, plataforma_id, plataformas(nombre)))', request => request.order('id', { ascending: true })),
+    query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
+    query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
+    query('subplataformas', 'id, nombre, plataforma_id, plataformas(nombre)', request => request.order('id', { ascending: true })),
+  ])
+  return { states, bonusTypes, bonusConditions, subplatforms }
+}
+
+function requireStateLines(lines) {
+  if (!Array.isArray(lines)) throw new Error('Agregá los porcentajes y condiciones del estado')
+  return lines.map((line) => {
+    const percentage = Number(line.percentage)
+    const conditionId = Number(line.conditionId)
+    const subplatformId = Number(line.subplatformId)
+    if (String(line.percentage).trim() === '' || !Number.isFinite(percentage) || percentage < 0 || percentage > 100 || Math.abs(Math.round(percentage * 100) - percentage * 100) > 1e-8) {
+      throw new Error('Cada porcentaje debe estar entre 0 y 100, con hasta dos decimales')
+    }
+    if (!Number.isInteger(conditionId) || conditionId <= 0) throw new Error('Seleccioná una condición para cada porcentaje')
+    if (!Number.isInteger(subplatformId) || subplatformId <= 0) throw new Error('No hay una subplataforma válida para asociar al estado')
+    return { porcentaje: percentage, condicion_bono_id: conditionId, subplataforma_id: subplatformId }
+  })
+}
+
+async function validateStateLineCount(typeId, lines) {
+  const { data: type, error } = await supabase.from('tipos_estado')
+    .select('cantidad_porcentaje')
+    .eq('id', typeId)
+    .maybeSingle()
+  if (error) throw error
+  if (!type) throw new Error('El tipo de estado seleccionado ya no existe')
+  if (lines.length !== Number(type.cantidad_porcentaje)) {
+    throw new Error('La cantidad de porcentajes no coincide con el tipo de estado')
+  }
+}
+
+function stateImageExtension(file) {
+  const allowed = new Map([['image/png', 'png'], ['image/jpeg', 'jpg'], ['image/webp', 'webp'], ['image/gif', 'gif'], ['image/avif', 'avif']])
+  const extension = allowed.get(file.type)
+  if (!extension) throw new Error('La imagen debe ser PNG, JPG, WEBP, GIF o AVIF')
+  return extension
+}
+
+async function uploadStateImage(stateId, file) {
+  const extension = stateImageExtension(file)
+  const path = `estados/${stateId}/${crypto.randomUUID()}.${extension}`
+  const { error } = await supabase.storage.from(APP_CONFIG_BUCKET).upload(path, file, {
+    contentType: file.type,
+    upsert: false,
+    cacheControl: '3600',
+  })
+  if (error) throw error
+  return path
+}
+
+async function removeStateImage(path) {
+  if (!path || /^(data:|https?:\/\/)/i.test(path)) return
+  const { error } = await supabase.storage.from(APP_CONFIG_BUCKET).remove([path])
+  if (error) throw error
+}
+
+export async function createState({ name, typeId, lines, imageFile }) {
+  requireSupabase()
+  const trimmedName = String(name || '').trim()
+  const parsedTypeId = Number(typeId)
+  if (!trimmedName) throw new Error('El nombre del estado es obligatorio')
+  if (!Number.isInteger(parsedTypeId) || parsedTypeId <= 0) throw new Error('Seleccioná un tipo de estado')
+  const validLines = requireStateLines(lines)
+  await validateStateLineCount(parsedTypeId, validLines)
+  if (imageFile) stateImageExtension(imageFile)
+  const { data: state, error } = await supabase.from('estados')
+    .insert({ nombre: trimmedName, tipo_estado_id: parsedTypeId })
+    .select()
+    .single()
+  if (error) throw error
+
+  let imagePath = null
+  try {
+    if (imageFile) {
+      imagePath = await uploadStateImage(state.id, imageFile)
+      const { error: imageError } = await supabase.from('estados').update({ imagen: imagePath, imagen_mini: imagePath }).eq('id', state.id)
+      if (imageError) throw imageError
+    }
+    if (validLines.length) {
+      const { error: linesError } = await supabase.from('lineas_estado')
+        .insert(validLines.map(line => ({ ...line, estado_id: state.id })))
+      if (linesError) throw linesError
+    }
+    return state
+  } catch (error) {
+    const cleanupErrors = []
+    const { error: stateCleanupError } = await supabase.from('estados').delete().eq('id', state.id)
+    if (stateCleanupError) cleanupErrors.push(stateCleanupError)
+    if (imagePath) {
+      try {
+        await removeStateImage(imagePath)
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError)
+      }
+    }
+    if (cleanupErrors.length) throw new Error(`${error.message || 'No se pudo guardar el estado'}. También falló la limpieza: ${cleanupErrors.map(item => item.message).join('; ')}`)
+    throw error
+  }
+}
+
+export async function updateState(id, { name, typeId, lines, imageFile }) {
+  requireSupabase()
+  const trimmedName = String(name || '').trim()
+  const parsedTypeId = Number(typeId)
+  if (!trimmedName) throw new Error('El nombre del estado es obligatorio')
+  if (!Number.isInteger(parsedTypeId) || parsedTypeId <= 0) throw new Error('Seleccioná un tipo de estado')
+  const validLines = requireStateLines(lines)
+  await validateStateLineCount(parsedTypeId, validLines)
+  if (imageFile) stateImageExtension(imageFile)
+  const { data: oldState, error: loadStateError } = await supabase.from('estados')
+    .select('id, nombre, tipo_estado_id, imagen, imagen_mini')
+    .eq('id', id)
+    .single()
+  if (loadStateError) throw loadStateError
+  const { data: oldLines, error: loadLinesError } = await supabase.from('lineas_estado')
+    .select('id')
+    .eq('estado_id', id)
+  if (loadLinesError) throw loadLinesError
+
+  let imagePath = oldState.imagen || null
+  let uploadedImagePath = null
+  let insertedLineIds = []
+  let stateUpdated = false
+  try {
+    if (imageFile) {
+      uploadedImagePath = await uploadStateImage(id, imageFile)
+      imagePath = uploadedImagePath
+    }
+    if (validLines.length) {
+      const { data: insertedLines, error: insertLinesError } = await supabase.from('lineas_estado')
+        .insert(validLines.map(line => ({ ...line, estado_id: id })))
+        .select('id')
+      if (insertLinesError) throw insertLinesError
+      insertedLineIds = (insertedLines || []).map(line => line.id)
+    }
+    const { error: updateError } = await supabase.from('estados')
+      .update({ nombre: trimmedName, tipo_estado_id: parsedTypeId, imagen: imagePath, ...(uploadedImagePath ? { imagen_mini: imagePath } : {}) })
+      .eq('id', id)
+    if (updateError) throw updateError
+    stateUpdated = true
+
+    if (oldLines?.length) {
+      const { error: deleteLinesError } = await supabase.from('lineas_estado').delete().in('id', oldLines.map(line => line.id))
+      if (deleteLinesError) throw deleteLinesError
+    }
+  } catch (error) {
+    const cleanupErrors = []
+    if (stateUpdated) {
+      const { error: restoreError } = await supabase.from('estados')
+        .update({ nombre: oldState.nombre, tipo_estado_id: oldState.tipo_estado_id, imagen: oldState.imagen, imagen_mini: oldState.imagen_mini })
+        .eq('id', id)
+      if (restoreError) cleanupErrors.push(restoreError)
+    }
+    if (insertedLineIds.length) {
+      const { error: lineCleanupError } = await supabase.from('lineas_estado').delete().in('id', insertedLineIds)
+      if (lineCleanupError) cleanupErrors.push(lineCleanupError)
+    }
+    if (uploadedImagePath) {
+      try {
+        await removeStateImage(uploadedImagePath)
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError)
+      }
+    }
+    if (cleanupErrors.length) throw new Error(`${error.message || 'No se pudo actualizar el estado'}. También falló la limpieza: ${cleanupErrors.map(item => item.message).join('; ')}`)
+    throw error
+  }
+  const oldImagePaths = [...new Set([oldState.imagen, oldState.imagen_mini].filter(path => path && path !== imagePath))]
+  if (uploadedImagePath && oldImagePaths.length) {
+    try {
+      for (const path of oldImagePaths) await removeStateImage(path)
+    } catch (error) {
+      throw new Error(`El estado se guardó, pero no se pudo eliminar la imagen anterior: ${error.message}`)
+    }
+  }
+  return { id, nombre: trimmedName, tipo_estado_id: parsedTypeId, imagen: imagePath }
+}
+
+export async function deleteState(id, { image, imageMini } = {}) {
+  requireSupabase()
+  const { error } = await supabase.from('estados').delete().eq('id', id)
+  if (error) throw error
+  const paths = [...new Set([image, imageMini].filter(Boolean))]
+  try {
+    for (const path of paths) await removeStateImage(path)
+  } catch (error) {
+    throw new Error(`El estado se eliminó, pero no se pudo eliminar su imagen: ${error.message}`)
+  }
 }
 
 async function updateRow(table, id, values) {

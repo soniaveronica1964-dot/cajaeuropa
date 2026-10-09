@@ -43,11 +43,13 @@ ALTER TABLE subobjetivos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE objetivos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE fichas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE plataformas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subplataformas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cargas_fichas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE condiciones_bono ENABLE ROW LEVEL SECURITY;
 ALTER TABLE app_config ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tipos_estado ENABLE ROW LEVEL SECURITY;
 ALTER TABLE estados ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lineas_estado ENABLE ROW LEVEL SECURITY;
 
 -- Lectura pública temporal para la app sin login.
 DO $$
@@ -61,7 +63,8 @@ BEGIN
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario',
     'paneles_x_usuario', 'paneles', 'subobjetivos_x_turno', 'subobjetivos',
-    'objetivos', 'fichas', 'plataformas', 'cargas_fichas', 'condiciones_bono', 'tipos_estado', 'app_config'
+    'objetivos', 'fichas', 'plataformas', 'subplataformas', 'cargas_fichas', 'condiciones_bono', 'tipos_estado',
+    'estados', 'lineas_estado', 'app_config'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_read_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_read_%I ON public.%I FOR SELECT TO anon USING (true)', table_name, table_name);
@@ -76,7 +79,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'colores', 'tipos_billetera', 'tipos_cuenta', 'tipos_gasto', 'cajas', 'billeteras', 'titulares',
     'titulares_x_caja', 'billeteras_x_caja', 'tipos_turno', 'dias_turno', 'turnos',
-    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'condiciones_bono', 'tipos_estado'
+    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'condiciones_bono', 'tipos_estado', 'estados', 'lineas_estado'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_insert_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_insert_%I ON public.%I FOR INSERT TO anon WITH CHECK (true)', table_name, table_name);
@@ -95,7 +98,7 @@ BEGIN
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica', 'usuarios',
     'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'paneles',
     'subobjetivos_x_turno', 'subobjetivos', 'objetivos', 'fichas', 'plataformas', 'cargas_fichas',
-    'condiciones_bono', 'app_config', 'tipos_estado', 'estados', 'subplataformas'
+    'condiciones_bono', 'app_config', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_update_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_update_%I ON public.%I FOR UPDATE TO anon USING (true) WITH CHECK (true)', table_name, table_name);
@@ -124,7 +127,10 @@ CREATE POLICY dev_app_assets_read ON storage.objects
   FOR SELECT TO anon
   USING (
     bucket_id = 'app-assets'
-    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+    AND (
+      name IN ('app-config/application-original', 'app-config/application-mini.webp')
+      OR name LIKE 'estados/%'
+    )
   );
 
 DROP POLICY IF EXISTS dev_app_assets_insert ON storage.objects;
@@ -132,7 +138,10 @@ CREATE POLICY dev_app_assets_insert ON storage.objects
   FOR INSERT TO anon
   WITH CHECK (
     bucket_id = 'app-assets'
-    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+    AND (
+      name IN ('app-config/application-original', 'app-config/application-mini.webp')
+      OR name LIKE 'estados/%'
+    )
   );
 
 DROP POLICY IF EXISTS dev_app_assets_update ON storage.objects;
@@ -140,11 +149,17 @@ CREATE POLICY dev_app_assets_update ON storage.objects
   FOR UPDATE TO anon
   USING (
     bucket_id = 'app-assets'
-    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+    AND (
+      name IN ('app-config/application-original', 'app-config/application-mini.webp')
+      OR name LIKE 'estados/%'
+    )
   )
   WITH CHECK (
     bucket_id = 'app-assets'
-    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+    AND (
+      name IN ('app-config/application-original', 'app-config/application-mini.webp')
+      OR name LIKE 'estados/%'
+    )
   );
 
 DROP POLICY IF EXISTS dev_app_assets_delete ON storage.objects;
@@ -152,7 +167,10 @@ CREATE POLICY dev_app_assets_delete ON storage.objects
   FOR DELETE TO anon
   USING (
     bucket_id = 'app-assets'
-    AND name IN ('app-config/application-original', 'app-config/application-mini.webp')
+    AND (
+      name IN ('app-config/application-original', 'app-config/application-mini.webp')
+      OR name LIKE 'estados/%'
+    )
   );
 
 COMMIT;
