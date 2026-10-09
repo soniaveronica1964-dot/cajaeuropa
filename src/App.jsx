@@ -1947,7 +1947,7 @@ function LegacyBonusList({ shiftId, rows, onSaved, setToast }) {
 function EmptyInline({ text }) { return <p className="empty-inline">{text}</p> }
 function PanelTitle({ icon: Icon, title, meta, action }) { return <div className="panel-title"><div><Icon size={16} /><h2>{title}</h2>{meta && <small>{meta}</small>}</div>{action && <span className="panel-action">{action}</span>}</div> }
 
-function ConfigList({ title, items, select }) { return <section className="panel config-list"><div className="panel-title"><h2>{title}</h2><small>{items.length} elementos</small></div>{items.map(item => <div className="config-row" key={item.id || item}><span className="drag">⠿</span><input defaultValue={item.nombre || item} />{select && <select defaultValue="Cobros + retiros"><option>Cobros + retiros</option><option>Solo cobros</option><option>Solo depósito</option></select>}<button className="icon-button"><X size={14} /></button></div>)}{!items.length && <EmptyInline text="No hay registros configurados." />}<button className="secondary-button"><Plus size={14} /> Agregar</button></section> }
+function ConfigList({ title, items, select }) { return <section className="panel config-list"><div className="panel-title"><h2>{title}</h2><small>{items.length} elementos</small></div>{items.map(item => <div className="config-row" key={item.id || item}><span className="drag">⠿</span><input defaultValue={item.nombre || item} />{select && <select defaultValue="Cobros + retiros"><option>Cobros + retiros</option><option>Solo cobros</option><option>Solo depósito</option></select>}<button className="icon-button"><Trash2 size={14} /></button></div>)}{!items.length && <EmptyInline text="No hay registros configurados." />}<button className="secondary-button"><Plus size={14} /> Agregar</button></section> }
 
 function LiveStatistics({ data }) {
   const tips = data.tips.reduce((sum, row) => sum + Number(row.monto || 0), 0)
@@ -2441,7 +2441,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
                 <button type="button" className="delete-button" title="Eliminar caja" onClick={() => {
                   if (!box.id) return
                   persistUpdate(() => deleteBox(box.id), 'Caja eliminada de Supabase')
-                }}><X size={14} /></button>
+                }}><Trash2 size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={async () => {
@@ -2462,7 +2462,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
                   if (!next || next === type.nombre) return
                   await persistUpdate(() => updateShiftType(type.id, { name: next, colorId: type.color_id }), 'Tipo de turno actualizado en Supabase')
                 }} placeholder="Nombre del tipo" />
-                <button type="button" className="delete-button" title="Eliminar tipo de turno" onClick={() => persistUpdate(() => deleteShiftType(type.id), 'Tipo de turno eliminado de Supabase')}><X size={14} /></button>
+                <button type="button" className="delete-button" title="Eliminar tipo de turno" onClick={() => persistUpdate(() => deleteShiftType(type.id), 'Tipo de turno eliminado de Supabase')}><Trash2 size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={() => persistUpdate(() => {
@@ -2503,7 +2503,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: day.hora_inicio || '08:00', end: event.target.value, crossesMidnight: Boolean(day.cruza_medianoche) }), 'Hora de fin actualizada')
             }} />
             <label className="toggle-cell" title="Cruza medianoche"><input type="checkbox" checked={Boolean(day.cruza_medianoche)} onChange={(event) => persistUpdate(() => updateDayShift(day.id, { name: day.nombre || 'Día', weekday: day.dia_semana, start: day.hora_inicio || '08:00', end: day.hora_fin || '18:00', crossesMidnight: event.target.checked }), 'Cruce de medianoche actualizado')} /><span /></label>
-            <button type="button" className="delete-button" title="Eliminar día" onClick={() => persistUpdate(() => deleteDayShift(day.id), 'Día de turno eliminado de Supabase')}><X size={14} /></button>
+            <button type="button" className="delete-button" title="Eliminar día" onClick={() => persistUpdate(() => deleteDayShift(day.id), 'Día de turno eliminado de Supabase')}><Trash2 size={14} /></button>
           </div>)}
           {!currentShiftDays.length && <EmptyInline text="Todavía no hay días de turno configurados para esta caja." />}
         </section>
@@ -2526,7 +2526,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               const finalAmount = window.prompt('Caja final', String(turn.caja_inicial || 0))
               if (finalAmount === null) return
               persistUpdate(() => closeShift(turn.id, finalAmount), 'Turno cerrado')
-            }}><X size={14} /></button>
+            }}><Trash2 size={14} /></button>
           </div>)}
           {!currentActiveTurns.length && <EmptyInline text="No hay turnos activos para esta caja." />}
         </section>
@@ -2588,7 +2588,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
                     await deleteHolder(current.id)
                     updateAccounts({ holders: draft.accounts.holders.filter((_, itemIndex) => itemIndex !== index) })
                   }, 'Titular desactivado')
-                }}><X size={14} /></button>
+                }}><Trash2 size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={() => addBlankConfigItem('holders')}><Plus size={15} /> Agregar titular</button>
@@ -2659,7 +2659,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
                     await deleteWallet(current.id)
                     updateAccounts({ wallets: draft.accounts.wallets.filter((_, itemIndex) => itemIndex !== index) })
                   }, 'Billetera desactivada')
-                }}><X size={14} /></button>
+                }}><Trash2 size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={() => addBlankConfigItem('wallets')}><Plus size={15} /> Agregar billetera</button>
@@ -2719,7 +2719,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
                   <small style={{ fontSize: '10px', opacity: 0.7 }}>Publicidad</small>
                   <label className="toggle-cell" title="Publicidad"><input type="checkbox" checked={Boolean(type.es_publicidad)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), deposit: Boolean(type.es_deposito), advertising: !Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
                 </div>
-                <button type="button" className="delete-button" title="Desactivar tipo de cuenta" onClick={() => persistUpdate(() => deleteAccountType(type.id), 'Tipo de cuenta desactivado')}><X size={14} /></button>
+                <button type="button" className="delete-button" title="Desactivar tipo de cuenta" onClick={() => persistUpdate(() => deleteAccountType(type.id), 'Tipo de cuenta desactivado')}><Trash2 size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={() => persistUpdate(() => createAccountType({ name: 'Nuevo tipo de cuenta', shared: false, deposit: false, advertising: false, saving: false, canCollect: true, canWithdraw: true }), 'Tipo de cuenta creado en Supabase')}><Plus size={15} /> Agregar tipo de cuenta</button>
@@ -2746,7 +2746,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
                   <small style={{ fontSize: '10px', opacity: 0.7 }}>Retiros</small>
                   <label className="toggle-cell" title="Retiros"><input type="checkbox" checked={Boolean(type.retiros)} onChange={async () => persistUpdate(() => updateWalletType(type.id, { name: type.nombre || 'Tipo', canCollect: Boolean(type.cobros), canWithdraw: !Boolean(type.retiros) }), 'Config de tipo de billetera guardada')} /><span /></label>
                 </div>
-                <button type="button" className="delete-button" title="Desactivar tipo de billetera" onClick={() => persistUpdate(() => deleteWalletType(type.id), 'Tipo de billetera desactivado')}><X size={14} /></button>
+                <button type="button" className="delete-button" title="Desactivar tipo de billetera" onClick={() => persistUpdate(() => deleteWalletType(type.id), 'Tipo de billetera desactivado')}><Trash2 size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={() => persistUpdate(() => createWalletType({ name: 'Nuevo tipo de billetera', canCollect: true, canWithdraw: true }), 'Tipo de billetera creado en Supabase')}><Plus size={15} /> Agregar tipo de billetera</button>
@@ -2780,7 +2780,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               const target = data.expenseTypes.find(item => item.id === expense.id)
               if (!target) return
               await persistUpdate(() => deleteExpenseType(target.id), 'Tipo de gasto eliminado de Supabase')
-            }}><X size={14} /></button>
+            }}><Trash2 size={14} /></button>
           </div>
         ))}
         <button type="button" className="config-add" onClick={async () => {
@@ -2811,7 +2811,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
             <button type="button" className="delete-button" title="Eliminar plataforma" onClick={async () => {
               if (!platform.id) return
               await persistUpdate(() => deletePlatform(platform.id), 'Plataforma eliminada de Supabase')
-            }}><X size={14} /></button>
+            }}><Trash2 size={14} /></button>
           </div>
         ))}
         <button type="button" className="config-add" onClick={async () => {
@@ -2887,19 +2887,22 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
                   if (!value || !target) return
                   await persistUpdate(() => updateBonusCondition(target.id, { name: value, platform: condition.allow }), 'Condición de bono guardada en Supabase')
                 }} placeholder="Etiqueta" />
-                <label className="toggle-cell" aria-label={`Habilitar ${condition.label}`}>
-                  <input type="checkbox" checked={condition.allow} onChange={async () => {
-                    setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, allow: !item.allow } : item) }))
-                    const target = localData.bonusConditions?.find(item => item.id === condition.id)
-                    if (target) await persistUpdate(() => updateBonusCondition(target.id, { name: condition.label, platform: !condition.allow }), 'Condición de bono actualizada en Supabase')
-                  }} />
-                  <span />
-                </label>
+                <div className="bonus-condition-platform">
+                  <label className="toggle-cell" aria-label={`Plataforma para ${condition.label}`}>
+                    <input type="checkbox" checked={condition.allow} onChange={async () => {
+                      setDraft((current) => ({ ...current, bonusConditions: current.bonusConditions.map((item, itemIndex) => itemIndex === index ? { ...item, allow: !item.allow } : item) }))
+                      const target = localData.bonusConditions?.find(item => item.id === condition.id)
+                      if (target) await persistUpdate(() => updateBonusCondition(target.id, { name: condition.label, platform: !condition.allow }), 'Condición de bono actualizada en Supabase')
+                    }} />
+                    <span />
+                  </label>
+                  <span>Plataforma</span>
+                </div>
                 <button type="button" className="delete-button" title="Eliminar condición" onClick={async () => {
                   const target = localData.bonusConditions?.find(item => item.id === condition.id)
                   if (!target) return
                   await persistUpdate(() => deleteBonusCondition(target.id), 'Condición de bono eliminada de Supabase')
-                }}><X size={14} /></button>
+                }}><Trash2 size={14} /></button>
               </div>
             ))}
             <button type="button" className="config-add" onClick={async () => {
@@ -2960,7 +2963,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
               if (hex === (color.hex || '#72D7CA')) return
               persistUpdate(() => updateColor(color.id, { name: color.nombre || 'Color', hex }), 'Color actualizado')
             }} />
-            <button type="button" className="delete-button" title="Eliminar color" onClick={() => persistUpdate(() => deleteColor(color.id), 'Color eliminado')}><X size={14} /></button>
+            <button type="button" className="delete-button" title="Eliminar color" onClick={() => persistUpdate(() => deleteColor(color.id), 'Color eliminado')}><Trash2 size={14} /></button>
           </div>)}
           <button type="button" className="config-add" onClick={() => persistUpdate(() => createColor({ name: 'Nuevo color', hex: '#72D7CA' }), 'Color creado')}><Plus size={15} /> Agregar color</button>
         </section>

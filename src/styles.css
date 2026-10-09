@@ -2002,6 +2002,14 @@ input[type="time"] { color-scheme: dark; }
   place-items: center;
   position: relative;
 }
+.bonus-condition-platform {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
 .toggle-cell input {
   position: absolute;
   opacity: 0;
