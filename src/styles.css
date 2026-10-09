@@ -1956,10 +1956,13 @@ input[type="time"] { color-scheme: dark; }
 .config-list-row input { flex: 1; }
 .bonus-type-config-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(90px, .9fr) 28px;
+  grid-template-columns: minmax(0, 1fr) 52px 28px;
   gap: 8px;
 }
 .bonus-type-config-row input[type="number"] { min-width: 0; }
+.bonus-settings-grid {
+  grid-template-columns: minmax(240px, .78fr) minmax(320px, 1.22fr);
+}
 .config-list-row .delete-button,
 .wallet-config-row .delete-button,
 .delete-button {
@@ -2602,7 +2605,7 @@ html:has(.app-shell[data-theme='light']) {
 .state-form-modal {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(540px, 100%);
+  width: min(500px, 100%);
   max-height: min(90dvh, 760px);
   overflow: hidden;
   padding: 0;
@@ -2642,11 +2645,34 @@ html:has(.app-shell[data-theme='light']) {
   object-fit: contain;
   background: #0d1315;
 }
-.state-lines-editor { gap: 8px; }
+.state-configuration-row {
+  display: grid;
+  grid-template-columns: minmax(100px, max-content) minmax(0, 1fr);
+  align-items: end;
+  gap: 10px;
+}
+.state-type-field select {
+  width: max-content;
+  min-width: 100px;
+  max-width: 160px;
+}
+.state-lines-editor { gap: 6px; }
+.state-lines-editor > span { color: var(--muted); font-size: 10px; }
+.state-line-list {
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+  overflow-x: auto;
+}
 .state-line-editor {
   display: grid;
-  grid-template-columns: minmax(78px, .55fr) minmax(130px, 1fr) minmax(130px, 1fr);
+  flex: 0 0 178px;
+  grid-template-columns: 62px minmax(105px, 1fr);
   gap: 7px;
+}
+.state-line-editor.has-platform {
+  flex-basis: 292px;
+  grid-template-columns: 62px minmax(105px, 1fr) minmax(110px, 1fr);
 }
 .state-percentage-input {
   display: flex;
@@ -2682,8 +2708,10 @@ html:has(.app-shell[data-theme='light']) {
   .state-filter-panel { grid-template-columns: 1fr; }
   .state-card-grid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
   .state-card-image { height: 160px; }
-  .state-line-editor { grid-template-columns: minmax(80px, .55fr) 1fr; }
-  .state-line-editor > label:last-child { grid-column: 2; }
+  .state-configuration-row { grid-template-columns: minmax(92px, max-content) minmax(0, 1fr); gap: 7px; }
+  .state-type-field select { min-width: 92px; }
+  .state-line-editor { flex-basis: 170px; grid-template-columns: 58px minmax(100px, 1fr); }
+  .state-line-editor.has-platform { flex-basis: 280px; grid-template-columns: 58px minmax(100px, 1fr) minmax(105px, 1fr); }
 }
 .bonus-history-backdrop { z-index: 90; padding: 18px; }
 .bonus-history-modal { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; width: min(1120px, 100%); max-height: min(88dvh, 900px); overflow: hidden; border: 1px solid var(--line); border-radius: 10px; background: rgba(17, 25, 26, .98); box-shadow: 0 18px 42px rgba(0, 0, 0, .45); }
