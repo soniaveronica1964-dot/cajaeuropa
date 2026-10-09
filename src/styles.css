@@ -2516,6 +2516,7 @@ html:has(.app-shell[data-theme='light']) {
 }
 .state-filter-panel label,
 .state-form-fields > label,
+.state-configuration-row .state-type-field,
 .state-lines-editor,
 .state-line-editor > label {
   display: grid;
@@ -2524,6 +2525,7 @@ html:has(.app-shell[data-theme='light']) {
 }
 .state-filter-panel label > span,
 .state-form-fields > label > span,
+.state-configuration-row .state-type-field > span,
 .state-lines-editor > span {
   color: var(--muted);
   font-size: 10px;
@@ -2650,11 +2652,6 @@ html:has(.app-shell[data-theme='light']) {
   grid-template-columns: minmax(130px, .8fr) minmax(0, 1.6fr);
   align-items: start;
   gap: 10px;
-}
-.state-form-fields .state-type-field {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
 }
 .state-type-field select {
   width: 100%;
