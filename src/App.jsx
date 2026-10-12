@@ -2696,6 +2696,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
 
       setToast(nextValue ? 'Cuenta activada' : 'Cuenta desactivada')
       const refreshed = await refreshLocalData()
+      onSaved(refreshed)
       if (refreshed?.accounts) {
         setDraft((current) => ({
           ...current,
@@ -2800,6 +2801,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       setSelected(null)
       setToast('Cuenta guardada')
       const refreshed = await refreshLocalData()
+      onSaved(refreshed)
       setDraft((current) => ({
         ...current,
         accounts: {
