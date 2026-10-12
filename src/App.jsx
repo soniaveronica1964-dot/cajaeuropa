@@ -2425,7 +2425,7 @@ function latestLogisticsReset(row) {
 }
 
 function logisticsDateLabel(value) {
-  return value ? new Date(value).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+  return value ? new Date(value).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : 'dd/mm/aaaa --:--'
 }
 
 function LiveLogistics({ data, setToast, onSaved }) {
@@ -2525,16 +2525,24 @@ function LiveLogistics({ data, setToast, onSaved }) {
     }
   }
 
-  const reorderRows = async (targetId, targetGroup) => {
-    if (!draggedId || draggedId === targetId) return
-    const sourceGroup = groups.find(group => group.rows.some(row => row.id === draggedId))
+  const reorderRows = async (sourceId, targetId, targetGroup, insertAfter) => {
+    if (!sourceId || sourceId === targetId) return
+    const sourceGroup = groups.find(group => group.rows.some(row => String(row.id) === sourceId))
     if (!sourceGroup || sourceGroup.key !== targetGroup) return
-    const nextRows = [...activeRows]
-    const fromIndex = nextRows.findIndex(row => row.id === draggedId)
-    const toIndex = nextRows.findIndex(row => row.id === targetId)
+    const nextGroupRows = [...sourceGroup.rows]
+    const fromIndex = nextGroupRows.findIndex(row => String(row.id) === sourceId)
+    const toIndex = nextGroupRows.findIndex(row => String(row.id) === String(targetId))
     if (fromIndex < 0 || toIndex < 0) return
-    const [moved] = nextRows.splice(fromIndex, 1)
-    nextRows.splice(toIndex, 0, moved)
+    const [moved] = nextGroupRows.splice(fromIndex, 1)
+    const insertionIndex = toIndex + (insertAfter ? 1 : 0) - (fromIndex < toIndex + (insertAfter ? 1 : 0) ? 1 : 0)
+    nextGroupRows.splice(insertionIndex, 0, moved)
+    const reorderedGroupIds = new Set(nextGroupRows.map(row => row.id))
+    const nextRows = []
+    let nextGroupIndex = 0
+    activeRows.forEach(row => {
+      if (reorderedGroupIds.has(row.id)) nextRows.push(nextGroupRows[nextGroupIndex++])
+      else nextRows.push(row)
+    })
     setSaving(true)
     try {
       await Promise.all([
@@ -2557,18 +2565,22 @@ function LiveLogistics({ data, setToast, onSaved }) {
     const latestReset = latestLogisticsReset(row)
     const useVisible = Boolean(accountType?.cobros)
     const paymentsVisible = Boolean(accountType?.retiros)
-    const displayDate = value => <time className={`logistics-date ${dateTone(value)}`}>{logisticsDateLabel(value)}</time>
-    return <div className="logistics-data-row" key={row.id} draggable={!saving} onDragStart={event => {
-      if (!event.target.closest('.logistics-drag-handle')) { event.preventDefault(); return }
-      setDraggedId(row.id)
-      event.dataTransfer.effectAllowed = 'move'
-      event.dataTransfer.setData('text/plain', String(row.id))
-    }} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); reorderRows(row.id, groupKey) }} onDragEnd={() => setDraggedId(null)}>
-      <span className="logistics-drag-handle" title="Arrastrar para ordenar"><GripVertical size={14} /></span>
+    const displayDate = value => <time className="logistics-date">{logisticsDateLabel(value)}</time>
+    return <div className={`logistics-data-row ${draggedId === row.id ? 'dragging' : ''}`} key={row.id} onDragOver={event => event.preventDefault()} onDrop={event => {
+      event.preventDefault()
+      const sourceId = event.dataTransfer.getData('text/plain')
+      const bounds = event.currentTarget.getBoundingClientRect()
+      void reorderRows(sourceId, row.id, groupKey, event.clientY >= bounds.top + bounds.height / 2)
+    }}>
+      <span className="logistics-drag-handle" title="Arrastrar para ordenar" draggable={!saving} onDragStart={event => {
+        setDraggedId(row.id)
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData('text/plain', String(row.id))
+      }} onDragEnd={() => setDraggedId(null)}><GripVertical size={14} /></span>
       <div className="logistics-activity-cell">
         {useVisible && <label title="En uso"><input type="checkbox" aria-label={`En uso ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked={Boolean(accountLink?.cobros)} onChange={event => toggleActivity(row, accountLink, 'cobros', event.target.checked)} /></label>}
       </div>
-      <div className="logistics-activity-cell">
+      <div className="logistics-activity-cell logistics-payments-cell">
         {paymentsVisible && <label title="Pagos"><input type="checkbox" aria-label={`Pagos ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked={Boolean(accountLink?.retiros)} onChange={event => toggleActivity(row, accountLink, 'retiros', event.target.checked)} /></label>}
       </div>
       <strong className="logistics-holder">{account?.titulares?.nombre || 'Sin titular'}</strong>
@@ -2577,7 +2589,7 @@ function LiveLogistics({ data, setToast, onSaved }) {
       <div className="logistics-reset-cell">{displayDate(row.ultimo_reinicio_cobros)}</div>
       <div className="logistics-reset-cell">{displayDate(row.ultimo_reinicio_retiros)}</div>
       <span className="logistics-date stale">-</span>
-      <div className="logistics-last-reset">
+      <div className={`logistics-last-reset ${dateTone(latestReset)}`}>
         {displayDate(latestReset)}
         <input ref={element => { dateInputRefs.current[row.id] = element }} className="logistics-date-picker" type="datetime-local" aria-label={`Editar último reinicio ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} value={dateInputValue(latestReset)} onChange={event => saveGeneralReset(row, event.target.value)} />
         <button type="button" className="logistics-date-button" title="Editar último reinicio" aria-label="Editar último reinicio" onClick={() => {
@@ -2591,7 +2603,7 @@ function LiveLogistics({ data, setToast, onSaved }) {
   }
 
   return <section className="panel logistics-page">
-    <PanelTitle icon={WalletCards} title="Ruta de cuentas" meta={`${activeRows.length} registros del turno`} action={<select className="logistics-add-select" aria-label="Agregar billetera a logística" value="" onChange={addAccount} disabled={Boolean(addingAccount)}>
+    <PanelTitle icon={WalletCards} title="Ruta de cuentas" action={<select className="logistics-add-select" aria-label="Agregar billetera a logística" value="" onChange={addAccount} disabled={Boolean(addingAccount)}>
       <option value="">{addingAccount ? 'Agregando...' : 'Agregar billetera...'}</option>
       {accountOptions.map(link => <option value={link.id} key={link.id}>{link.cuentas?.titulares?.nombre || 'Sin titular'} · {link.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
     </select>} />

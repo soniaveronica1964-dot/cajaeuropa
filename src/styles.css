@@ -1461,9 +1461,9 @@ input[type="time"] { color-scheme: dark; }
   background: rgba(121, 146, 146, .035);
 }
 .logistics-data-row:nth-child(even) { background: rgba(121, 146, 146, .075); }
-.logistics-data-row[draggable="true"] { cursor: grab; }
-.logistics-data-row[draggable="true"]:active { cursor: grabbing; }
-.logistics-drag-handle { display: grid; place-items: center; color: var(--muted); }
+.logistics-data-row.dragging { opacity: .55; }
+.logistics-drag-handle { display: grid; place-items: center; color: var(--muted); cursor: grab; user-select: none; }
+.logistics-drag-handle:active { cursor: grabbing; }
 .logistics-activity-cell { display: flex; justify-content: center; gap: 7px; }
 .logistics-activity-cell label { display: grid; place-items: center; width: 17px; height: 18px; }
 .logistics-activity-cell input {
@@ -1480,6 +1480,7 @@ input[type="time"] { color-scheme: dark; }
 }
 .logistics-activity-cell input:checked { border-color: var(--green); background: var(--green); }
 .logistics-activity-cell input:checked::after { width: 6px; height: 3px; border: solid #183027; border-width: 0 0 1.5px 1.5px; content: ''; transform: rotate(-45deg) translate(0, -1px); }
+.logistics-payments-cell input:checked { border-color: var(--orange); background: var(--orange); }
 .logistics-holder,
 .logistics-wallet { overflow: hidden; padding: 0 9px; color: var(--text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .logistics-wallet { color: var(--accent); }
@@ -1496,14 +1497,25 @@ input[type="time"] { color-scheme: dark; }
   color: var(--muted-2);
   font-size: 9px;
 }
-.logistics-data-row:hover .logistics-note,
+.logistics-note:hover,
 .logistics-note:focus { border-color: var(--line); background: var(--surface); color: var(--text); }
 .logistics-reset-cell { overflow: hidden; text-align: center; }
 .logistics-date { color: var(--muted-2); font: 9px 'DM Mono', monospace; white-space: nowrap; }
-.logistics-date.today { color: var(--red); }
-.logistics-date.yesterday { color: var(--orange); }
-.logistics-date.stale { color: var(--muted-2); }
-.logistics-last-reset { position: relative; display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 0; }
+.logistics-last-reset {
+  position: relative;
+  display: flex;
+  align-self: stretch;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--muted) 12%, transparent);
+}
+.logistics-last-reset.today { background: color-mix(in srgb, var(--red) 20%, transparent); }
+.logistics-last-reset.yesterday { background: color-mix(in srgb, var(--orange) 18%, transparent); }
+.logistics-last-reset .logistics-date { font-weight: 700; }
 .logistics-date-picker { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .logistics-date-button,
 .logistics-hide-button { display: grid; place-items: center; width: 25px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }
