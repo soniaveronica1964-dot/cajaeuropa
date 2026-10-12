@@ -86,6 +86,24 @@ BEGIN
   END LOOP;
 END $$;
 
+-- Las líneas de logística solo pueden agregarse a cuentas del turno abierto.
+DROP POLICY IF EXISTS dev_insert_lineas_logistica ON public.lineas_logistica;
+CREATE POLICY dev_insert_lineas_logistica ON public.lineas_logistica
+  FOR INSERT TO anon
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.logistica AS logistics
+      JOIN public.turnos AS shifts
+        ON shifts.id = logistics.turno_id
+      JOIN public.cuentas_x_turno AS account_links
+        ON account_links.turno_id = shifts.id
+      WHERE logistics.id = lineas_logistica.logistica_id
+        AND account_links.id = lineas_logistica.cuenta_x_turno_id
+        AND shifts.abierto IS TRUE
+    )
+  );
+
 -- Escrituras mínimas usadas por los controles actuales.
 DO $$
 DECLARE

@@ -2553,9 +2553,10 @@ function LiveLogistics({ data, setToast, onSaved }) {
   const renderRow = (row, groupKey) => {
     const accountLink = row.cuentas_x_turno
     const account = accountLink?.cuentas
+    const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account?.tipo_cuenta_id))
     const latestReset = latestLogisticsReset(row)
-    const useVisible = Boolean(accountLink?.cobros)
-    const paymentsVisible = Boolean(accountLink?.retiros)
+    const useVisible = Boolean(accountType?.cobros)
+    const paymentsVisible = Boolean(accountType?.retiros)
     const displayDate = value => <time className={`logistics-date ${dateTone(value)}`}>{logisticsDateLabel(value)}</time>
     return <div className="logistics-data-row" key={row.id} draggable={!saving} onDragStart={event => {
       if (!event.target.closest('.logistics-drag-handle')) { event.preventDefault(); return }
@@ -2565,10 +2566,10 @@ function LiveLogistics({ data, setToast, onSaved }) {
     }} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); reorderRows(row.id, groupKey) }} onDragEnd={() => setDraggedId(null)}>
       <span className="logistics-drag-handle" title="Arrastrar para ordenar"><GripVertical size={14} /></span>
       <div className="logistics-activity-cell">
-        {useVisible && <label title="En uso"><input type="checkbox" aria-label={`En uso ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked onChange={event => toggleActivity(row, accountLink, 'cobros', event.target.checked)} /></label>}
+        {useVisible && <label title="En uso"><input type="checkbox" aria-label={`En uso ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked={Boolean(accountLink?.cobros)} onChange={event => toggleActivity(row, accountLink, 'cobros', event.target.checked)} /></label>}
       </div>
       <div className="logistics-activity-cell">
-        {paymentsVisible && <label title="Pagos"><input type="checkbox" aria-label={`Pagos ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked onChange={event => toggleActivity(row, accountLink, 'retiros', event.target.checked)} /></label>}
+        {paymentsVisible && <label title="Pagos"><input type="checkbox" aria-label={`Pagos ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked={Boolean(accountLink?.retiros)} onChange={event => toggleActivity(row, accountLink, 'retiros', event.target.checked)} /></label>}
       </div>
       <strong className="logistics-holder">{account?.titulares?.nombre || 'Sin titular'}</strong>
       <strong className="logistics-wallet">{account?.billeteras?.nombre || 'Sin billetera'}</strong>
