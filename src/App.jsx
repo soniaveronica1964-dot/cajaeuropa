@@ -565,7 +565,8 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
   const goals = mapGoals(data.goals)
   const accounts = data.accounts.map(account => {
     const savedAmount = Number(account.valor || 0)
-    return { ...account, holder: account.cuentas?.titulares?.nombre || 'Sin titular', wallet: account.cuentas?.billeteras?.nombre || 'Sin billetera', savedAmount, amount: accountValueDrafts[String(account.id)] ?? savedAmount }
+    const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account.cuentas?.tipo_cuenta_id)) || null
+    return { ...account, accountType, holder: account.cuentas?.titulares?.nombre || 'Sin titular', wallet: account.cuentas?.billeteras?.nombre || 'Sin billetera', savedAmount, amount: accountValueDrafts[String(account.id)] ?? savedAmount }
   })
   const total = accounts.reduce((sum, account) => sum + account.amount, 0)
   const chips = data.chips.map(chip => ({
@@ -615,7 +616,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
     <div className="dashboard-grid">
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
-        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} total={total} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
+        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard setToast={setToast} /><UsersCard users={data.users} /></div>
         <div className="operations-grid">
           <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
@@ -1443,8 +1444,18 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
   </section>
 }
-function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved, onAccountValueDraft }) {
+function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccountValueDraft }) {
   const [flagOverrides, setFlagOverrides] = useState({})
+  const [expandedAccountTypes, setExpandedAccountTypes] = useState({ deposit: true, shared: false, saving: false })
+  const accountTypeSections = [
+    { key: 'deposit', label: 'Billeteras depósitos', matches: account => account.accountType?.es_deposito },
+    { key: 'shared', label: 'Billeteras compartidas', matches: account => account.accountType?.es_compartido },
+    { key: 'saving', label: 'Billeteras ahorro', matches: account => account.accountType?.ahorro },
+  ].map(section => ({ ...section, accounts: accounts.filter(section.matches) }))
+  const specialAccountIds = new Set(accountTypeSections.flatMap(section => section.accounts.map(account => account.id)))
+  const regularAccounts = accounts.filter(account => !specialAccountIds.has(account.id))
+  const columns = { '--wallet-count': wallets.length }
+
   const saveAccount = async (account, event) => {
     const input = event.currentTarget
     const value = parseLocalizedAmount(input.value)
@@ -1477,54 +1488,67 @@ function AccountMatrix({ accounts, holders, wallets, total, setToast, onSaved, o
       setToast(`No se pudo guardar ${field === 'cobros' ? 'cobros' : 'retiros'}`)
     })
   }
-  const columns = { '--wallet-count': wallets.length }
+  const renderRows = (matrixAccounts, keyPrefix) => holders
+    .filter(holder => matrixAccounts.some(account => account.holder === holder))
+    .map(holder => {
+      const holderAccounts = matrixAccounts.filter(account => account.holder === holder)
+      const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0)
+      return <div className="matrix-row" key={`${keyPrefix}-${holder}`}>
+        <strong>{holder}</strong>
+        {wallets.map(wallet => {
+          const account = holderAccounts.find(item => item.wallet === wallet)
+          if (!account) return <span className="matrix-account-empty" key={`${keyPrefix}-${holder}-${wallet}`} aria-hidden="true" />
+          const flags = flagOverrides[account.id] || account
+          const valueTone = flags.cobros && flags.retiros ? 'both-enabled' : flags.cobros ? 'collecting' : flags.retiros ? 'withdrawing' : ''
+          return <div className="matrix-account-cell" key={`${keyPrefix}-${holder}-${wallet}`}>
+            <label className={`matrix-value ${valueTone}`}>
+              <span>$</span>
+              <input defaultValue={account.savedAmount ? numberWithCents.format(account.savedAmount) : ''} placeholder="-" onFocus={(event) => event.target.select()} onChange={(event) => {
+                const value = parseLocalizedAmount(event.target.value)
+                if (value !== null && value >= 0) onAccountValueDraft(account.id, value)
+              }} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
+            </label>
+            <div className="matrix-account-flags">
+              <label className="matrix-flag" title="Cobros">
+                <input type="checkbox" aria-label={`Cobros ${wallet}, ${holder}`} checked={Boolean(flags.cobros)} onChange={(event) => saveFlag(account, 'cobros', event.target.checked)} />
+              </label>
+              <label className="matrix-flag" title="Retiros">
+                <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} checked={Boolean(flags.retiros)} onChange={(event) => saveFlag(account, 'retiros', event.target.checked)} />
+              </label>
+            </div>
+          </div>
+        })}
+        <b>{moneyWithCents.format(holderTotal)}</b>
+      </div>
+    })
+
+  const renderTotal = () => <div className="matrix-total">
+    <span>Total billetera</span>
+    {wallets.map(wallet => <b key={wallet}>{moneyWithCents.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}
+    <strong>{moneyWithCents.format(accounts.reduce((sum, account) => sum + account.amount, 0))}</strong>
+  </div>
 
   return <section className="panel account-panel">
-    <div className="matrix-wrap" style={columns}>
-      {accounts.length ? <>
+    {accounts.length ? <>
+      <div className="matrix-wrap" style={columns}>
         <div className="matrix-row matrix-head">
           <strong className="matrix-box-heading"><WalletCards size={13} />Caja</strong>
           {wallets.map(wallet => <span key={wallet}>{wallet}</span>)}
           <span>Total</span>
         </div>
-        {holders.map(holder => {
-          const holderAccounts = accounts.filter(account => account.holder === holder)
-          const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0)
-          return <div className="matrix-row" key={holder}>
-            <strong>{holder}</strong>
-            {wallets.map(wallet => {
-              const account = holderAccounts.find(item => item.wallet === wallet)
-              if (!account) return <span className="matrix-account-empty" key={`${holder}-${wallet}`} aria-hidden="true" />
-              const flags = flagOverrides[account.id] || account
-              const valueTone = flags.cobros && flags.retiros ? 'both-enabled' : flags.cobros ? 'collecting' : flags.retiros ? 'withdrawing' : ''
-              return <div className="matrix-account-cell" key={`${holder}-${wallet}`}>
-                <label className={`matrix-value ${valueTone}`}>
-                  <span>$</span>
-                  <input defaultValue={account.savedAmount ? numberWithCents.format(account.savedAmount) : ''} placeholder="-" onFocus={(event) => event.target.select()} onChange={(event) => {
-                    const value = parseLocalizedAmount(event.target.value)
-                    if (value !== null && value >= 0) onAccountValueDraft(account.id, value)
-                  }} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
-                </label>
-                <div className="matrix-account-flags">
-                  <label className="matrix-flag" title="Cobros">
-                    <input type="checkbox" aria-label={`Cobros ${wallet}, ${holder}`} checked={Boolean(flags.cobros)} onChange={(event) => saveFlag(account, 'cobros', event.target.checked)} />
-                  </label>
-                  <label className="matrix-flag" title="Retiros">
-                    <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} checked={Boolean(flags.retiros)} onChange={(event) => saveFlag(account, 'retiros', event.target.checked)} />
-                  </label>
-                </div>
-              </div>
-            })}
-            <b>{moneyWithCents.format(holderTotal)}</b>
-          </div>
-        })}
-        <div className="matrix-total">
-          <span>Total billetera</span>
-          {wallets.map(wallet => <b key={wallet}>{moneyWithCents.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}
-          <strong>{moneyWithCents.format(total)}</strong>
-        </div>
-      </> : <EmptyInline text="No hay cuentas vinculadas al turno abierto." />}
-    </div>
+        {renderRows(regularAccounts, 'regular')}
+      </div>
+      {accountTypeSections.filter(section => section.accounts.length).map(section => {
+        const expanded = Boolean(expandedAccountTypes[section.key])
+        return <section className="account-type-section" key={section.key}>
+          <button type="button" className="account-type-section-toggle" aria-expanded={expanded} onClick={() => setExpandedAccountTypes(current => ({ ...current, [section.key]: !current[section.key] }))}>
+            <span>{section.label}</span>{expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
+          </button>
+          {expanded && <div className="matrix-wrap" style={columns}>{renderRows(section.accounts, section.key)}</div>}
+        </section>
+      })}
+      <div className="matrix-wrap" style={columns}>{renderTotal()}</div>
+    </> : <div className="matrix-wrap"><EmptyInline text="No hay cuentas vinculadas al turno abierto." /></div>}
   </section>
 }
 function LogisticsCard({ rows }) { return <section className="panel mini-card logistics-card"><PanelTitle icon={WalletCards} title="Logística" action={<ChevronRight size={15} />} />{rows.length ? rows.slice(0, 4).map(row => { const account = row.cuentas_x_turno?.cuentas; return <div className="route-row" key={row.id}><span>{row.num_orden ?? '—'}</span><b>{account?.titulares?.nombre || 'Sin titular'} · {account?.billeteras?.nombre || 'Sin billetera'}</b></div> }) : <EmptyInline text="No hay rutas de logística configuradas." />}</section> }
@@ -2397,6 +2421,21 @@ function LiveLogistics({ data, setToast }) {
 
 function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(null); return <><section className="panel directory"><PanelTitle icon={Users} title="Usuarios" meta={`${users.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo usuario</button>} />{users.map(user => { const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`; return <div className={`directory-row ${expanded === user.id ? 'expanded' : ''}`} key={user.id}><button className="expand-button" onClick={() => setExpanded(expanded === user.id ? null : user.id)}>{expanded === user.id ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button><b>{name}</b><div className="tags">{user.titulares_usuario?.map(holder => <span key={holder.id}>{holder.nombre}</span>)}</div><button className="icon-button"><Settings2 size={15} /></button>{expanded === user.id && <div className="user-detail"><label>Nombre<input defaultValue={name} /></label><label>Teléfono<input defaultValue={user.telefonos_usuario?.[0]?.numero || ''} /></label><label>Titular<input defaultValue={user.titulares_usuario?.[0]?.nombre || ''} /></label><label>Estado<input defaultValue={user.bloqueado ? 'Bloqueado' : 'Activo'} readOnly /></label></div>}</div> })}{!users.length && <EmptyInline text="No hay usuarios registrados en Supabase." />}</section></> }
 
+function accountTypeFlagsAfterToggle(type, field, enabled) {
+  const flags = {
+    shared: Boolean(type.es_compartido),
+    deposit: Boolean(type.es_deposito),
+    saving: Boolean(type.ahorro),
+  }
+  flags[field] = enabled
+  if (enabled) {
+    Object.keys(flags).forEach(key => {
+      if (key !== field) flags[key] = false
+    })
+  }
+  return flags
+}
+
 function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
   const appImageInputRef = useRef(null)
   const [dragState, setDragState] = useState({ type: null, index: null })
@@ -3127,15 +3166,15 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', borderLeft: '1px solid rgba(148, 163, 184, 0.35)', paddingLeft: '8px' }}>
                   <small style={{ fontSize: '10px', opacity: 0.7 }}>Compartida</small>
-                  <label className="toggle-cell" title="Compartida"><input type="checkbox" checked={Boolean(type.es_compartido)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: !Boolean(type.es_compartido), deposit: Boolean(type.es_deposito), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+                  <label className="toggle-cell" title="Compartida"><input type="checkbox" checked={Boolean(type.es_compartido)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', ...accountTypeFlagsAfterToggle(type, 'shared', !Boolean(type.es_compartido)), advertising: Boolean(type.es_publicidad), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                   <small style={{ fontSize: '10px', opacity: 0.7 }}>Depósito</small>
-                  <label className="toggle-cell" title="Depósito"><input type="checkbox" checked={Boolean(type.es_deposito)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), deposit: !Boolean(type.es_deposito), advertising: Boolean(type.es_publicidad), saving: Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+                  <label className="toggle-cell" title="Depósito"><input type="checkbox" checked={Boolean(type.es_deposito)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', ...accountTypeFlagsAfterToggle(type, 'deposit', !Boolean(type.es_deposito)), advertising: Boolean(type.es_publicidad), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                   <small style={{ fontSize: '10px', opacity: 0.7 }}>Ahorro</small>
-                  <label className="toggle-cell" title="Ahorro"><input type="checkbox" checked={Boolean(type.ahorro)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', shared: Boolean(type.es_compartido), deposit: Boolean(type.es_deposito), advertising: Boolean(type.es_publicidad), saving: !Boolean(type.ahorro), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
+                  <label className="toggle-cell" title="Ahorro"><input type="checkbox" checked={Boolean(type.ahorro)} onChange={async () => persistUpdate(() => updateAccountType(type.id, { name: type.nombre || 'Tipo', ...accountTypeFlagsAfterToggle(type, 'saving', !Boolean(type.ahorro)), advertising: Boolean(type.es_publicidad), canCollect: Boolean(type.cobros), canWithdraw: Boolean(type.retiros) }), 'Config de tipo de cuenta guardada')} /><span /></label>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', borderLeft: '1px solid rgba(148, 163, 184, 0.35)', paddingLeft: '8px' }}>
                   <small style={{ fontSize: '10px', opacity: 0.7 }}>Publicidad</small>

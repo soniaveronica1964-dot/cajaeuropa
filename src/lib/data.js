@@ -1253,6 +1253,13 @@ export async function closeShift(id, finalAmount) {
   return data
 }
 
+function exclusiveAccountTypeFlags(shared, deposit, saving) {
+  if (shared) return { es_compartido: true, es_deposito: false, ahorro: false }
+  if (deposit) return { es_compartido: false, es_deposito: true, ahorro: false }
+  if (saving) return { es_compartido: false, es_deposito: false, ahorro: true }
+  return { es_compartido: false, es_deposito: false, ahorro: false }
+}
+
 export async function createAccountType({ name, shared = false, deposit = false, advertising = false, saving = false, canCollect = false, canWithdraw = false }) {
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
@@ -1268,10 +1275,8 @@ export async function createAccountType({ name, shared = false, deposit = false,
 
   const payload = {
     nombre: trimmedName,
-    es_compartido: Boolean(shared),
-    es_deposito: Boolean(deposit),
+    ...exclusiveAccountTypeFlags(Boolean(shared), Boolean(deposit), Boolean(saving)),
     es_publicidad: Boolean(advertising),
-    ahorro: Boolean(saving),
     cobros: Boolean(canCollect),
     retiros: Boolean(canWithdraw),
     is_off: false,
@@ -1302,10 +1307,8 @@ export async function updateAccountType(id, { name, shared = false, deposit = fa
 
   const { data, error } = await supabase.from('tipos_cuenta').update({
     nombre: trimmedName,
-    es_compartido: Boolean(shared),
-    es_deposito: Boolean(deposit),
+    ...exclusiveAccountTypeFlags(Boolean(shared), Boolean(deposit), Boolean(saving)),
     es_publicidad: Boolean(advertising),
-    ahorro: Boolean(saving),
     cobros: Boolean(canCollect),
     retiros: Boolean(canWithdraw),
     is_off: false,
