@@ -621,7 +621,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
-        <div className="three-panels"><LogisticsCard rows={data.logistics} /><StatusCard setToast={setToast} /><UsersCard users={data.users} /></div>
+        <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard setToast={setToast} /><UsersCard users={data.users} /></div>
         <div className="operations-grid">
           <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
           <MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} />
@@ -1555,7 +1555,95 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
     </> : <div className="matrix-wrap"><EmptyInline text="No hay cuentas vinculadas al turno abierto." /></div>}
   </section>
 }
-function LogisticsCard({ rows }) { return <section className="panel mini-card logistics-card"><PanelTitle icon={WalletCards} title="Logística" action={<ChevronRight size={15} />} />{rows.length ? rows.slice(0, 4).map(row => { const account = row.cuentas_x_turno?.cuentas; return <div className="route-row" key={row.id}><span>{row.num_orden ?? '—'}</span><b>{account?.titulares?.nombre || 'Sin titular'} · {account?.billeteras?.nombre || 'Sin billetera'}</b></div> }) : <EmptyInline text="No hay rutas de logística configuradas." />}</section> }
+function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
+  const [saving, setSaving] = useState(false)
+  const routeRows = [...rows]
+    .filter(row => {
+      if (row.is_off) return false
+      const account = row.cuentas_x_turno?.cuentas
+      const type = (accountTypes || []).find(item => String(item.id) === String(account?.tipo_cuenta_id))
+      return Boolean(type?.cobros) && !type?.es_deposito && !type?.es_compartido && !type?.ahorro
+    })
+    .sort((left, right) => (Number(left.num_orden) || Number.MAX_SAFE_INTEGER) - (Number(right.num_orden) || Number.MAX_SAFE_INTEGER) || Number(left.id) - Number(right.id))
+  const currentIndex = routeRows.findIndex(row => Boolean(row.cuentas_x_turno?.cobros))
+  const currentRow = currentIndex >= 0 ? routeRows[currentIndex] : null
+  const dateOrder = Number(currentRow?.num_orden) || 0
+  const recommendedRow = currentRow
+    ? routeRows
+      .filter(row => row.id !== currentRow.id && !['today', 'yesterday'].includes(dateTone(row.ultimo_reinicio_cobros)))
+      .sort((left, right) => {
+        const leftDistance = Math.abs((Number(left.num_orden) || 0) - dateOrder)
+        const rightDistance = Math.abs((Number(right.num_orden) || 0) - dateOrder)
+        return leftDistance - rightDistance ||
+          Number((Number(right.num_orden) || 0) > dateOrder) - Number((Number(left.num_orden) || 0) > dateOrder)
+      })[0] || null
+    : null
+  const nearbyRows = currentIndex < 0
+    ? (routeRows[0] ? [{ row: routeRows[0], label: 'INICIAR', key: 'start' }] : [])
+    : [
+    { row: routeRows[currentIndex - 2], label: '-2', key: 'previous-2' },
+    { row: routeRows[currentIndex - 1], label: '-1', key: 'previous-1' },
+    { row: currentRow, label: 'EN USO', key: 'current', current: true },
+    { row: routeRows[currentIndex + 1], label: '+1', key: 'next-1' },
+    recommendedRow && { row: recommendedRow, label: `${Number(recommendedRow.num_orden) >= dateOrder ? '+' : ''}${(Number(recommendedRow.num_orden) || 0) - dateOrder}`, key: 'recommended', recommended: true },
+  ].filter(item => item?.row)
+
+  const selectWallet = async targetRow => {
+    if (saving || !targetRow || targetRow.id === currentRow?.id) return
+    setSaving(true)
+    try {
+      const previouslySelected = routeRows.filter(row => row.cuentas_x_turno?.cobros && row.id !== targetRow.id)
+      const now = new Date().toISOString()
+      await Promise.all([
+        ...previouslySelected.map(row => updateAccountFlags(row.cuentas_x_turno.id, 'cobros', false)),
+        updateAccountFlags(targetRow.cuentas_x_turno.id, 'cobros', true),
+        updateLogisticsLine(targetRow.id, {
+          ultimo_reinicio_cobros: now,
+          ultimo_reinicio_general: now,
+        }),
+      ])
+      setToast('Billetera En uso actualizada')
+    } catch (error) {
+      setToast(error.message || 'No se pudo cambiar la billetera En uso')
+    } finally {
+      await onSaved()
+      setSaving(false)
+    }
+  }
+
+  const walletLabel = row => `${row.cuentas_x_turno?.cuentas?.titulares?.nombre || 'Sin titular'} · ${row.cuentas_x_turno?.cuentas?.billeteras?.nombre || 'Sin billetera'}`
+
+  return <section className="panel mini-card logistics-card">
+    <PanelTitle icon={WalletCards} title="Logística" />
+    {recommendedRow && <button type="button" className="logistics-recommendation" disabled={saving} onClick={() => selectWallet(recommendedRow)}>
+      <span><Sparkles size={13} />BILLETERA RECOMENDADA</span>
+      <strong>{walletLabel(recommendedRow)}</strong>
+      <small>Reinicio más antiguo · {logisticsDateLabel(recommendedRow.ultimo_reinicio_cobros)}</small>
+    </button>}
+    <div className="logistics-route-heading">
+      <strong><WalletCards size={13} />Próximas Billeteras</strong>
+      <small>RUTA NORMAL</small>
+    </div>
+    <div className="logistics-route-actions">
+      <button type="button" disabled={saving || currentIndex <= 0} onClick={() => selectWallet(routeRows[currentIndex - 1])}><ArrowLeft size={12} />Anterior</button>
+      <button type="button" disabled={saving || currentIndex < 0 || currentIndex >= routeRows.length - 1} onClick={() => selectWallet(routeRows[currentIndex + 1])}>Próxima<ArrowRight size={12} /></button>
+      <button type="button" className="recommended-action" disabled={saving || !recommendedRow} onClick={() => selectWallet(recommendedRow)}><Sparkles size={12} />Recomendada</button>
+    </div>
+    {nearbyRows.length
+      ? <div className="logistics-route-list">{nearbyRows.map(({ row, label, key, current, recommended }) => <button
+        type="button"
+        key={key}
+        className={`logistics-route-item ${current ? 'current' : ''} ${recommended ? 'recommended' : ''}`}
+        disabled={saving || current}
+        onClick={() => selectWallet(row)}
+      >
+        <span>{label}</span>
+        <strong>{walletLabel(row)}</strong>
+        {recommended && <small>Recomendada</small>}
+      </button>)}</div>
+      : <EmptyInline text="No hay una billetera En uso en la ruta normal." />}
+  </section>
+}
 function StatusCard({ setToast }) {
   const [catalog, setCatalog] = useState({ states: [], bonusTypes: [], bonusConditions: [], subplatforms: [] })
   const [loading, setLoading] = useState(true)
