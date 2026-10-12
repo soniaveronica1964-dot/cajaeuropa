@@ -1461,6 +1461,8 @@ input[type="time"] { color-scheme: dark; }
   background: rgba(121, 146, 146, .035);
 }
 .logistics-data-row:nth-child(even) { background: rgba(121, 146, 146, .075); }
+.logistics-data-row.reset-today { background: color-mix(in srgb, var(--red) 18%, transparent); }
+.logistics-data-row.reset-yesterday { background: color-mix(in srgb, var(--orange) 16%, transparent); }
 .logistics-data-row.dragging { opacity: .55; }
 .logistics-drag-handle { display: grid; place-items: center; color: var(--muted); cursor: grab; user-select: none; }
 .logistics-drag-handle:active { cursor: grabbing; }
@@ -1511,11 +1513,10 @@ input[type="time"] { color-scheme: dark; }
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  background: color-mix(in srgb, var(--muted) 12%, transparent);
 }
-.logistics-last-reset.today { background: color-mix(in srgb, var(--red) 20%, transparent); }
-.logistics-last-reset.yesterday { background: color-mix(in srgb, var(--orange) 18%, transparent); }
 .logistics-last-reset .logistics-date { font-weight: 700; }
+.logistics-last-reset.today .logistics-date { color: color-mix(in srgb, var(--red) 65%, #240c0c); }
+.logistics-last-reset.yesterday .logistics-date { color: color-mix(in srgb, var(--orange) 65%, #3b210d); }
 .logistics-date-picker { position: absolute; width: 1px; height: 1px; overflow: hidden; opacity: 0; pointer-events: none; }
 .logistics-date-button,
 .logistics-hide-button { display: grid; place-items: center; width: 25px; height: 26px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--muted); cursor: pointer; }

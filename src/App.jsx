@@ -2566,7 +2566,7 @@ function LiveLogistics({ data, setToast, onSaved }) {
     const useVisible = Boolean(accountType?.cobros)
     const paymentsVisible = Boolean(accountType?.retiros)
     const displayDate = value => <time className="logistics-date">{logisticsDateLabel(value)}</time>
-    return <div className={`logistics-data-row ${draggedId === row.id ? 'dragging' : ''}`} key={row.id} onDragOver={event => event.preventDefault()} onDrop={event => {
+    return <div className={`logistics-data-row reset-${dateTone(latestReset)} ${draggedId === row.id ? 'dragging' : ''}`} key={row.id} onDragOver={event => event.preventDefault()} onDrop={event => {
       event.preventDefault()
       const sourceId = event.dataTransfer.getData('text/plain')
       const bounds = event.currentTarget.getBoundingClientRect()
