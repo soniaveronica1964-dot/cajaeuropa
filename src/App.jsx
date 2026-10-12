@@ -990,11 +990,10 @@ function LiveStates({ setToast }) {
 
   return <section className="panel state-catalog">
     <header className="state-catalog-toolbar">
-      <div className="state-catalog-title"><Gift size={17} /><div><h2>Estados</h2><span>{catalog.states.length} registros</span></div></div>
+      <div className="state-catalog-title"><Gift size={17} /><div><h2>Estados</h2></div></div>
       <div className="state-catalog-controls">
-        <label className="state-search"><Search size={14} /><input aria-label="Buscar estado" placeholder="Buscar estado, porcentaje o condición" value={search} onChange={event => setSearch(event.target.value)} /></label>
+        <label className="state-search"><Search size={14} /><input aria-label="Buscar bono" placeholder="Buscar bono" value={search} onChange={event => setSearch(event.target.value)} /></label>
         <button type="button" className={`icon-button state-filter-trigger ${filtersOpen ? 'selected' : ''}`} title="Filtros" aria-label="Filtros" aria-expanded={filtersOpen} onClick={() => setFiltersOpen(value => !value)}><SlidersHorizontal size={15} /></button>
-        <button type="button" className="icon-button state-add-button" title="Nuevo estado" aria-label="Nuevo estado" onClick={() => setEditingState(false)}><Plus size={17} /></button>
       </div>
     </header>
 
@@ -1013,30 +1012,27 @@ function LiveStates({ setToast }) {
 
     {loadError ? <div className="empty-state"><strong>Error al cargar estados</strong><p>{loadError}</p><button type="button" className="secondary-button" onClick={refresh}>Reintentar</button></div>
       : loading ? <div className="empty-state">Cargando estados...</div>
-        : filteredStates.length ? <div className="state-groups">{groups.map(group => <section className="state-group" key={group.key}>
+        : filteredStates.length ? <div className="state-list-scroll"><div className="state-groups">{groups.map(group => <section className="state-group" key={group.key}>
           <header><h3>{group.title}</h3><span>{group.items.length} estados</span></header>
           <div className="state-card-grid">{group.items.map(state => {
             const image = getStoragePublicUrl(state.imagen_mini || state.imagen)
+            const originalImage = getStoragePublicUrl(state.imagen)
             const lines = [...(state.lineas_estado || [])].sort((left, right) => Number(left.porcentaje) - Number(right.porcentaje))
             return <article className="state-card" key={state.id}>
               {image ? <img className="state-card-image" src={image} alt={`Imagen de ${state.nombre}`} /> : <div className="state-card-image state-card-placeholder"><Gift size={30} /></div>}
               <div className="state-card-body">
                 <h4>{state.nombre}</h4>
                 <span className="state-card-type">{state.tipos_estado?.nombre || 'Sin tipo'}</span>
-                <div className="state-card-lines">{lines.length ? lines.map(line => <p key={line.id}>
-                  <strong>{numberCompact.format(Number(line.porcentaje))}%</strong>
-                  <span>{line.condiciones_bono?.nombre || 'Sin condición'}</span>
-                  {line.condiciones_bono?.plataforma && <small>{line.subplataformas?.nombre || line.subplataformas?.plataformas?.nombre || 'Plataforma'}</small>}
-                </p>) : <small>Sin porcentajes configurados</small>}</div>
-                <div className="state-card-actions">
-                  <button type="button" className="icon-button" title="Editar estado" aria-label={`Editar ${state.nombre}`} onClick={() => setEditingState(state)}><Pencil size={14} /></button>
-                  <button type="button" className="icon-button" title="Descargar imagen" aria-label={`Descargar imagen de ${state.nombre}`} disabled={!image} onClick={() => image && download(state, image)}><Download size={14} /></button>
-                  <button type="button" className="delete-button" title="Eliminar estado" aria-label={`Eliminar ${state.nombre}`} onClick={() => remove(state)}><Trash2 size={14} /></button>
-                </div>
+                <span className="state-card-percentage">{lines.length ? lines.map(line => `${numberCompact.format(Number(line.porcentaje))}%`).join(' · ') : 'Sin porcentajes configurados'}</span>
+              </div>
+              <div className="state-card-actions">
+                <button type="button" className="icon-button" title="Editar estado" aria-label={`Editar ${state.nombre}`} onClick={() => setEditingState(state)}><Pencil size={14} /></button>
+                <button type="button" className="icon-button state-download-button" title="Descargar imagen original" aria-label={`Descargar imagen original de ${state.nombre}`} disabled={!originalImage} onClick={() => originalImage && download(state, originalImage)}><Download size={14} /></button>
+                <button type="button" className="delete-button" title="Eliminar estado" aria-label={`Eliminar ${state.nombre}`} onClick={() => remove(state)}><Trash2 size={14} /></button>
               </div>
             </article>
           })}</div>
-        </section>)}</div>
+        </section>)}</div></div>
           : <div className="empty-state"><strong>{catalog.states.length ? 'No hay resultados' : 'Todavía no hay estados'}</strong><p>{catalog.states.length ? 'Probá cambiar la búsqueda o los filtros.' : 'Creá un estado para empezar a armar el catálogo.'}</p></div>}
 
     {editingState !== null && <StateFormModal
