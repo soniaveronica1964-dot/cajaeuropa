@@ -1452,8 +1452,8 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
     { key: 'shared', label: 'Billeteras compartidas', matches: account => account.accountType?.es_compartido },
     { key: 'saving', label: 'Billeteras ahorro', matches: account => account.accountType?.ahorro },
   ].map(section => ({ ...section, accounts: accounts.filter(section.matches) }))
-  const specialAccountIds = new Set(accountTypeSections.flatMap(section => section.accounts.map(account => account.id)))
-  const regularAccounts = accounts.filter(account => !specialAccountIds.has(account.id))
+  const specialAccountIds = new Set(accountTypeSections.flatMap(section => section.accounts.map(account => account.cuenta_id)))
+  const regularAccounts = accounts.filter(account => !specialAccountIds.has(account.cuenta_id))
   const columns = { '--wallet-count': wallets.length }
 
   const saveAccount = async (account, event) => {
