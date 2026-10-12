@@ -2500,7 +2500,7 @@ html:has(.app-shell[data-theme='light']) {
 .bonus-library { padding: 14px; }
 .state-catalog {
   display: grid;
-  gap: 10px;
+  gap: 14px;
   padding: 16px;
 }
 .state-catalog-toolbar,
@@ -2513,9 +2513,9 @@ html:has(.app-shell[data-theme='light']) {
   justify-content: space-between;
   gap: 16px;
 }
-.state-catalog-title { gap: 9px; color: var(--accent); }
+.state-catalog-title { gap: 9px; color: var(--muted-2); }
 .state-catalog-title > div { display: grid; gap: 3px; }
-.state-catalog-title h2 { margin: 0; color: var(--text); font-size: 14px; font-weight: 500; }
+.state-catalog-title h2 { margin: 0; color: var(--text); font-size: 16px; }
 .state-catalog-title span,
 .state-group > header span { color: var(--muted); font-size: 10px; }
 .state-catalog-controls { gap: 7px; }
@@ -2542,7 +2542,7 @@ html:has(.app-shell[data-theme='light']) {
 }
 .state-search input:focus-visible { outline: 0; }
 .state-search input::placeholder { color: var(--muted); }
-.state-catalog-controls .icon-button { width: 32px; height: 32px; color: var(--accent); }
+.state-catalog-controls .icon-button { width: 32px; height: 32px; }
 .state-add-button { border-color: var(--accent-border); color: var(--accent); }
 .state-filter-panel {
   display: grid;
@@ -2582,48 +2582,35 @@ html:has(.app-shell[data-theme='light']) {
   color: var(--text);
   font-size: 11px;
 }
-.state-list-scroll {
-  max-height: 300px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-right: 3px;
-}
-.state-groups { display: grid; gap: 12px; }
+.state-groups { display: grid; gap: 20px; }
 .state-group { min-width: 0; }
 .state-group > header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  margin: 0 0 4px;
-  padding: 0 0 2px;
+  margin-bottom: 9px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
 }
-.state-group > header h3 { margin: 0; color: var(--muted-2); font: 8px 'DM Mono', monospace; font-weight: 500; text-transform: uppercase; }
-.state-group > header span { font: 8px 'DM Mono', monospace; }
+.state-group > header h3 { margin: 0; color: var(--accent); font-size: 12px; font-weight: 600; }
 .state-card-grid {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 2px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px;
 }
 .state-card {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 8px;
   min-width: 0;
-  padding: 4px;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--panel) 88%, var(--bg));
 }
-.state-card:hover { border-color: var(--line); background: color-mix(in srgb, var(--panel) 88%, var(--bg)); }
 .state-card-image {
   display: block;
-  width: 36px;
-  height: 40px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  object-fit: cover;
+  width: 100%;
+  height: 185px;
+  object-fit: contain;
   background: #0d1315;
 }
 .state-card-placeholder {
@@ -2633,29 +2620,135 @@ html:has(.app-shell[data-theme='light']) {
 }
 .state-card-body {
   display: grid;
-  align-content: center;
-  gap: 2px;
-  min-width: 0;
-  padding: 0;
+  align-content: start;
+  gap: 6px;
+  min-height: 104px;
+  padding: 10px;
 }
 .state-card-body h4 {
   overflow: hidden;
   margin: 0;
   color: var(--text);
-  font-size: 10px;
+  font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.state-card-type { overflow: hidden; color: var(--accent); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.state-card-percentage { overflow: hidden; color: var(--muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+.state-card-type { color: var(--accent); font-size: 10px; }
 .state-card-lines { display: grid; gap: 3px; color: var(--muted); font-size: 9px; }
 .state-card-lines p { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; }
 .state-card-lines p strong { color: var(--text); }
 .state-card-lines p small { color: var(--muted); }
-.state-card-actions { display: flex; justify-content: flex-end; gap: 4px; }
+.state-card-actions { display: flex; justify-content: flex-end; gap: 5px; margin-top: auto; }
 .state-card-actions .icon-button,
 .state-card-actions .delete-button { width: 28px; height: 28px; }
-.state-download-button { color: var(--muted-2); }
+.turn-state-card { position: relative; }
+.turn-state-card .panel-title { margin-bottom: 8px; padding-bottom: 8px; }
+.turn-state-filter-trigger { width: 30px; height: 30px; color: var(--muted-2); }
+.turn-state-filter-trigger.selected { border-color: var(--accent); color: var(--accent); }
+.turn-state-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  margin-bottom: 8px;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+}
+.turn-state-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+}
+.turn-state-search input::placeholder { color: var(--muted); }
+.turn-state-filter-panel {
+  position: absolute;
+  z-index: 5;
+  top: 62px;
+  right: 8px;
+  left: 8px;
+  display: grid;
+  gap: 9px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .3);
+}
+.turn-state-filter-panel label { display: grid; gap: 5px; min-width: 0; }
+.turn-state-filter-panel label > span { color: var(--muted); font-size: 9px; }
+.turn-state-filter-panel select {
+  width: 100%;
+  min-width: 0;
+  min-height: 34px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 10px;
+}
+.turn-state-scroll {
+  display: grid;
+  gap: 8px;
+  max-height: 276px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 3px;
+}
+.turn-state-group { min-width: 0; }
+.turn-state-group > header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+}
+.turn-state-group > header h3 { margin: 0; color: var(--muted-2); font: 8px 'DM Mono', monospace; font-weight: 500; text-transform: uppercase; }
+.turn-state-group > header span { color: var(--muted); font: 8px 'DM Mono', monospace; }
+.turn-state-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 3px;
+  border-radius: 5px;
+}
+.turn-state-row:hover { background: color-mix(in srgb, var(--panel) 88%, var(--bg)); }
+.turn-state-row > img,
+.turn-state-placeholder {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 40px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  object-fit: cover;
+  background: #0d1315;
+  color: var(--muted);
+}
+.turn-state-info { display: grid; gap: 2px; min-width: 0; }
+.turn-state-info strong,
+.turn-state-info > span,
+.turn-state-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.turn-state-info strong { color: var(--text); font-size: 10px; }
+.turn-state-info > span { color: var(--accent); font-size: 9px; }
+.turn-state-info small { color: var(--muted); font-size: 8px; }
+.turn-state-row > .icon-button { width: 28px; height: 30px; color: var(--muted-2); }
+.turn-state-row > .icon-button:disabled { opacity: .4; }
+.turn-state-message { display: grid; gap: 4px; padding: 8px 2px; color: var(--muted); font-size: 10px; }
+.turn-state-message strong { color: var(--text); }
+.turn-state-message span { overflow-wrap: anywhere; }
 .state-modal-backdrop { z-index: 100; }
 .state-form-modal {
   display: grid;
@@ -2759,9 +2852,8 @@ html:has(.app-shell[data-theme='light']) {
   .state-catalog-controls { width: 100%; }
   .state-search { flex: 1; width: auto; }
   .state-filter-panel { grid-template-columns: 1fr; }
-  .state-list-scroll { max-height: 300px; }
-  .state-card { grid-template-columns: 40px minmax(0, 1fr) auto; }
-  .state-card-image { width: 36px; height: 40px; }
+  .state-card-grid { grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); }
+  .state-card-image { height: 160px; }
   .state-line-editor,
   .state-line-editor.has-platform { grid-template-columns: 78px minmax(0, 1fr); gap: 6px; }
   .state-line-editor.has-platform > label:last-child { grid-column: 2; }
