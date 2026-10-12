@@ -71,7 +71,7 @@ export async function loadCurrentShiftData(boxId = null) {
     query('propinas', 'id, monto, notas, usuario_texto, fecha_hora_creacion', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('gastos', 'id, tipo_gasto_id, monto, notas, fecha_hora_creacion, tipos_gasto(nombre, invertir_signo)', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('tipos_gasto', 'id, nombre, invertir_signo', request => request.order('id', { ascending: true })),
-    query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, cuenta_x_turno_id, logistica!inner(turno_id)', request => request.eq('logistica.turno_id', shift.id).order('num_orden')), 
+    query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, is_off, cuenta_x_turno_id, logistica!inner(turno_id)', request => request.eq('logistica.turno_id', shift.id).order('num_orden', { ascending: true }).order('id', { ascending: true })),
     query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(nombre), telefonos_usuario(numero), titulares_usuario(nombre), paneles_x_usuario(paneles(nombre))', request => request.order('fecha_creacion', { ascending: false })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
     query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id)),
@@ -96,12 +96,15 @@ export async function loadCurrentShiftData(boxId = null) {
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
   const accounts = accountIds.length
-    ? await query('cuentas', 'id, alias, cuil, patron, notas, tipo_cuenta_id, activa, titular_id, billetera_id, titulares(nombre), billeteras(nombre)', request => request.in('id', accountIds))
+    ? await query('cuentas', 'id, alias, cuil, patron, notas, tipo_cuenta_id, activa, titular_id, billetera_id, titulares(id, nombre), billeteras(id, nombre)', request => request.in('id', accountIds))
     : []
   const accountById = new Map(accounts.map(account => [account.id, account]))
   const linkedAccounts = accountLinks.map(link => ({ ...link, cuentas: accountById.get(link.cuenta_id) || null }))
 
-  const logisticsWithAccounts = logistics.map(line => ({ ...line, cuentas_x_turno: { cuentas: accountById.get(accountLinks.find(link => link.id === line.cuenta_x_turno_id)?.cuenta_id) || null } }))
+  const logisticsWithAccounts = logistics.map(line => {
+    const accountLink = accountLinks.find(link => link.id === line.cuenta_x_turno_id)
+    return { ...line, cuentas_x_turno: { ...(accountLink || {}), cuentas: accountById.get(accountLink?.cuenta_id) || null } }
+  })
 
   return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
@@ -383,6 +386,59 @@ export function updateAccountFlags(accountShiftId, field, enabled) {
     throw new Error('Campo de disponibilidad no permitido')
   }
   return updateRow('cuentas_x_turno', accountShiftId, { [field]: Boolean(enabled) })
+}
+
+export async function createLogisticsLine(shiftId, accountShiftId, orderNum) {
+  requireSupabase()
+  const { data: shift, error: shiftError } = await supabase
+    .from('turnos')
+    .select('id')
+    .eq('id', shiftId)
+    .eq('abierto', true)
+    .maybeSingle()
+  if (shiftError) throw shiftError
+  if (!shift) throw new Error('La logística solo se puede modificar en el turno abierto actual')
+
+  const { data: accountLink, error: accountError } = await supabase
+    .from('cuentas_x_turno')
+    .select('id')
+    .eq('id', accountShiftId)
+    .eq('turno_id', shiftId)
+    .maybeSingle()
+  if (accountError) throw accountError
+  if (!accountLink) throw new Error('La billetera no pertenece al turno abierto actual')
+
+  const { data: logistics, error: logisticsError } = await supabase
+    .from('logistica')
+    .upsert({ turno_id: shiftId }, { onConflict: 'turno_id' })
+    .select('id')
+    .single()
+  if (logisticsError) throw logisticsError
+
+  const { data: existing, error: existingError } = await supabase
+    .from('lineas_logistica')
+    .select('id')
+    .eq('logistica_id', logistics.id)
+    .eq('cuenta_x_turno_id', accountShiftId)
+    .maybeSingle()
+  if (existingError) throw existingError
+  if (existing) return updateRow('lineas_logistica', existing.id, { is_off: false, num_orden: orderNum })
+
+  const { data, error } = await supabase.from('lineas_logistica').insert({
+    logistica_id: logistics.id,
+    cuenta_x_turno_id: accountShiftId,
+    num_orden: orderNum,
+    is_off: false,
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export function updateLogisticsLine(lineId, values) {
+  const allowedFields = ['aclaracion', 'ultimo_reinicio_general', 'ultimo_reinicio_cobros', 'ultimo_reinicio_retiros', 'is_off', 'num_orden']
+  const invalidField = Object.keys(values).find(field => !allowedFields.includes(field))
+  if (invalidField) throw new Error('Campo de logística no permitido')
+  return updateRow('lineas_logistica', lineId, values)
 }
 
 export function updateChipFinal(chipId, value) {

@@ -491,6 +491,7 @@ CREATE TABLE lineas_logistica (
     ultimo_reinicio_caja TIMESTAMPTZ,
     ultimo_reinicio_general TIMESTAMPTZ,
     num_orden INTEGER,
+    is_off BOOLEAN NOT NULL DEFAULT FALSE,
 
     UNIQUE (logistica_id, cuenta_x_turno_id)
 );

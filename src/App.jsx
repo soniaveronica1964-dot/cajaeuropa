@@ -9,6 +9,7 @@ import {
   Boxes,
   Camera,
   Check,
+  CalendarDays,
   ChevronDown,
   ChevronRight,
   CircleDollarSign,
@@ -16,6 +17,7 @@ import {
   Copy,
   Download,
   Eye,
+  EyeOff,
   FileText,
   Gift,
   GripVertical,
@@ -71,6 +73,7 @@ import {
   createFoundMoney,
   createTransferMovement,
   createChipLoad,
+  createLogisticsLine,
   saveShiftNotes,
   createWallet,
   deleteAccountType,
@@ -107,6 +110,7 @@ import {
   updateAdvertisingLine,
   updateAdvertisingDistribution,
   updateChipFinal,
+  updateLogisticsLine,
   updateColor,
   updateWalletType,
   updateBonusCondition,
@@ -412,7 +416,7 @@ function App() {
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
           {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
-          {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} />}
+          {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} />}
@@ -2395,28 +2399,225 @@ function LiveStatistics({ data }) {
   return <><section className="panel stats-toolbar"><div><span className="eyebrow">Turno actual</span><h2>{data.shift ? new Date(data.shift.fecha_hora_inicio).toLocaleString('es-AR') : 'Sin turno abierto'}</h2></div><div className="stats-filters"><span className="muted-copy">Las estadísticas históricas estarán disponibles cuando existan turnos cerrados.</span></div></section><div className="stats-grid"><section className="panel stat-card featured"><div className="stat-head"><h2>Turno actual</h2><small>1 turno</small></div><h3>GENERAL</h3><div className="stat-line"><span>Caja inicial</span><b>{money.format(data.shift?.caja_inicial || 0)}</b></div><div className="stat-line"><span>Propinas</span><b>{money.format(tips)}</b></div><div className="stat-line"><span>Gastos</span><b>{money.format(expenses)}</b></div><h3>BONOS</h3><div className="stat-line"><span>Bonos netos</span><b>{money.format(bonuses)}</b></div><h3>DATOS</h3><div className="stat-line"><span>Cuentas activas</span><b>{data.accounts.length}</b></div><div className="stat-line"><span>Movimientos</span><b>{data.tips.length + data.expenses.length + data.bonuses.length}</b></div></section><section className="panel stat-card"><EmptyInline text="No hay otros turnos cerrados en el rango cargado." /></section></div></>
 }
 
-function LiveLogistics({ data, setToast }) {
+function dateTone(value) {
+  if (!value) return 'stale'
+  const date = new Date(value)
+  const now = new Date()
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  if (day === today) return 'today'
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (day === yesterday.getTime()) return 'yesterday'
+  return 'stale'
+}
+
+function dateInputValue(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+}
+
+function latestLogisticsReset(row) {
+  if (row.ultimo_reinicio_general) return row.ultimo_reinicio_general
+  const dates = [row.ultimo_reinicio_cobros, row.ultimo_reinicio_retiros].filter(Boolean)
+  return dates.sort((left, right) => new Date(right).getTime() - new Date(left).getTime())[0] || null
+}
+
+function logisticsDateLabel(value) {
+  return value ? new Date(value).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }) : '—'
+}
+
+function LiveLogistics({ data, setToast, onSaved }) {
   const [filter, setFilter] = useState('')
-  const rows = data.logistics.filter(row => {
+  const [addingAccount, setAddingAccount] = useState('')
+  const [draggedId, setDraggedId] = useState(null)
+  const [notes, setNotes] = useState({})
+  const [saving, setSaving] = useState(false)
+  const dateInputRefs = useRef({})
+  const allRows = [...(data.logistics || [])].sort((left, right) => (Number(left.num_orden) || Number.MAX_SAFE_INTEGER) - (Number(right.num_orden) || Number.MAX_SAFE_INTEGER) || Number(left.id) - Number(right.id))
+  const activeRows = allRows.filter(row => !row.is_off)
+  const hiddenRows = allRows.filter(row => row.is_off)
+  const linkedShiftIds = new Set(allRows.map(row => String(row.cuenta_x_turno_id)))
+  const accountOptions = [...(data.accounts || [])]
+    .filter(link => !linkedShiftIds.has(String(link.id)) && link.cuentas?.activa !== false)
+    .sort((left, right) => Number(left.cuentas?.billeteras?.id || 0) - Number(right.cuentas?.billeteras?.id || 0) || Number(left.cuentas?.id || left.cuenta_id) - Number(right.cuentas?.id || right.cuenta_id))
+  const filteredRows = activeRows.filter(row => {
     const account = row.cuentas_x_turno?.cuentas
     const text = `${account?.titulares?.nombre || ''} ${account?.billeteras?.nombre || ''}`
-    return text.toLowerCase().includes(filter.toLowerCase())
+    return text.toLocaleLowerCase('es').includes(filter.trim().toLocaleLowerCase('es'))
   })
+  const groups = [
+    { key: 'normal', title: 'Billeteras normales', matches: account => !account?.accountType?.es_deposito && !account?.accountType?.es_compartido && !account?.accountType?.ahorro },
+    { key: 'deposit', title: 'Billeteras depósitos', matches: account => account?.accountType?.es_deposito },
+    { key: 'shared', title: 'Billeteras compartidas', matches: account => account?.accountType?.es_compartido },
+    { key: 'saving', title: 'Billeteras ahorro', matches: account => account?.accountType?.ahorro },
+  ].map(group => ({
+    ...group,
+    rows: filteredRows.filter(row => {
+      const account = row.cuentas_x_turno?.cuentas
+      const type = (data.accountTypes || []).find(item => String(item.id) === String(account?.tipo_cuenta_id))
+      return group.matches({ ...account, accountType: type })
+    }),
+  }))
 
-  return <>
-    <section className="panel logistics-page">
-      <PanelTitle icon={WalletCards} title="Ruta de cuentas" meta={`${rows.length} registros del turno`} action={<button className="primary-button" onClick={() => setToast('La creación de logística se conectará a la tabla lineas_logistica')}><Plus size={14} /> Agregar billetera</button>} />
-      <div className="search-line wide"><Search size={14} /><input placeholder="Filtrar cliente o billetera" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
-      <div className="logistics-table">
-        <div className="logistics-head"><span>Orden</span><span>Cliente</span><span>Billetera</span><span>Aclaración</span><span>Último cobro</span><span>Último retiro</span><span>Caja</span></div>
-        {rows.map(row => {
-          const account = row.cuentas_x_turno?.cuentas
-          return <div className="logistics-row" key={row.id}><span>{row.num_orden ?? '—'}</span><b>{account?.titulares?.nombre || 'Sin titular'}</b><strong>{account?.billeteras?.nombre || 'Sin billetera'}</strong><span>{row.aclaracion || '—'}</span><time>{row.ultimo_reinicio_cobros ? new Date(row.ultimo_reinicio_cobros).toLocaleString('es-AR') : '—'}</time><time>{row.ultimo_reinicio_retiros ? new Date(row.ultimo_reinicio_retiros).toLocaleString('es-AR') : '—'}</time><button onClick={() => setToast('La asignación se guarda en Supabase al conectar el formulario')}>Sin asignar</button></div>
-        })}
-        {!rows.length && <EmptyInline text="No hay líneas de logística para el turno actual." />}
+  useEffect(() => {
+    setNotes(Object.fromEntries((data.logistics || []).map(row => [row.id, row.aclaracion || ''])))
+  }, [data.logistics])
+
+  const addAccount = async event => {
+    const accountShiftId = event.target.value
+    if (!accountShiftId || !data.shift?.id) return
+    setAddingAccount(accountShiftId)
+    try {
+      await createLogisticsLine(data.shift.id, Number(accountShiftId), allRows.length + 1)
+      setToast('Billetera agregada a logística')
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo agregar la billetera')
+    } finally {
+      setAddingAccount('')
+    }
+  }
+
+  const toggleHidden = async row => {
+    try {
+      await updateLogisticsLine(row.id, { is_off: !row.is_off })
+      setToast(row.is_off ? 'Billetera activada en logística' : 'Billetera ocultada')
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo actualizar la billetera')
+    }
+  }
+
+  const saveNote = async row => {
+    const value = notes[row.id] || ''
+    if (value === (row.aclaracion || '')) return
+    try {
+      await updateLogisticsLine(row.id, { aclaracion: value || null })
+      await onSaved()
+    } catch (error) {
+      setNotes(current => ({ ...current, [row.id]: row.aclaracion || '' }))
+      setToast(error.message || 'No se pudo guardar la aclaración')
+    }
+  }
+
+  const toggleActivity = async (row, accountLink, field, checked) => {
+    const timestampField = field === 'cobros' ? 'ultimo_reinicio_cobros' : 'ultimo_reinicio_retiros'
+    const now = new Date().toISOString()
+    const nextValues = checked ? { [timestampField]: now, ultimo_reinicio_general: now } : {}
+    try {
+      await updateAccountFlags(accountLink.id, field, checked)
+      if (checked) await updateLogisticsLine(row.id, nextValues)
+    } catch (error) {
+      setToast(error.message || 'No se pudo actualizar el estado de la billetera')
+    } finally {
+      await onSaved()
+    }
+  }
+
+  const saveGeneralReset = async (row, value) => {
+    try {
+      await updateLogisticsLine(row.id, { ultimo_reinicio_general: value ? new Date(value).toISOString() : null })
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar el último reinicio')
+    }
+  }
+
+  const reorderRows = async (targetId, targetGroup) => {
+    if (!draggedId || draggedId === targetId) return
+    const sourceGroup = groups.find(group => group.rows.some(row => row.id === draggedId))
+    if (!sourceGroup || sourceGroup.key !== targetGroup) return
+    const nextRows = [...activeRows]
+    const fromIndex = nextRows.findIndex(row => row.id === draggedId)
+    const toIndex = nextRows.findIndex(row => row.id === targetId)
+    if (fromIndex < 0 || toIndex < 0) return
+    const [moved] = nextRows.splice(fromIndex, 1)
+    nextRows.splice(toIndex, 0, moved)
+    setSaving(true)
+    try {
+      await Promise.all([
+        ...nextRows.map((row, index) => updateLogisticsLine(row.id, { num_orden: index + 1 })),
+        ...hiddenRows.map((row, index) => updateLogisticsLine(row.id, { num_orden: nextRows.length + index + 1 })),
+      ])
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar el orden de logística')
+    } finally {
+      setSaving(false)
+      setDraggedId(null)
+    }
+  }
+
+  const renderRow = (row, groupKey) => {
+    const accountLink = row.cuentas_x_turno
+    const account = accountLink?.cuentas
+    const latestReset = latestLogisticsReset(row)
+    const useVisible = Boolean(accountLink?.cobros)
+    const paymentsVisible = Boolean(accountLink?.retiros)
+    const displayDate = value => <time className={`logistics-date ${dateTone(value)}`}>{logisticsDateLabel(value)}</time>
+    return <div className="logistics-data-row" key={row.id} draggable={!saving} onDragStart={event => {
+      if (!event.target.closest('.logistics-drag-handle')) { event.preventDefault(); return }
+      setDraggedId(row.id)
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData('text/plain', String(row.id))
+    }} onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); reorderRows(row.id, groupKey) }} onDragEnd={() => setDraggedId(null)}>
+      <span className="logistics-drag-handle" title="Arrastrar para ordenar"><GripVertical size={14} /></span>
+      <div className="logistics-activity-cell">
+        {useVisible && <label title="En uso"><input type="checkbox" aria-label={`En uso ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked onChange={event => toggleActivity(row, accountLink, 'cobros', event.target.checked)} /></label>}
       </div>
-    </section>
-  </>
+      <div className="logistics-activity-cell">
+        {paymentsVisible && <label title="Pagos"><input type="checkbox" aria-label={`Pagos ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked onChange={event => toggleActivity(row, accountLink, 'retiros', event.target.checked)} /></label>}
+      </div>
+      <strong className="logistics-holder">{account?.titulares?.nombre || 'Sin titular'}</strong>
+      <strong className="logistics-wallet">{account?.billeteras?.nombre || 'Sin billetera'}</strong>
+      <input className="logistics-note" aria-label={`Aclaración ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} value={notes[row.id] ?? row.aclaracion ?? ''} onChange={event => setNotes(current => ({ ...current, [row.id]: event.target.value }))} onBlur={() => saveNote(row)} />
+      <div className="logistics-reset-cell">{displayDate(row.ultimo_reinicio_cobros)}</div>
+      <div className="logistics-reset-cell">{displayDate(row.ultimo_reinicio_retiros)}</div>
+      <span className="logistics-date stale">-</span>
+      <div className="logistics-last-reset">
+        {displayDate(latestReset)}
+        <input ref={element => { dateInputRefs.current[row.id] = element }} className="logistics-date-picker" type="datetime-local" aria-label={`Editar último reinicio ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} value={dateInputValue(latestReset)} onChange={event => saveGeneralReset(row, event.target.value)} />
+        <button type="button" className="logistics-date-button" title="Editar último reinicio" aria-label="Editar último reinicio" onClick={() => {
+          const input = dateInputRefs.current[row.id]
+          if (input?.showPicker) input.showPicker()
+          else input?.click()
+        }}><CalendarDays size={14} /></button>
+      </div>
+      <button type="button" className="icon-button logistics-hide-button" title="Ocultar billetera" aria-label={`Ocultar ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} onClick={() => toggleHidden(row)}><EyeOff size={14} /></button>
+    </div>
+  }
+
+  return <section className="panel logistics-page">
+    <PanelTitle icon={WalletCards} title="Ruta de cuentas" meta={`${activeRows.length} registros del turno`} action={<select className="logistics-add-select" aria-label="Agregar billetera a logística" value="" onChange={addAccount} disabled={Boolean(addingAccount)}>
+      <option value="">{addingAccount ? 'Agregando...' : 'Agregar billetera...'}</option>
+      {accountOptions.map(link => <option value={link.id} key={link.id}>{link.cuentas?.titulares?.nombre || 'Sin titular'} · {link.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
+    </select>} />
+    <div className="search-line wide"><Search size={14} /><input placeholder="Filtrar titular o billetera" value={filter} onChange={event => setFilter(event.target.value)} /></div>
+    <div className="logistics-grid-scroll">
+      <div className="logistics-grid">
+        <div className="logistics-grid-head">
+          <span aria-label="Orden" />
+          <span>En uso</span><span>Pagos</span><span>Cuenta</span><span>Billetera</span><span>Aclaración</span>
+          <span>Último R. Uso</span><span>Último R. Retiros</span><span>Último R. Caja</span><span>Último Reinicio</span><span />
+        </div>
+        {groups.map(group => group.rows.length > 0 && <section className="logistics-group" key={group.key}>
+          <h3>{group.title}</h3>
+          {group.rows.map(row => renderRow(row, group.key))}
+        </section>)}
+        {!activeRows.length && <EmptyInline text="Agregá billeteras para organizar la logística del turno." />}
+        {activeRows.length > 0 && !filteredRows.length && <EmptyInline text="No hay billeteras que coincidan con la búsqueda." />}
+      </div>
+    </div>
+    {hiddenRows.length > 0 && <div className="logistics-hidden">
+      <span>Ocultas</span>
+      {hiddenRows.map(row => {
+        const account = row.cuentas_x_turno?.cuentas
+        return <button type="button" key={row.id} onClick={() => toggleHidden(row)} title="Volver a activar billetera"><Eye size={12} /> × {account?.titulares?.nombre || 'Sin titular'} · {account?.billeteras?.nombre || 'Sin billetera'}</button>
+      })}
+    </div>}
+  </section>
 }
 
 function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(null); return <><section className="panel directory"><PanelTitle icon={Users} title="Usuarios" meta={`${users.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo usuario</button>} />{users.map(user => { const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`; return <div className={`directory-row ${expanded === user.id ? 'expanded' : ''}`} key={user.id}><button className="expand-button" onClick={() => setExpanded(expanded === user.id ? null : user.id)}>{expanded === user.id ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button><b>{name}</b><div className="tags">{user.titulares_usuario?.map(holder => <span key={holder.id}>{holder.nombre}</span>)}</div><button className="icon-button"><Settings2 size={15} /></button>{expanded === user.id && <div className="user-detail"><label>Nombre<input defaultValue={name} /></label><label>Teléfono<input defaultValue={user.telefonos_usuario?.[0]?.numero || ''} /></label><label>Titular<input defaultValue={user.titulares_usuario?.[0]?.nombre || ''} /></label><label>Estado<input defaultValue={user.bloqueado ? 'Bloqueado' : 'Activo'} readOnly /></label></div>}</div> })}{!users.length && <EmptyInline text="No hay usuarios registrados en Supabase." />}</section></> }
