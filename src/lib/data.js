@@ -33,6 +33,10 @@ async function query(table, columns, configure = () => {}) {
 export async function loadCurrentShiftData(boxId = null) {
   requireSupabase()
   const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini, colores(nombre, hex)', request => request.order('id', { ascending: true }))
+  const [users, panels] = await Promise.all([
+    query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(id, nombre), telefonos_usuario(id, numero), titulares_usuario(id, nombre), paneles_x_usuario(id, caja_id, panel_id, paneles(id, nombre), cajas(nombre)), subplataformas_x_usuario(subplataforma_id, subplataformas(id, nombre, plataforma_id, plataformas(id, nombre, caja_id)))', request => request.order('fecha_creacion', { ascending: false })),
+    query('paneles', 'id, nombre, caja_id', request => request.order('id', { ascending: true })),
+  ])
   let shiftRequest = supabase
     .from('turnos')
     .select('id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, cajas(id, nombre), dias_turno(id, nombre, hora_inicio, hora_fin)')
@@ -59,12 +63,12 @@ export async function loadCurrentShiftData(boxId = null) {
       query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
       query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     ])
-    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users: [], goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
+    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
   await ensureAdvertisingLines(shift.id)
 
-  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, users, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes, movements] = await Promise.all([
+  const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes, movements] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, lineas_publicidad_x_caja(caja_id, num_derivado), publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id).order('id', { ascending: true })),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
@@ -72,7 +76,6 @@ export async function loadCurrentShiftData(boxId = null) {
     query('gastos', 'id, tipo_gasto_id, monto, notas, fecha_hora_creacion, tipos_gasto(nombre, invertir_signo)', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('tipos_gasto', 'id, nombre, invertir_signo', request => request.order('id', { ascending: true })),
     query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, is_off, cuenta_x_turno_id, logistica!inner(turno_id)', request => request.eq('logistica.turno_id', shift.id).order('num_orden', { ascending: true }).order('id', { ascending: true })),
-    query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(nombre), telefonos_usuario(numero), titulares_usuario(nombre), paneles_x_usuario(paneles(nombre))', request => request.order('fecha_creacion', { ascending: false })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
     query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id)),
     query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
@@ -106,7 +109,7 @@ export async function loadCurrentShiftData(boxId = null) {
     return { ...line, cuentas_x_turno: { ...(accountLink || {}), cuentas: accountById.get(accountLink?.cuenta_id) || null } }
   })
 
-  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
+  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
 
 export async function loadConfigurationData() {
@@ -1591,6 +1594,66 @@ async function findOrCreate(table, match, values) {
   const { data, error } = await supabase.from(table).insert(values).select().maybeSingle()
   if (error) throw error
   return data
+}
+
+export async function createUser({ names, phones, holders, createdAt, panelId, boxIds = [], subplatformIds = [] }) {
+  requireSupabase()
+  const userNames = names.map(name => name.trim()).filter(Boolean)
+  const userPhones = phones.map(phone => phone.trim()).filter(Boolean)
+  const userHolders = holders.map(holder => holder.trim()).filter(Boolean)
+  if (!userNames.length) throw new Error('Ingresá al menos un nombre de usuario')
+  if (!userPhones.length) throw new Error('Ingresá al menos un número de teléfono')
+
+  const creationDate = new Date(createdAt)
+  if (!createdAt || Number.isNaN(creationDate.getTime())) throw new Error('Ingresá una fecha de creación válida')
+
+  const selectedBoxes = new Set(boxIds.map(String))
+  let selectedPanelId = panelId ? Number(panelId) : null
+  let selectedPanelBoxId = null
+  if (selectedPanelId) {
+    const { data: panel, error } = await supabase.from('paneles')
+      .select('id, caja_id')
+      .eq('id', selectedPanelId)
+      .single()
+    if (error) throw error
+    selectedPanelBoxId = String(panel.caja_id)
+    selectedBoxes.add(selectedPanelBoxId)
+  }
+  if (!selectedBoxes.size) throw new Error('Seleccioná al menos una caja')
+
+  const { data: user, error: userError } = await supabase.from('usuarios')
+    .insert({ fecha_creacion: creationDate.toISOString() })
+    .select('id')
+    .single()
+  if (userError) throw userError
+
+  const boxRelations = [...selectedBoxes].map(cajaId => ({
+    usuario_id: user.id,
+    caja_id: Number(cajaId),
+    panel_id: selectedPanelBoxId === cajaId ? selectedPanelId : null,
+  }))
+  const userSubplatformIds = [...new Set(subplatformIds.map(Number))]
+  const writes = [
+    { table: 'nombres_usuario', rows: userNames.map(nombre => ({ usuario_id: user.id, nombre })) },
+    { table: 'telefonos_usuario', rows: userPhones.map(numero => ({ usuario_id: user.id, numero })) },
+    { table: 'titulares_usuario', rows: userHolders.map(nombre => ({ usuario_id: user.id, nombre })) },
+    { table: 'paneles_x_usuario', rows: boxRelations },
+    { table: 'subplataformas_x_usuario', rows: userSubplatformIds.map(subplataforma_id => ({ usuario_id: user.id, subplataforma_id })) },
+  ].filter(write => write.rows.length)
+
+  const results = await Promise.allSettled(writes.map(async ({ table, rows }) => {
+    const { error } = await supabase.from(table).insert(rows)
+    if (error) throw error
+  }))
+  const failedWrite = results.find(result => result.status === 'rejected')
+  if (failedWrite) {
+    const { error: rollbackError } = await supabase.from('usuarios').delete().eq('id', user.id)
+    if (rollbackError) {
+      throw new Error(`${failedWrite.reason.message}. No se pudo revertir el alta incompleta: ${rollbackError.message}`)
+    }
+    throw failedWrite.reason
+  }
+  return user
 }
 
 async function ensureAdvertisingLines(shiftId) {

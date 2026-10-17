@@ -535,13 +535,42 @@ CREATE TABLE paneles (
 );
 
 CREATE TABLE paneles_x_usuario (
-    panel_id BIGINT NOT NULL REFERENCES paneles(id)
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    caja_id BIGINT NOT NULL REFERENCES cajas(id)
         ON DELETE CASCADE,
+    panel_id BIGINT REFERENCES paneles(id)
+        ON DELETE SET NULL,
     usuario_id BIGINT NOT NULL REFERENCES usuarios(id)
-        ON DELETE CASCADE,
-
-    PRIMARY KEY (panel_id, usuario_id)
+        ON DELETE CASCADE
 );
+
+CREATE UNIQUE INDEX idx_paneles_x_usuario_usuario_panel
+    ON paneles_x_usuario(usuario_id, panel_id)
+    WHERE panel_id IS NOT NULL;
+
+CREATE UNIQUE INDEX idx_paneles_x_usuario_usuario_caja
+    ON paneles_x_usuario(usuario_id, caja_id)
+    WHERE panel_id IS NULL;
+
+CREATE FUNCTION completar_caja_panel_usuario()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.panel_id IS NOT NULL THEN
+        SELECT caja_id INTO NEW.caja_id
+        FROM paneles
+        WHERE id = NEW.panel_id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER trg_completar_caja_panel_usuario
+BEFORE INSERT OR UPDATE OF panel_id, caja_id
+ON paneles_x_usuario
+FOR EACH ROW
+EXECUTE FUNCTION completar_caja_panel_usuario();
 
 CREATE TABLE subplataformas_x_usuario (
     subplataforma_id BIGINT NOT NULL

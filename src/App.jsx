@@ -92,6 +92,7 @@ import {
   deleteWallet,
   closeShift,
   createState,
+  createUser,
   deleteState,
   formatDatabase,
   loadBonusCatalog,
@@ -133,6 +134,11 @@ const moneyWithCents = new Intl.NumberFormat('es-AR', { style: 'currency', curre
 const numberWithCents = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const numberCompact = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 const LAST_SAVED_STORAGE_KEY = 'caja:last-saved-at'
+
+function currentDateTimeInput() {
+  const localDate = new Date(Date.now() - new Date().getTimezoneOffset() * 60000)
+  return localDate.toISOString().slice(0, 16)
+}
 
 function readLastSavedAt() {
   try {
@@ -219,6 +225,7 @@ function App() {
   const [view, setView] = useState('dashboard')
   const [openGoal, setOpenGoal] = useState(false)
   const [toast, setToast] = useState('')
+  const [userCreateOpen, setUserCreateOpen] = useState(false)
   const [appData, setAppData] = useState(null)
   const [selectedBoxId, setSelectedBoxId] = useState(null)
   const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
@@ -414,14 +421,23 @@ function App() {
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
-          {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} />}
+          {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} onCreate={() => setUserCreateOpen(true)} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} />}
         </main>
       </div>
+      {userCreateOpen && appData && <UserCreateModal
+        boxes={appData.boxes || []}
+        panels={appData.panels || []}
+        platforms={appData.platforms || []}
+        subplatforms={appData.subplatforms || []}
+        onClose={() => setUserCreateOpen(false)}
+        onSaved={reloadData}
+        setToast={setToast}
+      />}
       {toast && <div className="toast"><Sparkles size={16} />{toast}</div>}
     </div>
   )
@@ -495,7 +511,7 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinalSaved, onRoundingChange, onDiscrepancyChange }) {
+function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onCreateUser, onChipFinalSaved, onRoundingChange, onDiscrepancyChange }) {
   const [rounding, setRounding] = useState(null)
   const [accountValueDrafts, setAccountValueDrafts] = useState({})
   const [chipFinalDrafts, setChipFinalDrafts] = useState({})
@@ -621,7 +637,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onChipFinal
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
-        <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard setToast={setToast} /><UsersCard users={data.users} /></div>
+        <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} /></div>
         <div className="operations-grid">
           <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
           <MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} />
@@ -1766,7 +1782,21 @@ function StatusCard({ setToast }) {
           : <div className="turn-state-message">{catalog.states.length ? 'No hay resultados' : 'Todavía no hay estados configurados.'}</div>}
   </section>
 }
-function UsersCard({ users }) { return <section className="panel mini-card"><PanelTitle icon={Users} title="Usuarios" action={<Plus size={15} />} /><div className="search-line"><Search size={14} /><input placeholder="Buscar usuario" /></div>{users.slice(0, 5).map(user => <div className="user-row" key={user.id}><span><UserRound size={15} /></span><b>{user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`}</b><ChevronRight size={14} /></div>)}{!users.length && <EmptyInline text="No hay usuarios registrados." />}</section> }
+function UsersCard({ users, onCreate }) {
+  const [search, setSearch] = useState('')
+  const matchingUsers = users.filter(user => [
+    ...(user.nombres_usuario || []).map(item => item.nombre),
+    ...(user.telefonos_usuario || []).map(item => item.numero),
+    ...(user.titulares_usuario || []).map(item => item.nombre),
+  ].join(' ').toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es')))
+
+  return <section className="panel mini-card">
+    <PanelTitle icon={Users} title="Usuarios" action={<button type="button" className="icon-button" title="Nuevo usuario" aria-label="Nuevo usuario" onClick={onCreate}><Plus size={15} /></button>} />
+    <div className="search-line"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
+    {matchingUsers.slice(0, 5).map(user => <div className="user-row" key={user.id}><span><UserRound size={15} /></span><b>{user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`}</b><ChevronRight size={14} /></div>)}
+    {!matchingUsers.length && <EmptyInline text={users.length ? 'No se encontraron usuarios.' : 'No hay usuarios registrados.'} />}
+  </section>
+}
 function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, rows, onSaved, setToast }) {
   const [value, setValue] = useState('')
   const [detail, setDetail] = useState('')
@@ -2721,7 +2751,152 @@ function LiveLogistics({ data, setToast, onSaved }) {
   </section>
 }
 
-function LiveUsersView({ users }) { const [expanded, setExpanded] = useState(null); return <><section className="panel directory"><PanelTitle icon={Users} title="Usuarios" meta={`${users.length} registros`} action={<button className="primary-button"><Plus size={14} /> Nuevo usuario</button>} />{users.map(user => { const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`; return <div className={`directory-row ${expanded === user.id ? 'expanded' : ''}`} key={user.id}><button className="expand-button" onClick={() => setExpanded(expanded === user.id ? null : user.id)}>{expanded === user.id ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button><b>{name}</b><div className="tags">{user.titulares_usuario?.map(holder => <span key={holder.id}>{holder.nombre}</span>)}</div><button className="icon-button"><Settings2 size={15} /></button>{expanded === user.id && <div className="user-detail"><label>Nombre<input defaultValue={name} /></label><label>Teléfono<input defaultValue={user.telefonos_usuario?.[0]?.numero || ''} /></label><label>Titular<input defaultValue={user.titulares_usuario?.[0]?.nombre || ''} /></label><label>Estado<input defaultValue={user.bloqueado ? 'Bloqueado' : 'Activo'} readOnly /></label></div>}</div> })}{!users.length && <EmptyInline text="No hay usuarios registrados en Supabase." />}</section></> }
+function LiveUsersView({ users, onCreate }) {
+  const [expanded, setExpanded] = useState(null)
+  const [search, setSearch] = useState('')
+  const matchingUsers = users.filter(user => [
+    ...(user.nombres_usuario || []).map(item => item.nombre),
+    ...(user.telefonos_usuario || []).map(item => item.numero),
+    ...(user.titulares_usuario || []).map(item => item.nombre),
+  ].join(' ').toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es')))
+
+  return <section className="panel directory">
+    <PanelTitle icon={Users} title="Usuarios" meta={`${users.length} registros`} action={<button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Nuevo usuario</button>} />
+    <div className="search-line wide"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
+    {matchingUsers.map(user => {
+      const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`
+      const isExpanded = expanded === user.id
+      return <div className={`directory-row ${isExpanded ? 'expanded' : ''}`} key={user.id}>
+        <button type="button" className="expand-button" aria-label={`${isExpanded ? 'Contraer' : 'Expandir'} ${name}`} onClick={() => setExpanded(isExpanded ? null : user.id)}>{isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
+        <b>{name}</b>
+        <div className="tags">{user.titulares_usuario?.map(holder => <span key={holder.id}>{holder.nombre}</span>)}</div>
+        <span className="directory-user-boxes">{[...new Set(user.paneles_x_usuario?.map(link => link.cajas?.nombre).filter(Boolean))].join(' · ')}</span>
+        <button type="button" className="icon-button" aria-label={`Ver detalles de ${name}`} onClick={() => setExpanded(isExpanded ? null : user.id)}><Settings2 size={15} /></button>
+        {isExpanded && <div className="user-detail">
+          <label>Nombres<input value={(user.nombres_usuario || []).map(item => item.nombre).join(', ')} readOnly /></label>
+          <label>Teléfonos<input value={(user.telefonos_usuario || []).map(item => item.numero).join(', ')} readOnly /></label>
+          <label>Titulares<input value={(user.titulares_usuario || []).map(item => item.nombre).join(', ')} readOnly /></label>
+          <label>Cajas<input value={[...new Set((user.paneles_x_usuario || []).map(link => link.cajas?.nombre).filter(Boolean))].join(', ')} readOnly /></label>
+          <label>Paneles<input value={(user.paneles_x_usuario || []).map(link => link.paneles?.nombre).filter(Boolean).join(', ')} readOnly /></label>
+          <label>Plataformas<input value={(user.subplataformas_x_usuario || []).map(link => link.subplataformas?.plataformas?.nombre && link.subplataformas?.nombre ? `${link.subplataformas.plataformas.nombre} · ${link.subplataformas.nombre}` : link.subplataformas?.nombre).filter(Boolean).join(', ')} readOnly /></label>
+          <label>Estado<input value={user.bloqueado ? 'Bloqueado' : 'Activo'} readOnly /></label>
+        </div>}
+      </div>
+    })}
+    {!matchingUsers.length && <EmptyInline text={users.length ? 'No se encontraron usuarios.' : 'No hay usuarios registrados en Supabase.'} />}
+  </section>
+}
+
+function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSaved, setToast }) {
+  const [names, setNames] = useState([''])
+  const [phones, setPhones] = useState([''])
+  const [holders, setHolders] = useState([''])
+  const [createdAt, setCreatedAt] = useState(currentDateTimeInput)
+  const [panelId, setPanelId] = useState('')
+  const [boxIds, setBoxIds] = useState([])
+  const [subplatformIds, setSubplatformIds] = useState([])
+  const [saving, setSaving] = useState(false)
+
+  const updateList = (setter, index, value) => setter(current => current.map((item, itemIndex) => itemIndex === index ? value : item))
+  const removeListItem = (setter, index) => setter(current => current.filter((_, itemIndex) => itemIndex !== index))
+  const toggleBox = (box, checked) => {
+    const id = String(box.id)
+    setBoxIds(current => checked ? [...new Set([...current, id])] : current.filter(item => item !== id))
+    if (!checked && String(panels.find(panel => String(panel.id) === panelId)?.caja_id) === id) setPanelId('')
+    if (!checked) {
+      const removedSubplatformIds = subplatforms
+        .filter(subplatform => String(platforms.find(platform => String(platform.id) === String(subplatform.plataforma_id))?.caja_id) === id)
+        .map(subplatform => String(subplatform.id))
+      setSubplatformIds(current => current.filter(subplatformId => !removedSubplatformIds.includes(subplatformId)))
+    }
+  }
+  const toggleSubplatform = (id, checked) => {
+    const normalizedId = String(id)
+    setSubplatformIds(current => checked ? [...new Set([...current, normalizedId])] : current.filter(item => item !== normalizedId))
+  }
+
+  const renderTextList = (title, values, setter, placeholder, maxLength, addLabel) => <div className="user-form-list">
+    <span className="user-form-label">{title}</span>
+    {values.map((value, index) => <div className="user-form-list-row" key={`${title}-${index}`}>
+      <input
+        aria-label={`${title} ${index + 1}`}
+        placeholder={`${placeholder}${index === 0 ? ' *' : ''}`}
+        value={value}
+        maxLength={maxLength}
+        required={index === 0}
+        disabled={saving}
+        onChange={event => updateList(setter, index, event.target.value)}
+      />
+      {values.length > 1 && <button type="button" className="icon-button" aria-label={`Quitar ${title.toLowerCase()} ${index + 1}`} disabled={saving} onClick={() => removeListItem(setter, index)}><X size={14} /></button>}
+    </div>)}
+    <button type="button" className="user-add-field" disabled={saving} onClick={() => setter(current => [...current, ''])}><Plus size={14} /> Agregar {addLabel}</button>
+  </div>
+
+  const submit = async event => {
+    event.preventDefault()
+    if (!boxIds.length && !panelId) {
+      setToast('Seleccioná al menos una caja')
+      return
+    }
+    setSaving(true)
+    try {
+      await createUser({ names, phones, holders, createdAt, panelId, boxIds, subplatformIds })
+      onClose()
+      setToast('Usuario guardado')
+      onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar el usuario')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <div className="modal-backdrop user-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !saving) onClose() }}>
+    <form className="modal user-form-modal" role="dialog" aria-modal="true" aria-label="Nuevo usuario" onSubmit={submit}>
+      <header>
+        <div className="modal-icon"><UserRound size={20} /></div>
+        <div><h2>Nuevo usuario</h2><p>Completá los datos obligatorios para dar de alta.</p></div>
+        <button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" disabled={saving} onClick={onClose}><X size={17} /></button>
+      </header>
+      <div className="user-form-fields">
+        {renderTextList('NOMBRE DE USUARIO *', names, setNames, 'Nombre de usuario', 150, 'nombre de usuario')}
+        {renderTextList('NÚMERO DE TELÉFONO *', phones, setPhones, 'Número de teléfono', 50, 'número de teléfono')}
+        {renderTextList('TITULAR', holders, setHolders, 'Titular', 150, 'titular')}
+        <label className="user-form-panel"><span>PANEL</span><select value={panelId} disabled={saving} onChange={event => {
+          const selectedPanel = panels.find(panel => String(panel.id) === event.target.value)
+          setPanelId(event.target.value)
+          if (selectedPanel) setBoxIds(current => [...new Set([...current, String(selectedPanel.caja_id)])])
+        }}>
+          <option value="">Sin seleccionar</option>
+          {panels.map(panel => {
+            const box = boxes.find(item => String(item.id) === String(panel.caja_id))
+            return <option value={panel.id} key={panel.id}>{panel.nombre}{box ? ` · ${box.nombre}` : ''}</option>
+          })}
+        </select></label>
+        <label className="user-form-created"><span>FECHA CREACIÓN</span><input type="datetime-local" required value={createdAt} disabled={saving} onChange={event => setCreatedAt(event.target.value)} /></label>
+        <fieldset className="user-form-boxes"><legend>CAJAS</legend>
+          {boxes.map(box => <label className="user-choice" key={box.id}><input type="checkbox" checked={boxIds.includes(String(box.id))} disabled={saving} onChange={event => toggleBox(box, event.target.checked)} /><span>{box.nombre}</span></label>)}
+          {!boxes.length && <small>No hay cajas configuradas.</small>}
+        </fieldset>
+        <fieldset className="user-form-platforms"><legend>PLATAFORMAS</legend>
+          {platforms.filter(platform => boxIds.includes(String(platform.caja_id))).map(platform => {
+            const children = subplatforms.filter(item => String(item.plataforma_id) === String(platform.id))
+            return children.length > 0 && <div className="user-platform-group" key={platform.id}>
+              <strong>{platform.nombre}</strong>
+              {children.map(subplatform => <label className="user-choice" key={subplatform.id}><input type="checkbox" checked={subplatformIds.includes(String(subplatform.id))} disabled={saving} onChange={event => toggleSubplatform(subplatform.id, event.target.checked)} /><span>{subplatform.nombre}</span></label>)}
+            </div>
+          })}
+          {!boxIds.length && <small>Seleccioná una caja para ver sus plataformas.</small>}
+          {boxIds.length > 0 && !platforms.some(platform => boxIds.includes(String(platform.caja_id)) && subplatforms.some(item => String(item.plataforma_id) === String(platform.id))) && <small>No hay plataformas configuradas para las cajas seleccionadas.</small>}
+        </fieldset>
+      </div>
+      <footer>
+        <button type="button" className="secondary-button" disabled={saving} onClick={onClose}>Cancelar</button>
+        <button type="submit" className="primary-button" disabled={saving || !boxes.length}>{saving ? 'Guardando...' : 'Guardar'} <Check size={14} /></button>
+      </footer>
+    </form>
+  </div>
+}
 
 function accountTypeFlagsAfterToggle(type, field, enabled) {
   const flags = {
