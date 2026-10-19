@@ -140,6 +140,29 @@ function currentDateTimeInput() {
   return localDate.toISOString().slice(0, 16)
 }
 
+function findCurrentShiftDay(days, now = new Date()) {
+  const weekday = ((now.getDay() + 6) % 7) + 1
+  const previousWeekday = weekday === 1 ? 7 : weekday - 1
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const matchingDays = days.filter((day) => {
+    const [startHour, startMinute] = String(day.hora_inicio || '').split(':').map(Number)
+    const [endHour, endMinute] = String(day.hora_fin || '').split(':').map(Number)
+    if (![startHour, startMinute, endHour, endMinute].every(Number.isFinite)) return false
+
+    const start = startHour * 60 + startMinute
+    const end = endHour * 60 + endMinute
+    if (day.cruza_medianoche) {
+      const scheduledWeekday = currentMinutes >= start ? weekday : previousWeekday
+      return Number(day.dia_semana) === scheduledWeekday && (currentMinutes >= start || currentMinutes < end)
+    }
+    return Number(day.dia_semana) === weekday && currentMinutes >= start && currentMinutes < end
+  })
+
+  if (!matchingDays.length) throw new Error('No hay un turno configurado para el día y horario actuales.')
+  if (matchingDays.length > 1) throw new Error('Hay más de un turno configurado para este horario. Elegí uno desde Turnos activos.')
+  return matchingDays[0]
+}
+
 function readLastSavedAt() {
   try {
     return globalThis.localStorage.getItem(LAST_SAVED_STORAGE_KEY) || ''
@@ -2919,6 +2942,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
   const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
   const [localData, setLocalData] = useState(data)
   const [formatting, setFormatting] = useState(false)
+  const [startingShift, setStartingShift] = useState(false)
   const [selectedWeekdays, setSelectedWeekdays] = useState([])
   const [dayDraft, setDayDraft] = useState({ typeId: '', name: '', start: '08:00', end: '18:00', crossesMidnight: false })
   const [turnDraft, setTurnDraft] = useState({ dayId: '', initialAmount: '0' })
@@ -2970,6 +2994,37 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       setToast(error.message || 'No se pudo formatear la base de datos')
     } finally {
       setFormatting(false)
+    }
+  }
+
+  const handleStartWorking = async () => {
+    if (!currentBoxId) {
+      setToast('Seleccioná una caja para comenzar a trabajar')
+      return
+    }
+    if (currentActiveTurns.length) {
+      setToast('Ya hay un turno abierto para esta caja')
+      return
+    }
+
+    const now = new Date()
+    let day
+    try {
+      day = findCurrentShiftDay(currentShiftDays, now)
+    } catch (error) {
+      setToast(error.message || 'No se pudo determinar el turno actual')
+      return
+    }
+
+    const shiftName = currentShiftTypes.find((type) => String(type.id) === String(day.tipo_turno_id))?.nombre || day.nombre
+    setStartingShift(true)
+    try {
+      await persistUpdate(
+        () => createShift({ dayId: day.id }),
+        `${shiftName} iniciado para ${now.toLocaleDateString('es-AR')}`,
+      )
+    } finally {
+      setStartingShift(false)
     }
   }
 
@@ -3953,6 +4008,11 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
         </div>
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(239, 136, 136, 0.5)' }}>
           <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Acción destructiva</span></div>
+          <p className="muted-copy">Inicia el turno configurado para el día y horario actuales, con caja inicial en $0.</p>
+          <button type="button" className="config-add" onClick={handleStartWorking} disabled={startingShift || currentActiveTurns.length > 0 || !currentBoxId}>
+            <Clock3 size={15} /> {startingShift ? 'Iniciando turno...' : 'Comenzar a trabajar'}
+          </button>
+          {currentActiveTurns.length > 0 && <p className="muted-copy">Ya hay un turno abierto para esta caja.</p>}
           <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
           <button type="button" className="secondary-button app-format-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
         </section>
