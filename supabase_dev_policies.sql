@@ -29,6 +29,7 @@ ALTER TABLE propinas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cargas_ta ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dinero_encontrado ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gastos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notas_turno ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tipos_gasto ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lineas_logistica ENABLE ROW LEVEL SECURITY;
 ALTER TABLE logistica ENABLE ROW LEVEL SECURITY;
@@ -60,7 +61,7 @@ BEGIN
     'cajas', 'turnos', 'dias_turno', 'tipos_turno', 'colores', 'tipos_billetera', 'tipos_cuenta',
     'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja', 'cuentas_x_caja',
     'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
-    'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica',
+    'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'tipos_gasto', 'lineas_logistica', 'logistica',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario',
     'paneles_x_usuario', 'paneles', 'subobjetivos_x_turno', 'subobjetivos',
     'objetivos', 'fichas', 'plataformas', 'subplataformas', 'cargas_fichas', 'condiciones_bono', 'tipos_estado',
@@ -79,7 +80,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'colores', 'tipos_billetera', 'tipos_cuenta', 'tipos_gasto', 'cajas', 'billeteras', 'titulares',
     'titulares_x_caja', 'billeteras_x_caja', 'tipos_turno', 'dias_turno', 'turnos',
-    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'condiciones_bono', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas',
+    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'condiciones_bono', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'subplataformas_x_usuario'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_insert_%I ON public.%I', table_name, table_name);
@@ -128,7 +129,7 @@ BEGIN
     'cajas', 'turnos', 'dias_turno', 'tipos_turno', 'colores', 'tipos_billetera', 'tipos_cuenta',
     'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja',
     'cuentas_x_caja', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
-    'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'tipos_gasto', 'lineas_logistica', 'logistica', 'usuarios',
+    'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'tipos_gasto', 'lineas_logistica', 'logistica', 'usuarios',
     'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'paneles',
     'subobjetivos_x_turno', 'subobjetivos', 'objetivos', 'fichas', 'plataformas', 'cargas_fichas',
     'condiciones_bono', 'app_config', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas'

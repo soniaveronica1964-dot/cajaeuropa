@@ -57,7 +57,7 @@ import {
   createHolder,
   createWalletType,
   createInitialSetup,
-  generateInitialShift,
+  closeAndStartNextShift,
   createPlatform,
   createSubplatform,
   createShiftType,
@@ -141,27 +141,38 @@ function currentDateTimeInput() {
   return localDate.toISOString().slice(0, 16)
 }
 
-function findCurrentShiftDay(days, now = new Date()) {
-  const weekday = ((now.getDay() + 6) % 7) + 1
-  const previousWeekday = weekday === 1 ? 7 : weekday - 1
-  const currentMinutes = now.getHours() * 60 + now.getMinutes()
-  const matchingDays = days.filter((day) => {
-    const [startHour, startMinute] = String(day.hora_inicio || '').split(':').map(Number)
-    const [endHour, endMinute] = String(day.hora_fin || '').split(':').map(Number)
-    if (![startHour, startMinute, endHour, endMinute].every(Number.isFinite)) return false
+function findNextShiftDay(days, currentDay) {
+  if (!currentDay || !Number.isFinite(Number(currentDay.dia_semana))) {
+    throw new Error('No se encontró el día configurado del turno actual.')
+  }
 
-    const start = startHour * 60 + startMinute
-    const end = endHour * 60 + endMinute
-    if (day.cruza_medianoche) {
-      const scheduledWeekday = currentMinutes >= start ? weekday : previousWeekday
-      return Number(day.dia_semana) === scheduledWeekday && (currentMinutes >= start || currentMinutes < end)
+  const currentWeekday = Number(currentDay.dia_semana)
+  const [currentHour, currentMinute] = String(currentDay.hora_inicio || '').split(':').map(Number)
+  if (![currentHour, currentMinute].every(Number.isFinite)) {
+    throw new Error('El horario de inicio del turno actual no es válido.')
+  }
+  const currentStart = currentHour * 60 + currentMinute
+  const weekMinutes = 7 * 24 * 60
+  const candidates = days.flatMap((day) => {
+    const weekday = Number(day.dia_semana)
+    const [hour, minute] = String(day.hora_inicio || '').split(':').map(Number)
+    if (![weekday, hour, minute].every(Number.isFinite) || weekday < 1 || weekday > 7) return []
+
+    let daysAhead = (weekday - currentWeekday + 7) % 7
+    let minutesAhead = daysAhead * 24 * 60 + hour * 60 + minute - currentStart
+    if (minutesAhead <= 0) {
+      if (daysAhead !== 0) return []
+      daysAhead = 7
+      minutesAhead += weekMinutes
     }
-    return Number(day.dia_semana) === weekday && currentMinutes >= start && currentMinutes < end
-  })
+    return [{ day, daysAhead, minutesAhead }]
+  }).sort((left, right) => left.minutesAhead - right.minutesAhead)
 
-  if (!matchingDays.length) throw new Error('No hay un turno configurado para el día y horario actuales.')
-  if (matchingDays.length > 1) throw new Error('Hay más de un turno configurado para este horario. Elegí uno desde Turnos activos.')
-  return matchingDays[0]
+  if (!candidates.length) throw new Error('No hay otro turno configurado después del turno actual.')
+  if (candidates.length > 1 && candidates[0].minutesAhead === candidates[1].minutesAhead) {
+    throw new Error('Hay dos turnos configurados con el mismo horario siguiente.')
+  }
+  return candidates[0]
 }
 
 function readLastSavedAt() {
@@ -250,6 +261,7 @@ function App() {
   const [openGoal, setOpenGoal] = useState(false)
   const [toast, setToast] = useState('')
   const [userCreateOpen, setUserCreateOpen] = useState(false)
+  const [closeBoxDialogOpen, setCloseBoxDialogOpen] = useState(false)
   const [appData, setAppData] = useState(null)
   const [selectedBoxId, setSelectedBoxId] = useState(null)
   const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
@@ -376,6 +388,17 @@ function App() {
     }
     reloadData()
   }
+  const openCloseBoxDialog = () => {
+    if (!shift) {
+      setToast('No hay un turno abierto para cerrar')
+      return
+    }
+    setCloseBoxDialogOpen(true)
+  }
+  const finishCloseBox = (boxId) => {
+    setCloseBoxDialogOpen(false)
+    reloadData(boxId)
+  }
   const updateChipFinalData = (chipId, value) => {
     setAppData(current => current ? {
       ...current,
@@ -424,7 +447,7 @@ function App() {
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={reloadData} />
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
           <button className="camera-button" title="Cámara"><Camera size={16} /></button>
-          <button className="lock-button" title="Bloquear caja"><LockKeyhole size={16} /></button>
+          <button className="lock-button" title="Cerrar caja y abrir siguiente turno" aria-label="Cerrar caja y abrir siguiente turno" onClick={openCloseBoxDialog} disabled={!shift}><LockKeyhole size={16} /></button>
         </div>
       </header>
 
@@ -450,9 +473,15 @@ function App() {
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} onCreate={() => setUserCreateOpen(true)} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
-          {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} />}
+          {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} onCloseBox={openCloseBoxDialog} />}
         </main>
       </div>
+      {closeBoxDialogOpen && appData?.shift && <ShiftCloseModal
+        data={appData}
+        onClose={() => setCloseBoxDialogOpen(false)}
+        onClosed={finishCloseBox}
+        setToast={setToast}
+      />}
       {userCreateOpen && appData && <UserCreateModal
         boxes={appData.boxes || []}
         panels={appData.panels || []}
@@ -2937,13 +2966,98 @@ function accountTypeFlagsAfterToggle(type, field, enabled) {
   return flags
 }
 
-function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
+function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
+  const [finalAmountDraft, setFinalAmountDraft] = useState(String(
+    (data.accounts || []).reduce((sum, account) => sum + Number(account.valor || 0), 0),
+  ))
+  const [closing, setClosing] = useState(false)
+  const currentShift = data.shift
+  const shiftTypes = (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(currentShift?.caja_id))
+  const shiftDays = (data.shiftDays || []).filter((day) => shiftTypes.some((type) => String(type.id) === String(day.tipo_turno_id)))
+  const currentDay = shiftDays.find((day) => String(day.id) === String(currentShift?.dias_turno?.id)) || currentShift?.dias_turno
+  const currentShiftTypeName = shiftTypes.find((type) => String(type.id) === String(currentDay?.tipo_turno_id))?.nombre
+    || currentDay?.tipos_turno?.nombre
+    || currentDay?.nombre
+  let nextShiftChoice = null
+  let scheduleError = ''
+  try {
+    if (!currentShift) throw new Error('No hay un turno abierto para cerrar')
+    const nextShift = findNextShiftDay(shiftDays, currentDay)
+    const shiftStartDate = new Date(currentShift.fecha_hora_inicio)
+    shiftStartDate.setDate(shiftStartDate.getDate() + nextShift.daysAhead)
+    const nextShiftType = shiftTypes.find((type) => String(type.id) === String(nextShift.day.tipo_turno_id))
+    nextShiftChoice = {
+      dayId: nextShift.day.id,
+      name: nextShiftType?.nombre || nextShift.day.nombre || 'Siguiente turno',
+      date: shiftStartDate.toLocaleDateString('es-AR'),
+    }
+  } catch (error) {
+    scheduleError = error.message || 'No se pudo determinar el siguiente turno'
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (scheduleError || !nextShiftChoice || !currentShift) {
+      setToast(scheduleError || 'No se pudo determinar el siguiente turno')
+      return
+    }
+    const finalAmount = parseLocalizedAmount(finalAmountDraft)
+    if (finalAmount == null || finalAmount < 0) {
+      setToast('Ingresá una caja final válida, igual o mayor a cero')
+      return
+    }
+
+    setClosing(true)
+    try {
+      await closeAndStartNextShift({
+        shiftId: currentShift.id,
+        dayId: nextShiftChoice.dayId,
+        finalAmount,
+        startedAt: new Date().toISOString(),
+      })
+      setToast(`Caja cerrada y turno ${nextShiftChoice.name} abierto`)
+      onClosed(currentShift.caja_id)
+    } catch (error) {
+      setToast(error.message || 'No se pudo cerrar la caja y abrir el siguiente turno')
+    } finally {
+      setClosing(false)
+    }
+  }
+
+  return <div className="modal-backdrop shift-close-backdrop" onMouseDown={(event) => {
+    if (event.target === event.currentTarget && !closing) onClose()
+  }}>
+    <form className="modal shift-close-modal" role="dialog" aria-modal="true" aria-labelledby="shift-close-title" onSubmit={submit}>
+      <header className="shift-close-header">
+        <span className="shift-close-icon"><LockKeyhole size={20} /></span>
+        <div><h2 id="shift-close-title">¿Cerrar esta caja?</h2><p>Se conservará el turno actual en el historial y se abrirá el siguiente.</p></div>
+        <button type="button" className="modal-close" title="Cancelar" aria-label="Cancelar" onClick={onClose} disabled={closing}><X size={17} /></button>
+      </header>
+      {scheduleError
+        ? <p className="shift-close-error">{scheduleError}</p>
+        : <div className="shift-close-summary">
+          <span>Turno actual</span><strong>{currentShiftTypeName || 'Turno actual'}</strong>
+          <ArrowRight size={15} aria-hidden="true" />
+          <span>Turno siguiente</span><strong>{nextShiftChoice.name} · {nextShiftChoice.date}</strong>
+        </div>}
+      <label className="shift-close-cash">Caja final del turno actual
+        <input type="number" min="0" step="0.01" inputMode="decimal" value={finalAmountDraft} onChange={(event) => setFinalAmountDraft(event.target.value)} disabled={closing} />
+      </label>
+      <p className="shift-close-inherit">El nuevo turno heredará este monto como caja inicial, los valores y estados de cobros/retiros de las cuentas, las fichas finales como fichas iniciales y la nota heredable como nota general.</p>
+      <footer className="shift-close-actions">
+        <button type="button" className="secondary-button" onClick={onClose} disabled={closing}>Cancelar</button>
+        <button type="submit" className="shift-close-confirm" disabled={closing || Boolean(scheduleError)}>{closing ? 'Cerrando caja...' : 'Confirmar cierre'} <ArrowRight size={15} /></button>
+      </footer>
+    </form>
+  </div>
+}
+
+function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
   const appImageInputRef = useRef(null)
   const [dragState, setDragState] = useState({ type: null, index: null })
   const [editingSnapshot, setEditingSnapshot] = useState({ holders: {}, wallets: {} })
   const [localData, setLocalData] = useState(data)
   const [formatting, setFormatting] = useState(false)
-  const [startingShift, setStartingShift] = useState(false)
   const [selectedWeekdays, setSelectedWeekdays] = useState([])
   const [dayDraft, setDayDraft] = useState({ typeId: '', name: '', start: '08:00', end: '18:00', crossesMidnight: false })
   const [turnDraft, setTurnDraft] = useState({ dayId: '', initialAmount: '0' })
@@ -2972,8 +3086,10 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       setLocalData(fresh)
       onSaved(fresh)
       setToast(successMessage)
+      return true
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la configuración')
+      return false
     }
   }
 
@@ -2995,39 +3111,6 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       setToast(error.message || 'No se pudo formatear la base de datos')
     } finally {
       setFormatting(false)
-    }
-  }
-
-  const handleStartWorking = async () => {
-    if (!currentBoxId) {
-      setToast('Seleccioná una caja para comenzar a trabajar')
-      return
-    }
-
-    const now = new Date()
-    let day
-    try {
-      day = findCurrentShiftDay(currentShiftDays, now)
-    } catch (error) {
-      setToast(error.message || 'No se pudo determinar el turno actual')
-      return
-    }
-
-    const boxName = currentBox?.nombre || 'la caja seleccionada'
-    const confirmed = window.confirm(
-      `Se eliminarán los turnos existentes de ${boxName} y sus registros operativos asociados. La logística más reciente y sus líneas se conservarán y se vincularán al turno nuevo; las logísticas históricas anteriores también se mantienen. Se conservarán la caja, sus horarios, cuentas y demás configuración. Después se generará un turno nuevo con fecha de hoy. ¿Continuar?`,
-    )
-    if (!confirmed) return
-
-    const shiftName = currentShiftTypes.find((type) => String(type.id) === String(day.tipo_turno_id))?.nombre || day.nombre
-    setStartingShift(true)
-    try {
-      await persistUpdate(
-        () => generateInitialShift({ boxId: currentBoxId, dayId: day.id, startedAt: now.toISOString() }),
-        `${shiftName} iniciado para ${now.toLocaleDateString('es-AR')}`,
-      )
-    } finally {
-      setStartingShift(false)
     }
   }
 
@@ -4009,11 +4092,11 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
           <button type="button" className="config-add" onClick={() => persistUpdate(() => createColor({ name: 'Nuevo color', hex: '#72D7CA' }), 'Color creado')}><Plus size={15} /> Agregar color</button>
         </section>
         </div>
-        <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(239, 136, 136, 0.5)' }}>
-          <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Acción destructiva</span></div>
-          <p className="muted-copy">Elimina los turnos operativos anteriores, conserva la logística más reciente y sus líneas para el turno nuevo, y mantiene las logísticas históricas. La configuración de la caja permanece intacta.</p>
-          <button type="button" className="config-add" onClick={handleStartWorking} disabled={startingShift || !currentBoxId}>
-            <Clock3 size={15} /> {startingShift ? 'Generando turno...' : 'Generar turno inicial'}
+        <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(232, 207, 102, 0.45)' }}>
+          <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Cierre de caja</span></div>
+          <p className="muted-copy">Cierra el turno actual y abre el siguiente día de turno configurado, conservando el historial y heredando los saldos.</p>
+          <button type="button" className="config-add" onClick={onCloseBox} disabled={!data.shift}>
+            <LockKeyhole size={15} /> Cerrar caja
           </button>
           <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
           <button type="button" className="secondary-button app-format-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
