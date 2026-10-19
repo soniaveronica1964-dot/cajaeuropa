@@ -66,6 +66,7 @@ export async function loadCurrentShiftData(boxId = null) {
     return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
+  await ensureShiftAccounts(shift.id, shift.caja_id)
   await ensureAdvertisingLines(shift.id)
   await ensureShiftChips(shift.id, shift.caja_id)
 
@@ -1289,6 +1290,62 @@ export async function deleteDayShift(id) {
   if (error) throw error
 }
 
+async function ensureShiftAccounts(shiftId, boxId) {
+  const { data: boxWalletLinks, error: boxWalletLinksError } = await supabase
+    .from('billeteras_x_caja')
+    .select('billetera_id')
+    .eq('caja_id', boxId)
+  if (boxWalletLinksError) throw boxWalletLinksError
+
+  const boxWalletIds = [...new Set((boxWalletLinks || []).map((link) => link.billetera_id))]
+  if (!boxWalletIds.length) return
+
+  const { data: activeWallets, error: walletsError } = await supabase
+    .from('billeteras')
+    .select('id')
+    .in('id', boxWalletIds)
+    .eq('is_off', false)
+  if (walletsError) throw walletsError
+
+  const activeWalletIds = new Set((activeWallets || []).map((wallet) => String(wallet.id)))
+  if (!activeWalletIds.size) return
+
+  const { data: boxAccounts, error: boxAccountsError } = await supabase
+    .from('cuentas_x_caja')
+    .select('cuenta_id, cuentas!inner(id, activa, billetera_id)')
+    .eq('caja_id', boxId)
+  if (boxAccountsError) throw boxAccountsError
+
+  const accountIds = [...new Set((boxAccounts || [])
+    .filter((link) => link.cuentas?.activa && activeWalletIds.has(String(link.cuentas.billetera_id)))
+    .map((link) => link.cuenta_id))]
+  if (!accountIds.length) return
+
+  const { data: existingLinks, error: existingLinksError } = await supabase
+    .from('cuentas_x_turno')
+    .select('cuenta_id')
+    .eq('turno_id', shiftId)
+    .eq('caja_id', boxId)
+  if (existingLinksError) throw existingLinksError
+
+  const existingAccountIds = new Set((existingLinks || []).map((link) => String(link.cuenta_id)))
+  const missingAccountIds = accountIds.filter((accountId) => !existingAccountIds.has(String(accountId)))
+  if (!missingAccountIds.length) return
+
+  const { error: insertError } = await supabase.from('cuentas_x_turno').upsert(
+    missingAccountIds.map((accountId) => ({
+      turno_id: shiftId,
+      cuenta_id: accountId,
+      caja_id: boxId,
+      valor: 0,
+      cobros: false,
+      retiros: false,
+    })),
+    { onConflict: 'turno_id,cuenta_id,caja_id', ignoreDuplicates: true },
+  )
+  if (insertError) throw insertError
+}
+
 async function ensureShiftChips(shiftId, boxId) {
   const { data: platforms, error: platformsError } = await supabase
     .from('plataformas')
@@ -1319,6 +1376,7 @@ export async function createShift({ dayId, initialAmount = 0, startedAt = new Da
     redondeo: 0,
   }).select().single()
   if (error) throw error
+  await ensureShiftAccounts(data.id, data.caja_id)
   await ensureAdvertisingLines(data.id)
   await ensureShiftChips(data.id, data.caja_id)
   return data
