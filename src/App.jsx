@@ -3015,7 +3015,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
 
     const boxName = currentBox?.nombre || 'la caja seleccionada'
     const confirmed = window.confirm(
-      `Se eliminarán los turnos existentes de ${boxName} y sus registros operativos asociados (movimientos, cuentas del turno, propinas, gastos, bonos, publicidad, fichas, logística, notas y objetivos alcanzados). Se conservarán la caja, sus horarios, cuentas y demás configuración. Después se generará un turno nuevo con fecha de hoy. ¿Continuar?`,
+      `Se eliminarán los turnos existentes de ${boxName} y sus registros operativos asociados. La logística más reciente y sus líneas se conservarán y se vincularán al turno nuevo; las logísticas históricas anteriores también se mantienen. Se conservarán la caja, sus horarios, cuentas y demás configuración. Después se generará un turno nuevo con fecha de hoy. ¿Continuar?`,
     )
     if (!confirmed) return
 
@@ -4011,7 +4011,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
         </div>
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(239, 136, 136, 0.5)' }}>
           <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Acción destructiva</span></div>
-          <p className="muted-copy">Elimina los turnos existentes de la caja seleccionada y sus registros operativos asociados, conserva la configuración e inicia el turno vigente hoy con caja inicial en $0.</p>
+          <p className="muted-copy">Elimina los turnos operativos anteriores, conserva la logística más reciente y sus líneas para el turno nuevo, y mantiene las logísticas históricas. La configuración de la caja permanece intacta.</p>
           <button type="button" className="config-add" onClick={handleStartWorking} disabled={startingShift || !currentBoxId}>
             <Clock3 size={15} /> {startingShift ? 'Generando turno...' : 'Generar turno inicial'}
           </button>

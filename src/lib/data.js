@@ -1288,6 +1288,21 @@ export async function deleteDayShift(id) {
   if (error) throw error
 }
 
+async function ensureShiftChips(shiftId, boxId) {
+  const { data: platforms, error: platformsError } = await supabase
+    .from('plataformas')
+    .select('id')
+    .eq('caja_id', boxId)
+  if (platformsError) throw platformsError
+  if (!platforms?.length) return
+
+  const { error } = await supabase.from('fichas').upsert(
+    platforms.map((platform) => ({ turno_id: shiftId, plataforma_id: platform.id })),
+    { onConflict: 'turno_id,plataforma_id', ignoreDuplicates: true },
+  )
+  if (error) throw error
+}
+
 export async function createShift({ dayId, initialAmount = 0, startedAt = new Date().toISOString() }) {
   requireSupabase()
   const { data, error } = await supabase.from('turnos').insert({
@@ -1299,6 +1314,7 @@ export async function createShift({ dayId, initialAmount = 0, startedAt = new Da
   }).select().single()
   if (error) throw error
   await ensureAdvertisingLines(data.id)
+  await ensureShiftChips(data.id, data.caja_id)
   return data
 }
 
@@ -1306,47 +1322,148 @@ export async function generateInitialShift({ boxId, dayId, startedAt = new Date(
   requireSupabase()
   const { data: shifts, error: shiftsError } = await supabase
     .from('turnos')
-    .select('id')
+    .select('id, abierto, caja_inicial, fecha_hora_inicio')
     .eq('caja_id', boxId)
+    .order('fecha_hora_inicio', { ascending: false })
   if (shiftsError) throw shiftsError
 
-  const shiftIds = (shifts || []).map((shift) => shift.id)
+  const existingShifts = shifts || []
+  const shiftIds = existingShifts.map((shift) => shift.id)
+  let logistics = []
   if (shiftIds.length) {
-    const { data: accountLinks, error: accountLinksError } = await supabase
-      .from('cuentas_x_turno')
-      .select('id')
-      .in('turno_id', shiftIds)
-    if (accountLinksError) throw accountLinksError
-    const accountLinkIds = (accountLinks || []).map((link) => link.id)
-
-    const { data: logistics, error: logisticsError } = await supabase
+    const { data, error } = await supabase
       .from('logistica')
-      .select('id')
+      .select('id, turno_id')
       .in('turno_id', shiftIds)
-    if (logisticsError) throw logisticsError
-    const logisticsIds = (logistics || []).map((entry) => entry.id)
+    if (error) throw error
+    logistics = data || []
+  }
 
-    if (shiftIds.length) {
-      const { error } = await supabase.from('movimientos').delete().in('turno_id', shiftIds)
-      if (error) throw error
+  const currentLogistics = existingShifts
+    .map((shift) => logistics.find((entry) => String(entry.turno_id) === String(shift.id)))
+    .find(Boolean) || null
+  let currentLines = []
+  let historicalAccountLinkIds = new Set()
+  if (currentLogistics) {
+    const { data, error } = await supabase
+      .from('lineas_logistica')
+      .select('id, cuenta_x_turno_id')
+      .eq('logistica_id', currentLogistics.id)
+    if (error) throw error
+    currentLines = data || []
+
+    const historicalLogisticsIds = logistics
+      .filter((entry) => String(entry.id) !== String(currentLogistics.id))
+      .map((entry) => entry.id)
+    if (historicalLogisticsIds.length) {
+      const { data: historicalLines, error: historicalLinesError } = await supabase
+        .from('lineas_logistica')
+        .select('cuenta_x_turno_id')
+        .in('logistica_id', historicalLogisticsIds)
+      if (historicalLinesError) throw historicalLinesError
+      historicalAccountLinkIds = new Set((historicalLines || []).map((line) => String(line.cuenta_x_turno_id)))
     }
-    if (accountLinkIds.length) {
-      const { error } = await supabase.from('dinero_encontrado').delete().in('cuenta_x_turno_id', accountLinkIds)
-      if (error) throw error
+  }
+
+  const currentAccountLinkIds = [...new Set(currentLines.map((line) => line.cuenta_x_turno_id))]
+  let currentAccountLinks = []
+  if (currentAccountLinkIds.length) {
+    const { data, error } = await supabase
+      .from('cuentas_x_turno')
+      .select('id, cuenta_id, caja_id, cobros, retiros')
+      .in('id', currentAccountLinkIds)
+    if (error) throw error
+    currentAccountLinks = data || []
+    if (currentAccountLinks.length !== currentAccountLinkIds.length) {
+      throw new Error('No se pudieron encontrar todas las cuentas asociadas a la logística actual')
     }
-    if (logisticsIds.length) {
-      const { error } = await supabase.from('lineas_logistica').delete().in('logistica_id', logisticsIds)
-      if (error) throw error
+    if (currentAccountLinks.some((link) => String(link.caja_id) !== String(boxId))) {
+      throw new Error('La logística actual contiene cuentas que no pertenecen a la caja seleccionada')
     }
-    if (accountLinkIds.length) {
-      const { error } = await supabase.from('cuentas_x_turno').delete().in('id', accountLinkIds)
-      if (error) throw error
-    }
-    const { error } = await supabase.from('turnos').delete().in('id', shiftIds)
+  }
+
+  const oldShiftsWithHistoricalLogistics = new Set(
+    logistics
+      .filter((entry) => !currentLogistics || String(entry.id) !== String(currentLogistics.id))
+      .map((entry) => String(entry.turno_id)),
+  )
+  const shiftsToRemove = existingShifts.filter((shift) => !oldShiftsWithHistoricalLogistics.has(String(shift.id)))
+  const shiftsToRemoveIds = shiftsToRemove.map((shift) => shift.id)
+
+  for (const shift of existingShifts) {
+    if (!shift.abierto) continue
+    const { error } = await supabase
+      .from('turnos')
+      .update({
+        abierto: false,
+        fecha_hora_fin: startedAt,
+        caja_final: Math.max(0, Number(shift.caja_inicial) || 0),
+      })
+      .eq('id', shift.id)
+      .eq('abierto', true)
     if (error) throw error
   }
 
-  return createShift({ dayId, startedAt })
+  const newShift = await createShift({ dayId, startedAt })
+  if (currentLogistics) {
+    const newAccountLinks = currentAccountLinks.length
+      ? await supabase
+        .from('cuentas_x_turno')
+        .upsert(currentAccountLinks.map((link) => ({
+          turno_id: newShift.id,
+          cuenta_id: link.cuenta_id,
+          caja_id: link.caja_id,
+          valor: 0,
+          cobros: link.cobros,
+          retiros: link.retiros,
+        })), { onConflict: 'turno_id,cuenta_id,caja_id' })
+        .select('id, cuenta_id, caja_id')
+      : { data: [], error: null }
+    if (newAccountLinks.error) throw newAccountLinks.error
+
+    const newAccountLinkByAccount = new Map(
+      (newAccountLinks.data || []).map((link) => [`${link.cuenta_id}:${link.caja_id}`, link.id]),
+    )
+    const oldAccountById = new Map(currentAccountLinks.map((link) => [String(link.id), link]))
+    for (const line of currentLines) {
+      const oldLink = oldAccountById.get(String(line.cuenta_x_turno_id))
+      const newLinkId = oldLink && newAccountLinkByAccount.get(`${oldLink.cuenta_id}:${oldLink.caja_id}`)
+      if (!newLinkId) throw new Error('No se pudo reasignar una línea de logística al turno nuevo')
+      const { error } = await supabase
+        .from('lineas_logistica')
+        .update({ cuenta_x_turno_id: newLinkId })
+        .eq('id', line.id)
+      if (error) throw error
+    }
+
+    const { error } = await supabase
+      .from('logistica')
+      .update({ turno_id: newShift.id })
+      .eq('id', currentLogistics.id)
+    if (error) throw error
+  }
+
+  if (shiftsToRemoveIds.length) {
+    const { data: accountLinks, error: accountLinksError } = await supabase
+      .from('cuentas_x_turno')
+      .select('id, turno_id')
+      .in('turno_id', shiftsToRemoveIds)
+    if (accountLinksError) throw accountLinksError
+    const accountLinkIdsToClear = (accountLinks || [])
+      .filter((link) => !historicalAccountLinkIds.has(String(link.id)))
+      .map((link) => link.id)
+
+    if (accountLinkIdsToClear.length) {
+      const { error } = await supabase.from('dinero_encontrado').delete().in('cuenta_x_turno_id', accountLinkIdsToClear)
+      if (error) throw error
+    }
+    const { error: movementsError } = await supabase.from('movimientos').delete().in('turno_id', shiftsToRemoveIds)
+    if (movementsError) throw movementsError
+    const { error: shiftsDeleteError } = await supabase.from('turnos').delete().in('id', shiftsToRemoveIds)
+    if (shiftsDeleteError) throw shiftsDeleteError
+  }
+
+  return newShift
 }
 
 export async function closeShift(id, finalAmount) {
@@ -1778,6 +1895,7 @@ export async function createInitialSetup({ boxName, shiftName = null, startTime 
   }
 
   await ensureAdvertisingLines(shift.id)
+  await ensureShiftChips(shift.id, box.id)
   await findOrCreate('bonos', { turno_id: shift.id }, { turno_id: shift.id, total_otorgado: 0, total_recuperado: 0, total_publicidad: 0, numero_bonos: 0 })
   await findOrCreate('logistica', { turno_id: shift.id }, { turno_id: shift.id })
   return shift
