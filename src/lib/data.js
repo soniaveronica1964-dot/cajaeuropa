@@ -1288,17 +1288,65 @@ export async function deleteDayShift(id) {
   if (error) throw error
 }
 
-export async function createShift({ dayId, initialAmount = 0 }) {
+export async function createShift({ dayId, initialAmount = 0, startedAt = new Date().toISOString() }) {
   requireSupabase()
   const { data, error } = await supabase.from('turnos').insert({
     dia_turno_id: dayId,
     abierto: true,
+    fecha_hora_inicio: startedAt,
     caja_inicial: Math.max(0, Number(initialAmount) || 0),
     redondeo: 0,
   }).select().single()
   if (error) throw error
   await ensureAdvertisingLines(data.id)
   return data
+}
+
+export async function generateInitialShift({ boxId, dayId, startedAt = new Date().toISOString() }) {
+  requireSupabase()
+  const { data: shifts, error: shiftsError } = await supabase
+    .from('turnos')
+    .select('id')
+    .eq('caja_id', boxId)
+  if (shiftsError) throw shiftsError
+
+  const shiftIds = (shifts || []).map((shift) => shift.id)
+  if (shiftIds.length) {
+    const { data: accountLinks, error: accountLinksError } = await supabase
+      .from('cuentas_x_turno')
+      .select('id')
+      .in('turno_id', shiftIds)
+    if (accountLinksError) throw accountLinksError
+    const accountLinkIds = (accountLinks || []).map((link) => link.id)
+
+    const { data: logistics, error: logisticsError } = await supabase
+      .from('logistica')
+      .select('id')
+      .in('turno_id', shiftIds)
+    if (logisticsError) throw logisticsError
+    const logisticsIds = (logistics || []).map((entry) => entry.id)
+
+    if (shiftIds.length) {
+      const { error } = await supabase.from('movimientos').delete().in('turno_id', shiftIds)
+      if (error) throw error
+    }
+    if (accountLinkIds.length) {
+      const { error } = await supabase.from('dinero_encontrado').delete().in('cuenta_x_turno_id', accountLinkIds)
+      if (error) throw error
+    }
+    if (logisticsIds.length) {
+      const { error } = await supabase.from('lineas_logistica').delete().in('logistica_id', logisticsIds)
+      if (error) throw error
+    }
+    if (accountLinkIds.length) {
+      const { error } = await supabase.from('cuentas_x_turno').delete().in('id', accountLinkIds)
+      if (error) throw error
+    }
+    const { error } = await supabase.from('turnos').delete().in('id', shiftIds)
+    if (error) throw error
+  }
+
+  return createShift({ dayId, startedAt })
 }
 
 export async function closeShift(id, finalAmount) {

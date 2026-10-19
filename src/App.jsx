@@ -57,6 +57,7 @@ import {
   createHolder,
   createWalletType,
   createInitialSetup,
+  generateInitialShift,
   createPlatform,
   createSubplatform,
   createShiftType,
@@ -3002,10 +3003,6 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       setToast('Seleccioná una caja para comenzar a trabajar')
       return
     }
-    if (currentActiveTurns.length) {
-      setToast('Ya hay un turno abierto para esta caja')
-      return
-    }
 
     const now = new Date()
     let day
@@ -3016,11 +3013,17 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
       return
     }
 
+    const boxName = currentBox?.nombre || 'la caja seleccionada'
+    const confirmed = window.confirm(
+      `Se eliminarán los turnos existentes de ${boxName} y sus registros operativos asociados (movimientos, cuentas del turno, propinas, gastos, bonos, publicidad, fichas, logística, notas y objetivos alcanzados). Se conservarán la caja, sus horarios, cuentas y demás configuración. Después se generará un turno nuevo con fecha de hoy. ¿Continuar?`,
+    )
+    if (!confirmed) return
+
     const shiftName = currentShiftTypes.find((type) => String(type.id) === String(day.tipo_turno_id))?.nombre || day.nombre
     setStartingShift(true)
     try {
       await persistUpdate(
-        () => createShift({ dayId: day.id }),
+        () => generateInitialShift({ boxId: currentBoxId, dayId: day.id, startedAt: now.toISOString() }),
         `${shiftName} iniciado para ${now.toLocaleDateString('es-AR')}`,
       )
     } finally {
@@ -4008,11 +4011,10 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved }) {
         </div>
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(239, 136, 136, 0.5)' }}>
           <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Acción destructiva</span></div>
-          <p className="muted-copy">Inicia el turno configurado para el día y horario actuales, con caja inicial en $0.</p>
-          <button type="button" className="config-add" onClick={handleStartWorking} disabled={startingShift || currentActiveTurns.length > 0 || !currentBoxId}>
-            <Clock3 size={15} /> {startingShift ? 'Iniciando turno...' : 'Comenzar a trabajar'}
+          <p className="muted-copy">Elimina los turnos existentes de la caja seleccionada y sus registros operativos asociados, conserva la configuración e inicia el turno vigente hoy con caja inicial en $0.</p>
+          <button type="button" className="config-add" onClick={handleStartWorking} disabled={startingShift || !currentBoxId}>
+            <Clock3 size={15} /> {startingShift ? 'Generando turno...' : 'Generar turno inicial'}
           </button>
-          {currentActiveTurns.length > 0 && <p className="muted-copy">Ya hay un turno abierto para esta caja.</p>}
           <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
           <button type="button" className="secondary-button app-format-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
         </section>
