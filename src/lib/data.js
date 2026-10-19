@@ -67,6 +67,7 @@ export async function loadCurrentShiftData(boxId = null) {
   }
 
   await ensureAdvertisingLines(shift.id)
+  await ensureShiftChips(shift.id, shift.caja_id)
 
   const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes, movements] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
@@ -1297,7 +1298,12 @@ async function ensureShiftChips(shiftId, boxId) {
   if (!platforms?.length) return
 
   const { error } = await supabase.from('fichas').upsert(
-    platforms.map((platform) => ({ turno_id: shiftId, plataforma_id: platform.id })),
+    platforms.map((platform) => ({
+      turno_id: shiftId,
+      plataforma_id: platform.id,
+      fichas_inicial: 0,
+      fichas_final: 0,
+    })),
     { onConflict: 'turno_id,plataforma_id', ignoreDuplicates: true },
   )
   if (error) throw error

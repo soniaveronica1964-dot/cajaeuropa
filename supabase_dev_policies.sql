@@ -79,13 +79,27 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'colores', 'tipos_billetera', 'tipos_cuenta', 'tipos_gasto', 'cajas', 'billeteras', 'titulares',
     'titulares_x_caja', 'billeteras_x_caja', 'tipos_turno', 'dias_turno', 'turnos',
-    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'fichas', 'condiciones_bono', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas',
+    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'condiciones_bono', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'subplataformas_x_usuario'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_insert_%I ON public.%I', table_name, table_name);
     EXECUTE format('CREATE POLICY dev_insert_%I ON public.%I FOR INSERT TO anon WITH CHECK (true)', table_name, table_name);
   END LOOP;
 END $$;
+
+DROP POLICY IF EXISTS dev_insert_fichas ON public.fichas;
+CREATE POLICY dev_insert_fichas ON public.fichas
+  FOR INSERT TO anon
+  WITH CHECK (
+    EXISTS (
+      SELECT 1
+      FROM public.turnos AS shifts
+      JOIN public.plataformas AS platforms
+        ON platforms.caja_id = shifts.caja_id
+      WHERE shifts.id = fichas.turno_id
+        AND platforms.id = fichas.plataforma_id
+    )
+  );
 
 -- Las líneas de logística solo pueden agregarse a cuentas del turno abierto.
 DROP POLICY IF EXISTS dev_insert_lineas_logistica ON public.lineas_logistica;
