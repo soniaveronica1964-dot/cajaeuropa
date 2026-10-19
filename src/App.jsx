@@ -98,6 +98,7 @@ import {
   formatDatabase,
   loadBonusCatalog,
   loadCurrentShiftData,
+  loadShiftHistory,
   deleteAppImage,
   getStoragePublicUrl,
   replaceAppImage,
@@ -263,6 +264,8 @@ function App() {
   const [userCreateOpen, setUserCreateOpen] = useState(false)
   const [closeBoxDialogOpen, setCloseBoxDialogOpen] = useState(false)
   const [appData, setAppData] = useState(null)
+  const [shiftHistory, setShiftHistory] = useState([])
+  const [shiftNavigationLoading, setShiftNavigationLoading] = useState(false)
   const [selectedBoxId, setSelectedBoxId] = useState(null)
   const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
   const [loadError, setLoadError] = useState('')
@@ -273,12 +276,24 @@ function App() {
   const editStatusFrame = useRef(null)
 
   useEffect(() => {
-    loadCurrentShiftData().then((freshData) => {
+    let cancelled = false
+    const loadInitialData = async () => {
+      let freshData = await loadCurrentShiftData()
       const initialBoxId = freshData.shift?.caja_id ?? freshData.boxes?.[0]?.id ?? null
+      const history = await loadShiftHistory(initialBoxId)
+      if (!freshData.shift && history[0]) {
+        freshData = await loadCurrentShiftData(initialBoxId, history[0].id)
+      }
+      if (cancelled) return
       setAppData(freshData)
       setSelectedBoxId(initialBoxId)
       setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === initialBoxId)?.colores?.hex || '#72d7ca')
-    }).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
+      setShiftHistory(history)
+    }
+    loadInitialData().catch((error) => {
+      if (!cancelled) setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.')
+    })
+    return () => { cancelled = true }
   }, [])
 
   useEffect(() => {
@@ -348,6 +363,10 @@ function App() {
     : 'Todavía no hay guardados'
   const saveStatusLabel = saveStatus === 'saving' ? 'Guardando...' : saveStatus === 'error' ? 'Error al guardar' : 'Guardado'
   const shift = appData?.shift
+  const shiftHistoryIndex = shiftHistory.findIndex((item) => String(item.id) === String(shift?.id))
+  const canNavigateToPreviousShift = shiftHistoryIndex >= 0 && shiftHistoryIndex < shiftHistory.length - 1
+  const canNavigateToNextShift = shiftHistoryIndex > 0
+  const isReadOnlyShift = Boolean(shift && !shift.abierto)
   const shiftName = shift?.dias_turno?.nombre ?? 'Sin turno abierto'
   const shiftTime = shift?.dias_turno ? `${shift.dias_turno.hora_inicio.slice(0, 5)} - ${shift.dias_turno.hora_fin.slice(0, 5)}` : '--:-- - --:--'
   const selectedBox = appData?.boxes?.find(boxItem => boxItem.id === selectedBoxId)
@@ -370,15 +389,39 @@ function App() {
   const cashDiscrepancyLabel = cashDiscrepancy >= 0
     ? `+${moneyWithCents.format(cashDiscrepancy)}`
     : moneyWithCents.format(cashDiscrepancy)
-  const reloadData = (boxId = selectedBoxId ?? shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null) => {
+  const reloadData = async (boxId = selectedBoxId ?? shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null) => {
     setSelectedBoxId(boxId)
     const requestedBoxAccent = appData?.boxes?.find((box) => box.id === boxId)?.colores?.hex || '#72d7ca'
     setSelectedBoxAccent(requestedBoxAccent)
     setLoadError('')
-    loadCurrentShiftData(boxId).then((freshData) => {
+    try {
+      let freshData = await loadCurrentShiftData(boxId)
+      const history = await loadShiftHistory(boxId)
+      if (!freshData.shift && history[0]) {
+        freshData = await loadCurrentShiftData(boxId, history[0].id)
+      }
       setAppData(freshData)
+      setShiftHistory(history)
       setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === boxId)?.colores?.hex || requestedBoxAccent)
-    }).catch((error) => setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.'))
+    } catch (error) {
+      setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.')
+    }
+  }
+  const navigateShift = async (offset) => {
+    const currentIndex = shiftHistory.findIndex((item) => String(item.id) === String(shift?.id))
+    const targetShift = shiftHistory[currentIndex + offset]
+    if (!targetShift || shiftNavigationLoading) return
+    setShiftNavigationLoading(true)
+    setLoadError('')
+    try {
+      const freshData = await loadCurrentShiftData(selectedBoxId, targetShift.id)
+      setAppData(freshData)
+      setCashDiscrepancyPreview(null)
+    } catch (error) {
+      setLoadError(error.message || 'No se pudo cargar el turno seleccionado.')
+    } finally {
+      setShiftNavigationLoading(false)
+    }
   }
   const updateSettingsData = (freshData) => {
     if (freshData) {
@@ -391,6 +434,10 @@ function App() {
   const openCloseBoxDialog = () => {
     if (!shift) {
       setToast('No hay un turno abierto para cerrar')
+      return
+    }
+    if (!shift.abierto) {
+      setToast('Este turno está cerrado y solo se puede consultar')
       return
     }
     setCloseBoxDialogOpen(true)
@@ -439,15 +486,19 @@ function App() {
           <div><strong>Caja<span>{appName}</span></strong><small>Control operativo</small></div>
         </div>
         <div className="shift-nav">
-          <button className="icon-button" title="Turno anterior"><ChevronRight size={17} className="flip-x" /></button>
-          <div className="shift-title"><span><Clock3 size={14} /> {shiftName}</span><b>{shift ? new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR') : '--/--'} <em>/</em> {shiftTime}</b></div>
-          <button className="icon-button" title="Turno siguiente"><ChevronRight size={17} /></button>
+          <button className="icon-button" title="Caja anterior" aria-label="Ir a la caja anterior" onClick={() => navigateShift(1)} disabled={!canNavigateToPreviousShift || shiftNavigationLoading}><ChevronRight size={17} className="flip-x" /></button>
+          <div className="shift-title">
+            <span><Clock3 size={14} /> {shiftName}</span>
+            <b>{shift ? new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR') : '--/--'} <em>/</em> {shiftTime}</b>
+            {isReadOnlyShift && <small className="shift-read-only">Solo lectura</small>}
+          </div>
+          <button className="icon-button" title="Caja siguiente" aria-label="Ir a la caja siguiente" onClick={() => navigateShift(-1)} disabled={!canNavigateToNextShift || shiftNavigationLoading}><ChevronRight size={17} /></button>
         </div>
         <div className="top-actions">
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={reloadData} />
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
           <button className="camera-button" title="Cámara"><Camera size={16} /></button>
-          <button className="lock-button" title="Cerrar caja y abrir siguiente turno" aria-label="Cerrar caja y abrir siguiente turno" onClick={openCloseBoxDialog} disabled={!shift}><LockKeyhole size={16} /></button>
+          <button className="lock-button" title="Cerrar caja y abrir siguiente turno" aria-label="Cerrar caja y abrir siguiente turno" onClick={openCloseBoxDialog} disabled={!shift || !shift.abierto}><LockKeyhole size={16} /></button>
         </div>
       </header>
 
@@ -459,8 +510,27 @@ function App() {
         </aside>
 
         <main className="main-content">
+          <fieldset
+            className="main-content-fieldset"
+            disabled={isReadOnlyShift}
+            onClickCapture={(event) => {
+              if (!isReadOnlyShift) return
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            onKeyDownCapture={(event) => {
+              if (!isReadOnlyShift) return
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+            onSubmitCapture={(event) => {
+              if (!isReadOnlyShift) return
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+          >
           <section className="page-heading">
-            <div><span className="eyebrow">{view === 'bonuses' ? 'Catálogo de estados' : shift ? `Turno iniciado · ${new Date(shift.fecha_hora_inicio).toLocaleString('es-AR')}` : 'Sin turno abierto'}</span><h1>{activeLabel === 'Caja' ? `${shiftName} / ${shiftTime}` : activeLabel}</h1><p>{view === 'bonuses' ? 'Administrá imágenes, tipos, porcentajes y condiciones' : shift ? `${new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${activeBox}` : 'Seleccioná una caja con un turno abierto'}</p></div>
+            <div><span className="eyebrow">{view === 'bonuses' ? 'Catálogo de estados' : isReadOnlyShift ? 'Solo lectura · Turno cerrado' : shift ? `Turno iniciado · ${new Date(shift.fecha_hora_inicio).toLocaleString('es-AR')}` : 'Sin turno abierto'}</span><h1>{activeLabel === 'Caja' ? `${shiftName} / ${shiftTime}` : activeLabel}</h1><p>{view === 'bonuses' ? 'Administrá imágenes, tipos, porcentajes y condiciones' : shift ? `${new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${activeBox}` : 'Seleccioná una caja con un turno abierto'}</p></div>
             {view === 'dashboard' && shift && <div className="shift-discrepancy" aria-label={`Sobrante o faltante: ${cashDiscrepancyLabel}`}><span>Sobrante / Faltante</span><strong className={cashDiscrepancyTone}>{cashDiscrepancyLabel}</strong></div>}
           </section>
 
@@ -474,9 +544,10 @@ function App() {
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} onCreate={() => setUserCreateOpen(true)} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} onCloseBox={openCloseBoxDialog} />}
+          </fieldset>
         </main>
       </div>
-      {closeBoxDialogOpen && appData?.shift && <ShiftCloseModal
+      {closeBoxDialogOpen && appData?.shift?.abierto && <ShiftCloseModal
         data={appData}
         onClose={() => setCloseBoxDialogOpen(false)}
         onClosed={finishCloseBox}

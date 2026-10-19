@@ -30,7 +30,19 @@ async function query(table, columns, configure = () => {}) {
   return data ?? []
 }
 
-export async function loadCurrentShiftData(boxId = null) {
+export async function loadShiftHistory(boxId = null) {
+  return query(
+    'turnos',
+    'id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_id, dia_turno_id, cajas(id, nombre), dias_turno(id, nombre, hora_inicio, hora_fin, tipos_turno(nombre))',
+    request => {
+      let historyRequest = request.order('fecha_hora_inicio', { ascending: false })
+      if (boxId != null) historyRequest = historyRequest.eq('caja_id', boxId)
+      return historyRequest
+    },
+  )
+}
+
+export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   requireSupabase()
   const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini, colores(nombre, hex)', request => request.order('id', { ascending: true }))
   const [users, panels] = await Promise.all([
@@ -40,10 +52,11 @@ export async function loadCurrentShiftData(boxId = null) {
   let shiftRequest = supabase
     .from('turnos')
     .select('id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, cajas(id, nombre), dias_turno(id, nombre, dia_semana, hora_inicio, hora_fin, cruza_medianoche, tipo_turno_id, tipos_turno(id, nombre, caja_id))')
-    .eq('abierto', true)
     .order('fecha_hora_inicio', { ascending: false })
     .limit(1)
-  if (boxId) shiftRequest = shiftRequest.eq('caja_id', boxId)
+  if (shiftId != null) shiftRequest = shiftRequest.eq('id', shiftId)
+  else shiftRequest = shiftRequest.eq('abierto', true)
+  if (boxId != null) shiftRequest = shiftRequest.eq('caja_id', boxId)
   const { data: shift, error: shiftError } = await shiftRequest.maybeSingle()
   if (shiftError) throw shiftError
   if (!shift) {
@@ -66,9 +79,11 @@ export async function loadCurrentShiftData(boxId = null) {
     return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
-  await ensureShiftAccounts(shift.id, shift.caja_id)
-  await ensureAdvertisingLines(shift.id)
-  await ensureShiftChips(shift.id, shift.caja_id)
+  if (shift.abierto) {
+    await ensureShiftAccounts(shift.id, shift.caja_id)
+    await ensureAdvertisingLines(shift.id)
+    await ensureShiftChips(shift.id, shift.caja_id)
+  }
 
   const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes, movements] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
@@ -1503,9 +1518,10 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
     if (nextChipsError) throw nextChipsError
     for (const chip of nextChips || []) {
       const previous = previousChipByPlatform.get(String(chip.plataforma_id))
+      const inheritedFinal = Number(previous?.fichas_final || 0)
       const { error } = await supabase.from('fichas').update({
-        fichas_inicial: Number(previous?.fichas_final || 0),
-        fichas_final: 0,
+        fichas_inicial: inheritedFinal,
+        fichas_final: inheritedFinal,
       }).eq('id', chip.id)
       if (error) throw error
     }
