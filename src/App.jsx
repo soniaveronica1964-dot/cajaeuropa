@@ -2662,6 +2662,89 @@ function LegacyBonusList({ shiftId, rows, onSaved, setToast }) {
 function EmptyInline({ text }) { return <p className="empty-inline">{text}</p> }
 function PanelTitle({ icon: Icon, title, meta, action }) { return <div className="panel-title"><div><Icon size={16} /><h2>{title}</h2>{meta && <small>{meta}</small>}</div>{action && <span className="panel-action">{action}</span>}</div> }
 
+function ColorSelect({ colors = [], value, onChange, ariaLabel, allowNone = false }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef(null)
+  const triggerRef = useRef(null)
+  const optionRefs = useRef([])
+  const selectedColor = colors.find(color => String(color.id) === String(value))
+  const options = allowNone ? [{ id: '', nombre: 'Sin color', hex: null }, ...colors] : colors
+
+  useEffect(() => {
+    if (!open) return undefined
+    const closeOnOutsidePointer = event => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    optionRefs.current[0]?.focus()
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [open])
+
+  const handleOptionKeyDown = (event, index) => {
+    let nextIndex = index
+    if (event.key === 'ArrowDown') nextIndex = (index + 1) % options.length
+    else if (event.key === 'ArrowUp') nextIndex = (index - 1 + options.length) % options.length
+    else if (event.key === 'Home') nextIndex = 0
+    else if (event.key === 'End') nextIndex = options.length - 1
+    else if (event.key === 'Escape') {
+      event.preventDefault()
+      setOpen(false)
+      triggerRef.current?.focus()
+      return
+    } else return
+    event.preventDefault()
+    optionRefs.current[nextIndex]?.focus()
+  }
+
+  return <div className={`color-select ${open ? 'open' : ''}`} ref={rootRef}>
+    <button
+      ref={triggerRef}
+      type="button"
+      className="color-select-trigger"
+      aria-label={ariaLabel}
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      disabled={!options.length}
+      onClick={() => setOpen(current => !current)}
+      onKeyDown={event => {
+        if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) {
+          event.preventDefault()
+          setOpen(true)
+        }
+      }}
+    >
+      <span className={`color-select-swatch ${selectedColor ? '' : 'empty'}`} style={selectedColor ? { '--swatch-color': selectedColor.hex } : undefined} />
+      <span className="color-select-current">{selectedColor?.nombre || (allowNone ? 'Sin color' : 'Elegir color')}</span>
+      <ChevronDown size={13} aria-hidden="true" />
+    </button>
+    {open && <div className="color-select-menu" role="listbox" aria-label={ariaLabel}>
+      {options.map((color, index) => {
+        const selected = String(color.id) === String(value)
+        return <button
+          ref={element => { optionRefs.current[index] = element }}
+          type="button"
+          role="option"
+          aria-selected={selected}
+          className={`color-select-option ${selected ? 'selected' : ''}`}
+          key={color.id || 'none'}
+          onClick={() => {
+            onChange(color.id)
+            setOpen(false)
+            triggerRef.current?.focus()
+          }}
+          onKeyDown={event => handleOptionKeyDown(event, index)}
+        >
+          <span className={`color-select-swatch ${color.hex ? '' : 'empty'}`} style={color.hex ? { '--swatch-color': color.hex } : undefined} />
+          <span className="color-select-option-name">{color.nombre}</span>
+          {color.hex && <small>{color.hex}</small>}
+          {selected && <Check size={13} aria-hidden="true" />}
+        </button>
+      })}
+      {!options.length && <span className="color-select-empty">No hay colores configurados</span>}
+    </div>}
+  </div>
+}
+
 function ConfigList({ title, items, select }) { return <section className="panel config-list"><div className="panel-title"><h2>{title}</h2><small>{items.length} elementos</small></div>{items.map(item => <div className="config-row" key={item.id || item}><span className="drag">⠿</span><input defaultValue={item.nombre || item} />{select && <select defaultValue="Cobros + retiros"><option>Cobros + retiros</option><option>Solo cobros</option><option>Solo depósito</option></select>}<button className="icon-button"><Trash2 size={14} /></button></div>)}{!items.length && <EmptyInline text="No hay registros configurados." />}<button className="secondary-button"><Plus size={14} /> Agregar</button></section> }
 
 function LiveStatistics({ data }) {
@@ -3681,14 +3764,12 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
                   if (value === savedName) return
                   await persistUpdate(() => updateBox(box.id, { name: value, colorId: box.colorId }), 'Caja actualizada en Supabase')
                 }} placeholder="Nombre" />
-                <select value={box.colorId == null ? '' : String(box.colorId)} onChange={(event) => {
-                  const nextColorId = event.target.value || null
+                <ColorSelect value={box.colorId == null ? '' : String(box.colorId)} colors={localData.colors || []} ariaLabel={`Color de ${box.title}`} onChange={(colorId) => {
+                  const nextColorId = colorId || null
                   const selectedColor = localData.colors?.find((color) => String(color.id) === nextColorId)
                   setDraft((current) => ({ ...current, boxes: current.boxes.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || null } : item) }))
                   if (box.id) persistUpdate(() => updateBox(box.id, { name: box.title, colorId: nextColorId }), 'Color de caja actualizado en Supabase')
-                }} aria-label="Color">
-                  {localData.colors?.length ? localData.colors.map((color) => <option value={String(color.id)} key={color.id}>{color.nombre}</option>) : <option value="">Sin colores disponibles</option>}
-                </select>
+                }} />
                 <button type="button" className="delete-button" title="Eliminar caja" onClick={() => {
                   if (!box.id) return
                   persistUpdate(() => deleteBox(box.id), 'Caja eliminada de Supabase')
@@ -4052,14 +4133,12 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
                 if (value === savedName) return
                 await persistUpdate(() => updatePlatform(platform.id, { name: value, colorId: platform.colorId }), 'Plataforma actualizada en Supabase')
               }} placeholder="Nombre de plataforma" />
-              <select value={platform.colorId == null ? '' : String(platform.colorId)} onChange={(event) => {
-                const nextColorId = event.target.value || null
+              <ColorSelect value={platform.colorId == null ? '' : String(platform.colorId)} colors={localData.colors || []} ariaLabel={`Color de ${platform.nombre}`} onChange={(colorId) => {
+                const nextColorId = colorId || null
                 const selectedColor = localData.colors?.find((color) => String(color.id) === nextColorId)
                 setDraft((current) => ({ ...current, platforms: current.platforms.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || null } : item) }))
                 if (platform.id) persistUpdate(() => updatePlatform(platform.id, { name: platform.nombre, colorId: nextColorId }), 'Color de plataforma actualizado en Supabase')
-              }} aria-label="Color">
-                {localData.colors?.length ? localData.colors.map((color) => <option value={String(color.id)} key={color.id}>{color.nombre}</option>) : <option value="">Sin colores disponibles</option>}
-              </select>
+              }} />
               <button type="button" className="delete-button" title="Eliminar plataforma" onClick={async () => {
                 if (!platform.id) return
                 await persistUpdate(() => deletePlatform(platform.id), 'Plataforma eliminada de Supabase')
@@ -4093,14 +4172,12 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
               }}>
                 {draft.platforms.map(platform => <option value={String(platform.id)} key={platform.id}>{platform.nombre}</option>)}
               </select>
-              <select value={String(subplatform.colorId ?? [...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id))[0]?.id ?? '')} aria-label="Color de subplataforma" onChange={(event) => {
-                const nextColorId = event.target.value || null
+              <ColorSelect value={String(subplatform.colorId ?? [...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id))[0]?.id ?? '')} colors={[...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id))} ariaLabel={`Color de subplataforma ${subplatform.nombre}`} onChange={(colorId) => {
+                const nextColorId = colorId || null
                 const selectedColor = localData.colors?.find(color => String(color.id) === nextColorId)
                 setDraft(current => ({ ...current, subplatforms: current.subplatforms.map((item, itemIndex) => itemIndex === index ? { ...item, colorId: nextColorId, colorHex: selectedColor?.hex || null } : item) }))
                 persistUpdate(() => updateSubplatform(subplatform.id, { name: subplatform.nombre, platformId: subplatform.platformId, colorId: nextColorId }), 'Color de subplataforma actualizado en Supabase')
-              }}>
-                {[...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id)).map(color => <option value={String(color.id)} key={color.id}>{color.nombre}</option>)}
-              </select>
+              }} />
               <button type="button" className="delete-button" title="Eliminar subplataforma" onClick={async () => {
                 if (!window.confirm(`¿Eliminar "${subplatform.nombre}"? También se eliminarán las líneas de estados y asignaciones vinculadas a esta subplataforma.`)) return
                 await persistUpdate(() => deleteSubplatform(subplatform.id), 'Subplataforma eliminada de Supabase')
@@ -4169,18 +4246,14 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
                 if (!target || (target.emote_tipo || '') === category.emoteType) return
                 persistUpdate(() => updateUserCategory(target.id, { name: category.nombre, colorId: category.colorId, emoteType: category.emoteType }), 'Emote de categoría actualizado')
               }} placeholder="Emote" />
-              <select value={category.colorId} aria-label={`Color de ${category.nombre}`} onChange={event => {
-                const colorId = event.target.value
+              <ColorSelect value={category.colorId} colors={[...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id))} ariaLabel={`Color de ${category.nombre}`} allowNone onChange={colorId => {
                 const color = localData.colors?.find(item => String(item.id) === colorId)
                 setDraft(current => ({
                   ...current,
                   userCategories: current.userCategories.map((item, itemIndex) => itemIndex === index ? { ...item, colorId, colorHex: color?.hex || null } : item),
                 }))
                 persistUpdate(() => updateUserCategory(category.id, { name: category.nombre, colorId, emoteType: category.emoteType }), 'Color de categoría actualizado')
-              }}>
-                <option value="">Sin color</option>
-                {[...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id)).map(color => <option value={String(color.id)} key={color.id}>{color.nombre}</option>)}
-              </select>
+              }} />
               <button type="button" className="delete-button" title={`Eliminar categoría ${category.nombre}`} onClick={() => {
                 if (!window.confirm(`¿Eliminar la categoría "${category.nombre}"? También se quitará de los usuarios que la tengan asignada.`)) return
                 persistUpdate(() => deleteUserCategory(category.id), 'Categoría eliminada de Supabase')
