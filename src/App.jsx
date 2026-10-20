@@ -31,6 +31,7 @@ import {
   Search,
   Send,
   Settings2,
+  LockKeyholeOpen,
   SlidersHorizontal,
   Sparkles,
   Target,
@@ -112,6 +113,7 @@ import {
   replaceAppImage,
   reorderEntityOrder,
   saveAppConfig,
+  setUserBlocked,
   setAccountAvailability,
   updateAccount,
   updateAccountFlags,
@@ -559,7 +561,7 @@ function App() {
           {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
-          {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} onEdit={setUserEditing} />}
+          {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} onEdit={setUserEditing} onSaved={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} onCloseBox={openCloseBoxDialog} />}
           </fieldset>
@@ -3068,7 +3070,7 @@ function LiveLogistics({ data, setToast, onSaved }) {
   </section>
 }
 
-function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit }) {
+function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit, onSaved, setToast }) {
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
   const [boxFilters, setBoxFilters] = useState(null)
@@ -3135,7 +3137,6 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit }) {
       <span>Titulares</span>
       <span>Cajas</span>
       <span>Categorías</span>
-      <span>Estado</span>
       <span />
     </div>}
     {matchingUsers.map(user => {
@@ -3145,7 +3146,7 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit }) {
         <button type="button" className="expand-button" aria-label={`${isExpanded ? 'Contraer' : 'Expandir'} ${name}`} onClick={() => setExpanded(isExpanded ? null : user.id)}>{isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
         <div className="directory-user-heading">
           <span className="directory-avatar"><UserRound size={15} /></span>
-          <span><b>{name}</b><small>{user.telefonos_usuario?.[0]?.numero || `Alta ${new Date(user.fecha_creacion).toLocaleDateString('es-AR')}`}</small></span>
+          <span><b className={user.bloqueado ? 'blocked' : ''}>{name}</b><small>{user.telefonos_usuario?.[0]?.numero || `Alta ${new Date(user.fecha_creacion).toLocaleDateString('es-AR')}`}</small></span>
         </div>
         <div className="tags">{user.titulares_usuario?.length ? user.titulares_usuario.map(holder => <span key={holder.id}>{holder.nombre}</span>) : <small className="directory-muted">Sin titular</small>}</div>
         <div className="directory-user-boxes">{[...new Set(user.paneles_x_usuario?.map(link => link.cajas?.nombre).filter(Boolean))].map(boxName => <span key={boxName}>{boxName}</span>)}</div>
@@ -3158,8 +3159,27 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit }) {
             <span>{category.nombre}</span>
           </span>
         })}</div>
-        <span className={`directory-status ${user.bloqueado ? 'blocked' : ''}`}><i />{user.bloqueado ? 'Bloqueado' : 'Activo'}</span>
-        <button type="button" className="icon-button" aria-label={`Editar ${name}`} title={`Editar ${name}`} onClick={() => onEdit(user)}><Pencil size={14} /></button>
+        <div className="directory-row-actions">
+          <button type="button" className="icon-button" aria-label={`Editar ${name}`} title={`Editar ${name}`} onClick={() => onEdit(user)}><Pencil size={14} /></button>
+          <button
+            type="button"
+            className={`icon-button directory-block-button ${user.bloqueado ? 'blocked' : ''}`}
+            aria-label={user.bloqueado ? `Desbloquear ${name}` : `Bloquear ${name}`}
+            title={user.bloqueado ? 'Desbloquear usuario' : 'Bloquear usuario'}
+            onClick={async () => {
+              const nextBlocked = !user.bloqueado
+              const action = nextBlocked ? 'bloquear' : 'desbloquear'
+              if (!window.confirm(`¿Querés ${action} a "${name}"?`)) return
+              try {
+                await setUserBlocked(user.id, nextBlocked)
+                await onSaved()
+                setToast(nextBlocked ? 'Usuario bloqueado' : 'Usuario desbloqueado')
+              } catch (error) {
+                setToast(error.message || `No se pudo ${action} al usuario`)
+              }
+            }}
+          >{user.bloqueado ? <LockKeyholeOpen size={14} /> : <LockKeyhole size={14} />}</button>
+        </div>
         {isExpanded && <div className="user-detail">
           <label>Nombres<input value={(user.nombres_usuario || []).map(item => item.nombre).join(', ')} readOnly /></label>
           <label>Teléfonos<input value={(user.telefonos_usuario || []).map(item => item.numero).join(', ')} readOnly /></label>
@@ -3168,7 +3188,6 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit }) {
           <label>Paneles<input value={(user.paneles_x_usuario || []).map(link => link.paneles?.nombre && link.cajas?.nombre ? `${link.cajas.nombre} - ${link.paneles.nombre}` : link.paneles?.nombre).filter(Boolean).join(', ')} readOnly /></label>
           <label>Categorías<input value={(user.categorias_x_usuario || []).map(link => link.categorias_usuario?.nombre).filter(Boolean).join(', ')} readOnly /></label>
           <label>Plataformas<input value={(user.subplataformas_x_usuario || []).map(link => link.subplataformas?.plataformas?.nombre && link.subplataformas?.nombre ? `${link.subplataformas.plataformas.nombre} · ${link.subplataformas.nombre}` : link.subplataformas?.nombre).filter(Boolean).join(', ')} readOnly /></label>
-          <label>Estado<input value={user.bloqueado ? 'Bloqueado' : 'Activo'} readOnly /></label>
         </div>}
       </div>
     })}

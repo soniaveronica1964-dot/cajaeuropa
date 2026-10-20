@@ -3687,7 +3687,7 @@ html:has(.app-shell[data-theme='light']) {
 .directory-list-head,
 .directory-row {
   display: grid;
-  grid-template-columns: 30px minmax(160px, 1.2fr) minmax(100px, .9fr) minmax(100px, .8fr) minmax(150px, 1.2fr) minmax(82px, auto) 34px;
+  grid-template-columns: 30px minmax(160px, 1.2fr) minmax(100px, .9fr) minmax(100px, .8fr) minmax(150px, 1.2fr) 68px;
   align-items: center;
   gap: 12px;
 }
@@ -3723,6 +3723,7 @@ html:has(.app-shell[data-theme='light']) {
 }
 .directory-user-heading > span:last-child { display: grid; gap: 3px; min-width: 0; }
 .directory-user-heading b { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.directory-user-heading b.blocked { color: #ff3b45; }
 .directory-user-heading small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .directory-row > .tags { display: flex; flex-wrap: wrap; gap: 4px; }
 .directory-row .tags > span {
@@ -3773,9 +3774,17 @@ html:has(.app-shell[data-theme='light']) {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.directory-status { display: inline-flex; align-items: center; gap: 6px; color: var(--green); font-size: 9px; white-space: nowrap; }
-.directory-status i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-.directory-status.blocked { color: var(--orange); }
+.directory-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+}
+.directory-row-actions .icon-button { flex: 0 0 28px; }
+.directory-block-button { color: var(--muted-2); }
+.directory-block-button:hover { border-color: color-mix(in srgb, var(--red) 50%, var(--line)); color: var(--red); }
+.directory-block-button.blocked { color: var(--red); }
+.directory-block-button.blocked:hover { border-color: color-mix(in srgb, var(--green) 50%, var(--line)); color: var(--green); }
 .directory-row .expand-button {
   display: grid;
   place-items: center;
@@ -3958,9 +3967,8 @@ html:has(.app-shell[data-theme='light']) {
   .directory-user-heading { grid-column: 2; grid-row: 1; }
   .directory-row > .tags,
   .directory-user-boxes,
-  .directory-user-categories,
-  .directory-status { grid-column: 2; }
-  .directory-row > .icon-button { grid-column: 3; grid-row: 1; }
+  .directory-user-categories { grid-column: 2; }
+  .directory-row-actions { grid-column: 3; grid-row: 1; }
   .directory-row .expand-button { grid-column: 1; grid-row: 1; }
   .user-detail { grid-column: 2 / -1; }
   .user-form-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 15px; }

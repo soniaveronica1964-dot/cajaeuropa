@@ -2071,6 +2071,14 @@ export async function updateUser({ userId, names, phones, holders, createdAt, pa
   }
 }
 
+export async function setUserBlocked(userId, blocked) {
+  requireSupabase()
+  const { error } = await supabase.from('usuarios')
+    .update({ bloqueado: Boolean(blocked) })
+    .eq('id', userId)
+  if (error) throw error
+}
+
 async function ensureAdvertisingLines(shiftId) {
   const advertising = await findOrCreate('publicidad', { turno_id: shiftId }, { turno_id: shiftId })
   const { data: lines, error } = await supabase
