@@ -395,8 +395,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .sidebar {
   width: 100px;
   flex: 0 0 100px;
-  height: calc(100vh - var(--topbar-height));
-  height: calc(100dvh - var(--topbar-height));
   min-height: calc(100vh - var(--topbar-height));
   min-height: calc(100dvh - var(--topbar-height));
   padding: 12px 8px;
@@ -1792,16 +1790,6 @@ input[type="time"] { color-scheme: dark; }
   align-items: center;
   margin-bottom: 8px;
 }
-.operation-select-field {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  color: var(--muted);
-  font: 8px 'DM Mono', monospace;
-}
-.operation-select-field > select {
-  text-overflow: ellipsis;
-}
 .operation-found-money-form {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(68px, .7fr) minmax(0, 1fr) 30px;
 }
@@ -1928,8 +1916,7 @@ input[type="time"] { color-scheme: dark; }
 .transfer-box-select > select:focus { border-color: var(--transfer-box-color); }
 .transfer-swap { display: grid; place-items: center; width: 28px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--muted-2); }
 .transfer-swap:hover { border-color: var(--accent-border); color: var(--accent); }
-.transfer-holder { grid-column: 1 / 3; }
-.transfer-wallet { grid-column: 3 / 5; }
+.transfer-account { grid-column: 1 / 3; }
 .transfer-form:not(.savings-transfer-form) .transfer-notes { grid-column: 1 / -1; }
 .transfer-submit { height: 34px; }
 .transfer-form:not(.savings-transfer-form) .transfer-submit { grid-column: 5; }

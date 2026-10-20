@@ -2447,14 +2447,14 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
   return <section className="panel operation-card operation-found-money">
     <PanelTitle icon={Search} title="Dinero encontrado" action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title="Ver dinero encontrado" aria-label="Ver dinero encontrado" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
     <form className="operation-form operation-found-money-form" onSubmit={add}>
-      <label className="operation-select-field"><span>Titular</span><select aria-label="Titular donde se encontró dinero" value={selectedHolderId} onChange={event => { setHolderId(event.target.value); setWalletId('') }} disabled={saving || !holders.length}>
+      <select aria-label="Titular donde se encontró dinero" value={selectedHolderId} onChange={event => { setHolderId(event.target.value); setWalletId('') }} disabled={saving || !holders.length}>
+        {!holders.length && <option value="">Titular</option>}
         {holders.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
-        {!holders.length && <option value="">Sin titulares</option>}
-      </select></label>
-      <label className="operation-select-field"><span>Billetera</span><select aria-label="Billetera donde se encontró dinero" value={selectedWalletId} onChange={event => setWalletId(event.target.value)} disabled={saving || !wallets.length}>
+      </select>
+      <select aria-label="Billetera donde se encontró dinero" value={selectedWalletId} onChange={event => setWalletId(event.target.value)} disabled={saving || !wallets.length}>
+        {!wallets.length && <option value="">Billetera</option>}
         {wallets.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
-        {!wallets.length && <option value="">Sin billeteras</option>}
-      </select></label>
+      </select>
       <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
       <input aria-label="Notas del dinero encontrado" placeholder="Nota" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       <button className="operation-submit" type="submit" title="Agregar dinero encontrado" aria-label="Agregar dinero encontrado" disabled={saving || !selectedAccount}><Send size={14} /></button>
@@ -2601,14 +2601,14 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
     />
     {savings
       ? <form className="transfer-form savings-transfer-form" onSubmit={event => add(event, 'deposit')}>
-        <label className="transfer-field"><span>Titular</span><select aria-label="Titular del ahorro" value={selectedSavingsHolderId} onChange={event => { setSavingsHolderId(event.target.value); setSavingsWalletId('') }} disabled={saving || !savingsHolders.length}>
+        <select aria-label="Titular del ahorro" value={selectedSavingsHolderId} onChange={event => { setSavingsHolderId(event.target.value); setSavingsWalletId('') }} disabled={saving || !savingsHolders.length}>
+          {!savingsHolders.length && <option value="">Titular</option>}
           {savingsHolders.map(([holderId, holderName]) => <option value={holderId} key={holderId}>{holderName}</option>)}
-          {!savingsHolders.length && <option value="">Sin titulares de ahorro</option>}
-        </select></label>
-        <label className="transfer-field"><span>Billetera</span><select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !savingsWallets.length}>
+        </select>
+        <select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !savingsWallets.length}>
+          {!savingsWallets.length && <option value="">Billetera</option>}
           {savingsWallets.map(account => <option value={account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
-          {!savingsWallets.length && <option value="">Sin billeteras de ahorro</option>}
-        </select></label>
+        </select>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del ahorro" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
         <input className="transfer-notes savings-transfer-notes" aria-label="Nota del movimiento de ahorro" placeholder="Nota" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
         <button className="operation-submit transfer-submit" type="submit" title="Depositar en ahorro" aria-label="Depositar en ahorro" disabled={saving || boxes.length < 2 || !selectedSavingsAccount}><Send size={14} /></button>
@@ -2624,14 +2624,14 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
         </select></span></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
         <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !selectedTransferAccount}><Send size={14} /></button>
-        <label className="transfer-field transfer-holder"><span>Titular</span><select aria-label="Titular del movimiento" value={selectedHolderId} onChange={event => { setHolderId(event.target.value); setWalletId('') }} disabled={saving || !holders.length}>
-          {holders.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
-          {!holders.length && <option value="">Sin titulares</option>}
-        </select></label>
-        <label className="transfer-field transfer-wallet"><span>Billetera</span><select aria-label="Billetera del movimiento" value={selectedWalletId} onChange={event => setWalletId(event.target.value)} disabled={saving || !wallets.length}>
-          {wallets.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
-          {!wallets.length && <option value="">Sin billeteras</option>}
-        </select></label>
+        <select className="transfer-account" aria-label="Cuenta del movimiento" value={selectedTransferAccount?.id?.toString() || ''} onChange={event => {
+          const selected = accounts.find(account => String(account.id) === event.target.value)
+          setHolderId(selected ? String(selected.cuentas?.titular_id ?? selected.cuentas?.titulares?.id ?? '') : '')
+          setWalletId(selected ? String(selected.cuentas?.billetera_id ?? selected.cuentas?.billeteras?.id ?? '') : '')
+        }} disabled={saving || !accounts.length}>
+          {accounts.map(account => <option value={account.id} key={account.id}>{accountName(account.id)}</option>)}
+          {!accounts.length && <option value="">Cuenta</option>}
+        </select>
         <input className="transfer-notes" aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       </form>}
     <div className="operation-recent-list">
