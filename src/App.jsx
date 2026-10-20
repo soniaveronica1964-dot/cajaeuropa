@@ -3066,7 +3066,7 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
   const [search, setSearch] = useState('')
   const [boxFilters, setBoxFilters] = useState(null)
   const activeBoxFilters = boxFilters ?? (selectedBoxId == null ? [] : [String(selectedBoxId)])
-  const selectedBoxes = boxes.filter(box => activeBoxFilters.includes(String(box.id)))
+  const allBoxesSelected = boxes.length > 0 && activeBoxFilters.length === boxes.length
   const boxFilteredUsers = users.filter(user => !activeBoxFilters.length
     || user.paneles_x_usuario?.some(link => activeBoxFilters.includes(String(link.caja_id))))
   const matchingUsers = boxFilteredUsers.filter(user => [
@@ -3080,7 +3080,7 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
       ? 'No encontramos coincidencias'
       : !activeBoxFilters.length
         ? 'No hay usuarios para mostrar'
-        : `Sin usuarios en ${selectedBoxes.map(box => box.nombre).join(' y ') || 'estas cajas'}`
+        : 'Sin usuarios en las cajas seleccionadas'
   const emptyDescription = !users.length
     ? 'Creá el primer registro para empezar a organizar tus usuarios.'
     : search.trim()
@@ -3097,29 +3097,31 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
         <span><h2>Usuarios</h2><small>Registro general de usuarios</small></span>
       </div>
       <div className="directory-header-actions">
-        {selectedBoxes.map(box => <span className="directory-scope" key={box.id}><span className="directory-scope-dot" style={{ backgroundColor: box.colores?.hex || 'currentColor' }} />{box.nombre}</span>)}
+        <div className="directory-header-filters">
+          <div className="search-line directory-search-line"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
+          <fieldset className="directory-box-filter">
+            <legend className="sr-only">Filtrar usuarios por caja</legend>
+            <div className="directory-box-filter-options">
+              <label className={`user-choice directory-box-choice ${allBoxesSelected ? 'selected' : ''}`}>
+                <input type="checkbox" checked={allBoxesSelected} disabled={!boxes.length} onChange={event => setBoxFilters(event.target.checked ? boxes.map(box => String(box.id)) : [])} />
+                <span>Todos</span>
+              </label>
+              {boxes.map(box => <label className={`user-choice directory-box-choice ${activeBoxFilters.includes(String(box.id)) ? 'selected' : ''}`} key={box.id} style={{ '--choice-color': box.colores?.hex || 'var(--line)' }}>
+                <input type="checkbox" checked={activeBoxFilters.includes(String(box.id))} onChange={event => setBoxFilters(current => {
+                  const active = current ?? (selectedBoxId == null ? [] : [String(selectedBoxId)])
+                  return event.target.checked
+                    ? [...new Set([...active, String(box.id)])]
+                    : active.filter(id => id !== String(box.id))
+                })} />
+                <span>{box.nombre}</span>
+              </label>)}
+            </div>
+          </fieldset>
+        </div>
         <span className="directory-count">{userCountLabel}</span>
         <button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Nuevo usuario</button>
       </div>
     </header>
-    <div className="directory-filters">
-      <div className="search-line"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
-      <fieldset className="directory-box-filter">
-        <legend>Cajas (selección múltiple)</legend>
-        <div className="directory-box-filter-options">
-          {boxes.map(box => <label className={`user-choice directory-box-choice ${activeBoxFilters.includes(String(box.id)) ? 'selected' : ''}`} key={box.id} style={{ '--choice-color': box.colores?.hex || 'var(--line)' }}>
-            <input type="checkbox" checked={activeBoxFilters.includes(String(box.id))} onChange={event => setBoxFilters(current => {
-              const active = current ?? (selectedBoxId == null ? [] : [String(selectedBoxId)])
-              return event.target.checked
-                ? [...new Set([...active, String(box.id)])]
-                : active.filter(id => id !== String(box.id))
-            })} />
-            <span>{box.nombre}</span>
-          </label>)}
-          {!boxes.length && <small>No hay cajas configuradas.</small>}
-        </div>
-      </fieldset>
-    </div>
     {!!matchingUsers.length && <div className="directory-list-head" aria-hidden="true">
       <span />
       <span>Usuario</span>
