@@ -3135,21 +3135,30 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit, onSaved,
       <span />
       <span>Usuario</span>
       <span>Titulares</span>
+      <span>Teléfonos</span>
       <span>Cajas</span>
+      <span>Paneles</span>
       <span>Categorías</span>
       <span />
     </div>}
     {matchingUsers.map(user => {
       const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`
       const isExpanded = expanded === user.id
+      const panelNames = [...new Set((user.paneles_x_usuario || []).map(link => {
+        const panelName = link.paneles?.nombre
+        const boxName = link.cajas?.nombre
+        return panelName && boxName ? `${boxName} - ${panelName}` : panelName
+      }).filter(Boolean))]
       return <div className={`directory-row ${isExpanded ? 'expanded' : ''}`} key={user.id}>
         <button type="button" className="expand-button" aria-label={`${isExpanded ? 'Contraer' : 'Expandir'} ${name}`} onClick={() => setExpanded(isExpanded ? null : user.id)}>{isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
         <div className="directory-user-heading">
           <span className="directory-avatar"><UserRound size={15} /></span>
-          <span><b className={user.bloqueado ? 'blocked' : ''}>{name}</b><small>{user.telefonos_usuario?.[0]?.numero || `Alta ${new Date(user.fecha_creacion).toLocaleDateString('es-AR')}`}</small></span>
+          <span><b className={user.bloqueado ? 'blocked' : ''}>{name}</b><small>Alta {new Date(user.fecha_creacion).toLocaleDateString('es-AR')}</small></span>
         </div>
         <div className="tags">{user.titulares_usuario?.length ? user.titulares_usuario.map(holder => <span key={holder.id}>{holder.nombre}</span>) : <small className="directory-muted">Sin titular</small>}</div>
+        <div className="directory-user-phones">{user.telefonos_usuario?.length ? user.telefonos_usuario.map(phone => <span key={phone.id}>{phone.numero}</span>) : <small className="directory-muted">Sin teléfono</small>}</div>
         <div className="directory-user-boxes">{[...new Set(user.paneles_x_usuario?.map(link => link.cajas?.nombre).filter(Boolean))].map(boxName => <span key={boxName}>{boxName}</span>)}</div>
+        <div className="directory-user-panels">{panelNames.length ? panelNames.map(panelName => <span key={panelName}>{panelName}</span>) : <small className="directory-muted">Sin panel</small>}</div>
         <div className="directory-user-categories">{(user.categorias_x_usuario || []).map(link => {
           const category = link.categorias_usuario
           if (!category) return null
