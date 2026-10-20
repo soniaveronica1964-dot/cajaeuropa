@@ -1,5 +1,5 @@
--- Development-only policy for the anonymous app role.
--- Run this in the Supabase SQL Editor to allow category assignments on user creation.
+-- Development-only policies for category assignments on user creation and editing.
+-- Run this in the Supabase SQL Editor to allow the anonymous app role to read, add, and remove assignments.
 ALTER TABLE public.categorias_x_usuario ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS dev_read_categorias_x_usuario

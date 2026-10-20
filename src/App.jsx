@@ -3284,9 +3284,9 @@ function UserCreateModal({ boxes, panels, userCategories, platforms, subplatform
       } else {
         await createUser({ names, phones, holders, createdAt, panelIds, boxIds, categoryIds, subplatformIds })
       }
+      await onSaved()
       onClose()
       setToast(user ? 'Usuario actualizado' : 'Usuario guardado')
-      onSaved()
     } catch (error) {
       setToast(error.message || 'No se pudo guardar el usuario')
     } finally {

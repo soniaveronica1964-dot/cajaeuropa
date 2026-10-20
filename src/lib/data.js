@@ -2058,7 +2058,6 @@ export async function updateUser({ userId, names, phones, holders, createdAt, pa
     { table: 'telefonos_usuario', rows: userPhones.map(numero => ({ usuario_id: userId, numero })) },
     { table: 'titulares_usuario', rows: userHolders.map(nombre => ({ usuario_id: userId, nombre })) },
     { table: 'paneles_x_usuario', rows: boxRelations },
-    { table: 'categorias_x_usuario', rows: categories },
     { table: 'subplataformas_x_usuario', rows: subplatforms },
   ]
   for (const { table, rows } of replacements) {
@@ -2068,6 +2067,44 @@ export async function updateUser({ userId, names, phones, holders, createdAt, pa
       const { error: insertError } = await supabase.from(table).insert(rows)
       if (insertError) throw insertError
     }
+  }
+
+  const { data: existingCategories, error: existingCategoriesError } = await supabase
+    .from('categorias_x_usuario')
+    .select('categoria_id')
+    .eq('usuario_id', userId)
+  if (existingCategoriesError) throw existingCategoriesError
+
+  const selectedCategoryIds = new Set(categories.map(category => String(category.categoria_id)))
+  const removedCategoryIds = existingCategories
+    .map(category => category.categoria_id)
+    .filter(categoryId => !selectedCategoryIds.has(String(categoryId)))
+  if (removedCategoryIds.length) {
+    const { error: deleteCategoriesError } = await supabase.from('categorias_x_usuario')
+      .delete()
+      .eq('usuario_id', userId)
+      .in('categoria_id', removedCategoryIds)
+    if (deleteCategoriesError) throw deleteCategoriesError
+  }
+
+  if (categories.length) {
+    const { error: upsertCategoriesError } = await supabase.from('categorias_x_usuario')
+      .upsert(categories, {
+        onConflict: 'categoria_id,usuario_id',
+        ignoreDuplicates: true,
+      })
+    if (upsertCategoriesError) throw upsertCategoriesError
+  }
+
+  const { data: savedCategories, error: savedCategoriesError } = await supabase
+    .from('categorias_x_usuario')
+    .select('categoria_id')
+    .eq('usuario_id', userId)
+  if (savedCategoriesError) throw savedCategoriesError
+  const savedCategoryIds = new Set(savedCategories.map(category => String(category.categoria_id)))
+  if (savedCategoryIds.size !== selectedCategoryIds.size
+    || [...selectedCategoryIds].some(categoryId => !savedCategoryIds.has(categoryId))) {
+    throw new Error('No se pudieron actualizar las categorías. Verificá que la política de DELETE de categorias_x_usuario esté aplicada en Supabase (supabase_fix_categorias_x_usuario_rls.sql).')
   }
 }
 
