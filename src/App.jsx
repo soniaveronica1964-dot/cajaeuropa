@@ -2745,6 +2745,93 @@ function ColorSelect({ colors = [], value, onChange, ariaLabel, allowNone = fals
   </div>
 }
 
+const EMOJI_GROUPS = [
+  { name: 'Personas', emojis: ['😀', '😎', '🤩', '🥳', '😇', '🤓', '🧑', '👩', '👨', '👑', '🧙', '🦸', '💃', '🕺', '🙋', '💁', '🤷', '🧏', '🧑‍💻', '🧑‍🎤'] },
+  { name: 'Símbolos', emojis: ['❤️', '💜', '💙', '💚', '💛', '🧡', '🖤', '🤍', '💖', '💯', '✨', '⭐', '🌟', '🔥', '⚡', '💎', '🔮', '♠️', '🎯', '✅'] },
+  { name: 'Celebración', emojis: ['🎉', '🎊', '🎁', '🎂', '🎈', '🥂', '🍾', '🎀', '🎆', '🎇', '🏆', '🥇', '🎵', '🎤', '🎧', '🎸', '🎹', '🪩', '🎭', '🎬'] },
+  { name: 'Objetos', emojis: ['💰', '💵', '💳', '🪙', '🏦', '📦', '📌', '📣', '💡', '🔑', '🛠️', '🧰', '📱', '💻', '📷', '🕯️', '🧸', '☕', '🍀', '🌈'] },
+  { name: 'Animales', emojis: ['🐶', '🐱', '🐼', '🐨', '🦊', '🐸', '🐵', '🦄', '🐝', '🦋', '🐢', '🦁', '🐯', '🐙', '🦜', '🐬', '🦈', '🐉', '🦖', '🐾'] },
+]
+
+function EmojiSelect({ value = '', onChange, ariaLabel }) {
+  const [open, setOpen] = useState(false)
+  const [search, setSearch] = useState('')
+  const [activeGroup, setActiveGroup] = useState(EMOJI_GROUPS[0].name)
+  const rootRef = useRef(null)
+  const triggerRef = useRef(null)
+  const searchRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return undefined
+    const closeOnOutsidePointer = event => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    searchRef.current?.focus()
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [open])
+
+  const normalizedSearch = search.trim().toLocaleLowerCase()
+  const groups = normalizedSearch
+    ? EMOJI_GROUPS.map(group => ({
+      ...group,
+      emojis: group.name.toLocaleLowerCase().includes(normalizedSearch)
+        ? group.emojis
+        : group.emojis.filter(emoji => emoji.includes(normalizedSearch)),
+    })).filter(group => group.emojis.length)
+    : EMOJI_GROUPS.filter(group => group.name === activeGroup)
+
+  return <div className={`emoji-select ${open ? 'open' : ''}`} ref={rootRef}>
+    <button
+      ref={triggerRef}
+      type="button"
+      className="emoji-select-trigger"
+      aria-label={ariaLabel}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      onClick={() => setOpen(current => !current)}
+    >
+      <span>{value || 'Elegir'}</span>
+      <ChevronDown size={13} aria-hidden="true" />
+    </button>
+    {open && <div className="emoji-select-menu" role="dialog" aria-label={ariaLabel}>
+      <input
+        ref={searchRef}
+        className="emoji-select-search"
+        type="search"
+        aria-label="Buscar emoji"
+        placeholder="Filtrar categoría o pegar emoji"
+        value={search}
+        onChange={event => setSearch(event.target.value)}
+      />
+      {!normalizedSearch && <div className="emoji-select-groups" aria-label="Categorías de emojis">
+        {EMOJI_GROUPS.map(group => <button
+          key={group.name}
+          type="button"
+          className={activeGroup === group.name ? 'active' : ''}
+          onClick={() => setActiveGroup(group.name)}
+        >{group.name}</button>)}
+      </div>}
+      <div className="emoji-select-grid">
+        {groups.flatMap(group => group.emojis).map((emoji, index) => <button
+          key={`${emoji}-${index}`}
+          type="button"
+          className={`emoji-select-option ${value === emoji ? 'selected' : ''}`}
+          aria-label={`Seleccionar ${emoji}`}
+          aria-pressed={value === emoji}
+          onClick={() => {
+            onChange(emoji)
+            setOpen(false)
+            setSearch('')
+            triggerRef.current?.focus()
+          }}
+        >{emoji}</button>)}
+        {!groups.length && <span className="emoji-select-empty">No se encontraron emojis.</span>}
+      </div>
+    </div>}
+  </div>
+}
+
 function ConfigList({ title, items, select }) { return <section className="panel config-list"><div className="panel-title"><h2>{title}</h2><small>{items.length} elementos</small></div>{items.map(item => <div className="config-row" key={item.id || item}><span className="drag">⠿</span><input defaultValue={item.nombre || item} />{select && <select defaultValue="Cobros + retiros"><option>Cobros + retiros</option><option>Solo cobros</option><option>Solo depósito</option></select>}<button className="icon-button"><Trash2 size={14} /></button></div>)}{!items.length && <EmptyInline text="No hay registros configurados." />}<button className="secondary-button"><Plus size={14} /> Agregar</button></section> }
 
 function LiveStatistics({ data }) {
@@ -4198,9 +4285,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
         <section className="config-card">
           <div className="config-list-head"><h3>Paneles</h3><span>{draft.panels.length} elementos · {currentBox?.nombre || 'Sin caja'}</span></div>
           {draft.panels.map((panel, index) => {
-            const panelBox = localData.boxes?.find(box => String(box.id) === String(panel.cajaId))
             return <div className="user-panel-config-row" key={panel.id}>
-              <span className="box-config-dot" style={{ backgroundColor: panelBox?.colores?.hex || panelBox?.color_hex || '#879598' }} />
               <input value={panel.nombre} aria-label={`Nombre del panel ${index + 1}`} onChange={event => setDraft(current => ({
                 ...current,
                 panels: current.panels.map((item, itemIndex) => itemIndex === index ? { ...item, nombre: event.target.value } : item),
@@ -4238,14 +4323,13 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
                 if (!target || !name || name === target.nombre) return
                 persistUpdate(() => updateUserCategory(target.id, { name, colorId: category.colorId, emoteType: category.emoteType }), 'Categoría actualizada en Supabase')
               }} placeholder="Nombre de categoría" />
-              <input value={category.emoteType} aria-label={`Emote de ${category.nombre}`} maxLength={100} onChange={event => setDraft(current => ({
-                ...current,
-                userCategories: current.userCategories.map((item, itemIndex) => itemIndex === index ? { ...item, emoteType: event.target.value } : item),
-              }))} onBlur={() => {
-                const target = localData.userCategories?.find(item => item.id === category.id)
-                if (!target || (target.emote_tipo || '') === category.emoteType) return
-                persistUpdate(() => updateUserCategory(target.id, { name: category.nombre, colorId: category.colorId, emoteType: category.emoteType }), 'Emote de categoría actualizado')
-              }} placeholder="Emote" />
+              <EmojiSelect value={category.emoteType} ariaLabel={`Emote de ${category.nombre}`} onChange={emoteType => {
+                setDraft(current => ({
+                  ...current,
+                  userCategories: current.userCategories.map((item, itemIndex) => itemIndex === index ? { ...item, emoteType } : item),
+                }))
+                persistUpdate(() => updateUserCategory(category.id, { name: category.nombre, colorId: category.colorId, emoteType }), 'Emote de categoría actualizado')
+              }} />
               <ColorSelect value={category.colorId} colors={[...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id))} ariaLabel={`Color de ${category.nombre}`} allowNone onChange={colorId => {
                 const color = localData.colors?.find(item => String(item.id) === colorId)
                 setDraft(current => ({
