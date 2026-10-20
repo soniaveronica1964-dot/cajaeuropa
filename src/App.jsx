@@ -2406,24 +2406,37 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
 }
 
 function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
-  const [accountId, setAccountId] = useState(accounts[0]?.id?.toString() || '')
+  const [holderId, setHolderId] = useState('')
+  const [walletId, setWalletId] = useState('')
   const [value, setValue] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
   const accountName = account => `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}`
+  const holders = [...new Map(accounts.map(account => [
+    String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
+    account.cuentas?.titulares?.nombre || 'Sin titular',
+  ])).entries()]
+  const selectedHolderId = holderId || holders[0]?.[0] || ''
+  const holderAccounts = accounts.filter(account => String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === selectedHolderId)
+  const wallets = [...new Map(holderAccounts.map(account => [
+    String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? ''),
+    account.cuentas?.billeteras?.nombre || 'Sin billetera',
+  ])).entries()]
+  const selectedWalletId = walletId || wallets[0]?.[0] || ''
+  const selectedAccount = holderAccounts.find(account => String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '') === selectedWalletId)
   const add = async (event) => {
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
-    if (!accountId) { setToast('Seleccioná una cuenta'); return }
+    if (!selectedAccount) { setToast('Seleccioná un titular y una billetera disponibles'); return }
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
-      await createFoundMoney({ accountShiftId: accountId, value: amount, notes })
+      await createFoundMoney({ accountShiftId: selectedAccount.id, value: amount, notes })
       setValue('')
       setNotes('')
       setToast('Dinero encontrado guardado')
-      onSaved()
+      await onSaved()
     } catch (error) {
       setToast(error.message || 'No se pudo guardar el dinero encontrado')
     } finally {
@@ -2433,13 +2446,18 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
   const total = rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
   return <section className="panel operation-card operation-found-money">
     <PanelTitle icon={Search} title="Dinero encontrado" action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title="Ver dinero encontrado" aria-label="Ver dinero encontrado" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
-    <form className="operation-form" onSubmit={add}>
-      <select aria-label="Cuenta donde se encontró dinero" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
-        {accounts.length ? accounts.map(account => <option value={account.id} key={account.id}>{accountName(account)}</option>) : <option value="">Sin cuentas</option>}
-      </select>
+    <form className="operation-form operation-found-money-form" onSubmit={add}>
+      <label className="operation-select-field"><span>Titular</span><select aria-label="Titular donde se encontró dinero" value={selectedHolderId} onChange={event => { setHolderId(event.target.value); setWalletId('') }} disabled={saving || !holders.length}>
+        {holders.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
+        {!holders.length && <option value="">Sin titulares</option>}
+      </select></label>
+      <label className="operation-select-field"><span>Billetera</span><select aria-label="Billetera donde se encontró dinero" value={selectedWalletId} onChange={event => setWalletId(event.target.value)} disabled={saving || !wallets.length}>
+        {wallets.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
+        {!wallets.length && <option value="">Sin billeteras</option>}
+      </select></label>
       <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
-      <input aria-label="Notas del dinero encontrado" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
-      <button className="operation-submit" type="submit" title="Agregar dinero encontrado" aria-label="Agregar dinero encontrado" disabled={saving || !accounts.length}><Send size={14} /></button>
+      <input aria-label="Notas del dinero encontrado" placeholder="Nota" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
+      <button className="operation-submit" type="submit" title="Agregar dinero encontrado" aria-label="Agregar dinero encontrado" disabled={saving || !selectedAccount}><Send size={14} /></button>
     </form>
     <div className="operation-recent-list">
       <small>Últimos registros</small>
@@ -2491,7 +2509,8 @@ function ShiftNotesCard({ shiftId, notes, onSaved, setToast }) {
 function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast }) {
   const [fromBoxId, setFromBoxId] = useState(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
   const [toBoxId, setToBoxId] = useState(boxes.find(box => String(box.id) !== String(shift.caja_id))?.id?.toString() || '')
-  const [accountId, setAccountId] = useState(accounts[0]?.id?.toString() || '')
+  const [holderId, setHolderId] = useState('')
+  const [walletId, setWalletId] = useState('')
   const [savingsHolderId, setSavingsHolderId] = useState('')
   const [savingsWalletId, setSavingsWalletId] = useState('')
   const [value, setValue] = useState('')
@@ -2499,6 +2518,18 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   const [savings, setSavings] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showAllRows, setShowAllRows] = useState(false)
+  const holders = [...new Map(accounts.map(account => [
+    String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
+    account.cuentas?.titulares?.nombre || 'Sin titular',
+  ])).entries()]
+  const selectedHolderId = holderId || holders[0]?.[0] || ''
+  const holderAccounts = accounts.filter(account => String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === selectedHolderId)
+  const wallets = [...new Map(holderAccounts.map(account => [
+    String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? ''),
+    account.cuentas?.billeteras?.nombre || 'Sin billetera',
+  ])).entries()]
+  const selectedWalletId = walletId || wallets[0]?.[0] || ''
+  const selectedTransferAccount = holderAccounts.find(account => String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '') === selectedWalletId)
   const savingsAccounts = accounts.filter(account => account.accountType?.ahorro)
   const savingsHolders = [...new Map(savingsAccounts.map(account => [
     String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
@@ -2513,7 +2544,7 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
     event?.preventDefault()
     const amount = parseLocalizedAmount(value)
     if (boxes.length < 2 || String(fromBoxId) === String(toBoxId)) { setToast('Se necesitan dos cajas distintas para crear un movimiento'); return }
-    const selectedAccountId = movementType === 'transfer' ? accountId : selectedSavingsAccount?.id?.toString()
+    const selectedAccountId = movementType === 'transfer' ? selectedTransferAccount?.id?.toString() : selectedSavingsAccount?.id?.toString()
     if (!selectedAccountId) { setToast(movementType === 'transfer' ? 'Seleccioná una cuenta' : 'No hay una billetera de ahorro disponible para este titular'); return }
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
@@ -2592,9 +2623,14 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
           {boxes.filter(box => String(box.id) !== String(fromBoxId)).map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
         </select></span></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
-        <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !accounts.length}><Send size={14} /></button>
-        <label className="transfer-field transfer-account"><span>Cuenta</span><select aria-label="Cuenta del movimiento" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
-          {accounts.map(account => <option value={account.id} key={account.id}>{accountName(account.id)}</option>)}
+        <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !selectedTransferAccount}><Send size={14} /></button>
+        <label className="transfer-field transfer-holder"><span>Titular</span><select aria-label="Titular del movimiento" value={selectedHolderId} onChange={event => { setHolderId(event.target.value); setWalletId('') }} disabled={saving || !holders.length}>
+          {holders.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
+          {!holders.length && <option value="">Sin titulares</option>}
+        </select></label>
+        <label className="transfer-field transfer-wallet"><span>Billetera</span><select aria-label="Billetera del movimiento" value={selectedWalletId} onChange={event => setWalletId(event.target.value)} disabled={saving || !wallets.length}>
+          {wallets.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
+          {!wallets.length && <option value="">Sin billeteras</option>}
         </select></label>
         <input className="transfer-notes" aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       </form>}
