@@ -2228,6 +2228,10 @@ input[type="time"] { color-scheme: dark; }
   --epr-emoji-size: 23px;
   --epr-emoji-padding: 3px;
 }
+.emoji-select-menu [data-epr-part="search-input"] {
+  padding-left: 40px !important;
+  padding-right: 34px !important;
+}
 .emoji-select-loading {
   display: block;
   padding: 18px 12px;
@@ -3635,34 +3639,32 @@ html:has(.app-shell[data-theme='light']) {
 .directory-scope-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
 .directory-filters {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin-bottom: 16px;
 }
 .directory-filters .search-line { min-width: 0; }
 .directory-box-filter {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  gap: 7px;
   min-width: 0;
-  padding: 0 10px;
+  margin: 0;
+  padding: 8px 10px 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: rgba(17, 23, 24, 0.8);
+}
+.directory-box-filter legend {
+  padding: 0 4px;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 9px;
+  text-transform: uppercase;
 }
-.directory-box-filter select {
-  flex: 1;
-  min-width: 0;
-  height: 30px;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--text);
-  font-size: 10px;
+.directory-box-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
-.directory-box-filter option { background: var(--panel); color: var(--text); }
 .directory-list-head,
 .directory-row {
   display: grid;
@@ -3832,6 +3834,8 @@ html:has(.app-shell[data-theme='light']) {
 }
 .user-add-field:hover { border-color: var(--accent-border); color: var(--text); }
 .user-form-boxes,
+.user-form-panels,
+.user-form-categories,
 .user-form-platforms {
   display: flex;
   flex-wrap: wrap;
@@ -3844,6 +3848,8 @@ html:has(.app-shell[data-theme='light']) {
   border: 0;
 }
 .user-form-boxes legend,
+.user-form-panels legend,
+.user-form-categories legend,
 .user-form-platforms legend { width: 100%; padding: 0 0 2px; }
 .user-choice {
   display: inline-flex;
@@ -3851,7 +3857,7 @@ html:has(.app-shell[data-theme='light']) {
   gap: 7px;
   min-height: 29px;
   padding: 0 9px;
-  border: 1px solid var(--line);
+  border: 1px solid color-mix(in srgb, var(--choice-color, var(--line)) 75%, var(--line));
   border-radius: 999px;
   background: var(--panel-2);
   color: var(--text);
@@ -3859,20 +3865,30 @@ html:has(.app-shell[data-theme='light']) {
   text-transform: none;
   cursor: pointer;
 }
-.user-choice input { width: 14px; height: 14px; margin: 0; accent-color: var(--accent); }
+.user-choice.selected {
+  border-color: color-mix(in srgb, var(--choice-color, var(--accent)) 78%, var(--line));
+  background: color-mix(in srgb, var(--choice-color, var(--accent)) 12%, var(--panel-2));
+}
+.directory-box-choice { min-height: 28px; }
+.user-category-choice { gap: 6px; }
+.user-category-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+.user-choice input { width: 14px; height: 14px; margin: 0; accent-color: #a78bfa; }
 .user-form-fields fieldset > small { color: var(--muted); font-size: 10px; }
 .user-platform-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; width: 100%; }
 .user-platform-group > strong { width: 100%; color: var(--text); font-size: 10px; }
-.user-form-panel { grid-column: 1; }
-.user-form-created { grid-column: 2; }
-.user-form-boxes { grid-column: 1; }
-.user-form-platforms { grid-column: 2 / 4; }
+.user-form-created { grid-column: 1; }
+.user-form-boxes { grid-column: 2 / 4; }
+.user-form-panels { grid-column: 1 / 3; }
+.user-form-categories { grid-column: 3; }
+.user-form-platforms { grid-column: 1 / -1; }
 
 @media (max-width: 700px) {
   .directory { padding: 12px; }
   .directory-header { align-items: flex-start; }
   .directory-header-actions { gap: 6px; }
-  .directory-filters { grid-template-columns: minmax(0, 1fr); }
   .directory-list-head { display: none; }
   .directory-row { grid-template-columns: 26px minmax(0, 1fr) 30px; gap: 7px; }
   .directory-user-heading { grid-column: 2; grid-row: 1; }
@@ -3884,6 +3900,9 @@ html:has(.app-shell[data-theme='light']) {
   .user-detail { grid-column: 2 / -1; }
   .user-form-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 15px; }
   .user-form-list:nth-child(3) { grid-column: 1 / -1; }
+  .user-form-boxes,
+  .user-form-panels,
+  .user-form-categories,
   .user-form-platforms { grid-column: 1 / -1; }
 }
 

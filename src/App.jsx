@@ -572,6 +572,7 @@ function App() {
       {userCreateOpen && appData && <UserCreateModal
         boxes={appData.boxes || []}
         panels={appData.panels || []}
+        userCategories={appData.userCategories || []}
         platforms={appData.platforms || []}
         subplatforms={appData.subplatforms || []}
         onClose={() => setUserCreateOpen(false)}
@@ -3063,28 +3064,28 @@ function LiveLogistics({ data, setToast, onSaved }) {
 function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
-  const [boxFilter, setBoxFilter] = useState(null)
-  const effectiveBoxFilter = boxFilter ?? (selectedBoxId == null ? 'all' : String(selectedBoxId))
-  const boxFilteredUsers = users.filter(user => effectiveBoxFilter === 'all'
-    || user.paneles_x_usuario?.some(link => String(link.caja_id) === effectiveBoxFilter))
+  const [boxFilters, setBoxFilters] = useState(null)
+  const activeBoxFilters = boxFilters ?? (selectedBoxId == null ? [] : [String(selectedBoxId)])
+  const selectedBoxes = boxes.filter(box => activeBoxFilters.includes(String(box.id)))
+  const boxFilteredUsers = users.filter(user => !activeBoxFilters.length
+    || user.paneles_x_usuario?.some(link => activeBoxFilters.includes(String(link.caja_id))))
   const matchingUsers = boxFilteredUsers.filter(user => [
     ...(user.nombres_usuario || []).map(item => item.nombre),
     ...(user.telefonos_usuario || []).map(item => item.numero),
     ...(user.titulares_usuario || []).map(item => item.nombre),
   ].join(' ').toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es')))
-  const selectedBox = boxes.find(box => String(box.id) === effectiveBoxFilter)
   const emptyTitle = !users.length
     ? 'Todavía no hay usuarios'
     : search.trim()
       ? 'No encontramos coincidencias'
-      : effectiveBoxFilter === 'all'
+      : !activeBoxFilters.length
         ? 'No hay usuarios para mostrar'
-        : `Sin usuarios en ${selectedBox?.nombre || 'esta caja'}`
+        : `Sin usuarios en ${selectedBoxes.map(box => box.nombre).join(' y ') || 'estas cajas'}`
   const emptyDescription = !users.length
     ? 'Creá el primer registro para empezar a organizar tus usuarios.'
     : search.trim()
       ? 'Probá con otro nombre, teléfono o titular.'
-      : effectiveBoxFilter === 'all'
+      : !activeBoxFilters.length
         ? 'No hay usuarios registrados para mostrar.'
         : 'Podés cambiar de caja o ver el registro completo.'
   const userCountLabel = `${matchingUsers.length} ${matchingUsers.length === 1 ? 'usuario' : 'usuarios'}`
@@ -3096,17 +3097,28 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
         <span><h2>Usuarios</h2><small>Registro general de usuarios</small></span>
       </div>
       <div className="directory-header-actions">
-        {effectiveBoxFilter !== 'all' && <span className="directory-scope"><span className="directory-scope-dot" />{selectedBox?.nombre || 'Caja'}</span>}
+        {selectedBoxes.map(box => <span className="directory-scope" key={box.id}><span className="directory-scope-dot" style={{ backgroundColor: box.colores?.hex || 'currentColor' }} />{box.nombre}</span>)}
         <span className="directory-count">{userCountLabel}</span>
         <button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Nuevo usuario</button>
       </div>
     </header>
     <div className="directory-filters">
       <div className="search-line"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
-      <label className="directory-box-filter"><span>Caja</span><select aria-label="Filtrar usuarios por caja" value={effectiveBoxFilter} onChange={event => setBoxFilter(event.target.value)}>
-        <option value="all">Todas las cajas</option>
-        {boxes.map(box => <option value={String(box.id)} key={box.id}>{box.nombre}</option>)}
-      </select></label>
+      <fieldset className="directory-box-filter">
+        <legend>Cajas (selección múltiple)</legend>
+        <div className="directory-box-filter-options">
+          {boxes.map(box => <label className={`user-choice directory-box-choice ${activeBoxFilters.includes(String(box.id)) ? 'selected' : ''}`} key={box.id} style={{ '--choice-color': box.colores?.hex || 'var(--line)' }}>
+            <input type="checkbox" checked={activeBoxFilters.includes(String(box.id))} onChange={event => setBoxFilters(current => {
+              const active = current ?? (selectedBoxId == null ? [] : [String(selectedBoxId)])
+              return event.target.checked
+                ? [...new Set([...active, String(box.id)])]
+                : active.filter(id => id !== String(box.id))
+            })} />
+            <span>{box.nombre}</span>
+          </label>)}
+          {!boxes.length && <small>No hay cajas configuradas.</small>}
+        </div>
+      </fieldset>
     </div>
     {!!matchingUsers.length && <div className="directory-list-head" aria-hidden="true">
       <span />
@@ -3134,7 +3146,8 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
           <label>Teléfonos<input value={(user.telefonos_usuario || []).map(item => item.numero).join(', ')} readOnly /></label>
           <label>Titulares<input value={(user.titulares_usuario || []).map(item => item.nombre).join(', ')} readOnly /></label>
           <label>Cajas<input value={[...new Set((user.paneles_x_usuario || []).map(link => link.cajas?.nombre).filter(Boolean))].join(', ')} readOnly /></label>
-          <label>Paneles<input value={(user.paneles_x_usuario || []).map(link => link.paneles?.nombre).filter(Boolean).join(', ')} readOnly /></label>
+          <label>Paneles<input value={(user.paneles_x_usuario || []).map(link => link.paneles?.nombre && link.cajas?.nombre ? `${link.cajas.nombre} - ${link.paneles.nombre}` : link.paneles?.nombre).filter(Boolean).join(', ')} readOnly /></label>
+          <label>Categorías<input value={(user.categorias_x_usuario || []).map(link => link.categorias_usuario?.nombre).filter(Boolean).join(', ')} readOnly /></label>
           <label>Plataformas<input value={(user.subplataformas_x_usuario || []).map(link => link.subplataformas?.plataformas?.nombre && link.subplataformas?.nombre ? `${link.subplataformas.plataformas.nombre} · ${link.subplataformas.nombre}` : link.subplataformas?.nombre).filter(Boolean).join(', ')} readOnly /></label>
           <label>Estado<input value={user.bloqueado ? 'Bloqueado' : 'Activo'} readOnly /></label>
         </div>}
@@ -3148,18 +3161,19 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
         ? <button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Crear usuario</button>
         : search.trim()
           ? <button type="button" className="secondary-button" onClick={() => setSearch('')}>Limpiar búsqueda</button>
-          : effectiveBoxFilter !== 'all' && <button type="button" className="secondary-button" onClick={() => setBoxFilter('all')}>Ver todas las cajas</button>}
+          : activeBoxFilters.length > 0 && <button type="button" className="secondary-button" onClick={() => setBoxFilters([])}>Ver todas las cajas</button>}
     </div>}
   </section>
 }
 
-function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSaved, setToast }) {
+function UserCreateModal({ boxes, panels, userCategories, platforms, subplatforms, onClose, onSaved, setToast }) {
   const [names, setNames] = useState([''])
   const [phones, setPhones] = useState([''])
   const [holders, setHolders] = useState([''])
   const [createdAt, setCreatedAt] = useState(currentDateTimeInput)
-  const [panelId, setPanelId] = useState('')
+  const [panelIds, setPanelIds] = useState([])
   const [boxIds, setBoxIds] = useState([])
+  const [categoryIds, setCategoryIds] = useState([])
   const [subplatformIds, setSubplatformIds] = useState([])
   const [saving, setSaving] = useState(false)
 
@@ -3168,7 +3182,10 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
   const toggleBox = (box, checked) => {
     const id = String(box.id)
     setBoxIds(current => checked ? [...new Set([...current, id])] : current.filter(item => item !== id))
-    if (!checked && String(panels.find(panel => String(panel.id) === panelId)?.caja_id) === id) setPanelId('')
+    if (!checked) {
+      const removedPanelIds = panels.filter(panel => String(panel.caja_id) === id).map(panel => String(panel.id))
+      setPanelIds(current => current.filter(panelId => !removedPanelIds.includes(panelId)))
+    }
     if (!checked) {
       const removedSubplatformIds = subplatforms
         .filter(subplatform => String(platforms.find(platform => String(platform.id) === String(subplatform.plataforma_id))?.caja_id) === id)
@@ -3179,6 +3196,11 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
   const toggleSubplatform = (id, checked) => {
     const normalizedId = String(id)
     setSubplatformIds(current => checked ? [...new Set([...current, normalizedId])] : current.filter(item => item !== normalizedId))
+  }
+  const togglePanel = (panel, checked) => {
+    const panelId = String(panel.id)
+    setPanelIds(current => checked ? [...new Set([...current, panelId])] : current.filter(item => item !== panelId))
+    if (checked) setBoxIds(current => [...new Set([...current, String(panel.caja_id)])])
   }
 
   const renderTextList = (title, values, setter, placeholder, maxLength, addLabel, required = false) => <div className="user-form-list">
@@ -3202,7 +3224,7 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
     event.preventDefault()
     setSaving(true)
     try {
-      await createUser({ names, phones, holders, createdAt, panelId, boxIds, subplatformIds })
+      await createUser({ names, phones, holders, createdAt, panelIds, boxIds, categoryIds, subplatformIds })
       onClose()
       setToast('Usuario guardado')
       onSaved()
@@ -3224,21 +3246,31 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
         {renderTextList('NOMBRE DE USUARIO *', names, setNames, 'Nombre de usuario', 150, 'nombre de usuario', true)}
         {renderTextList('NÚMERO DE TELÉFONO', phones, setPhones, 'Número de teléfono', 50, 'número de teléfono')}
         {renderTextList('TITULAR', holders, setHolders, 'Titular', 150, 'titular')}
-        <label className="user-form-panel"><span>PANEL</span><select value={panelId} disabled={saving} onChange={event => {
-          const selectedPanel = panels.find(panel => String(panel.id) === event.target.value)
-          setPanelId(event.target.value)
-          if (selectedPanel) setBoxIds(current => [...new Set([...current, String(selectedPanel.caja_id)])])
-        }}>
-          <option value="">Sin seleccionar</option>
-          {panels.map(panel => {
-            const box = boxes.find(item => String(item.id) === String(panel.caja_id))
-            return <option value={panel.id} key={panel.id}>{panel.nombre}{box ? ` · ${box.nombre}` : ''}</option>
-          })}
-        </select></label>
         <label className="user-form-created"><span>FECHA CREACIÓN</span><input type="datetime-local" value={createdAt} disabled={saving} onChange={event => setCreatedAt(event.target.value)} /></label>
         <fieldset className="user-form-boxes"><legend>CAJAS</legend>
-          {boxes.map(box => <label className="user-choice" key={box.id}><input type="checkbox" checked={boxIds.includes(String(box.id))} disabled={saving} onChange={event => toggleBox(box, event.target.checked)} /><span>{box.nombre}</span></label>)}
+          {boxes.map(box => <label className={`user-choice ${boxIds.includes(String(box.id)) ? 'selected' : ''}`} key={box.id} style={{ '--choice-color': box.colores?.hex || 'var(--line)' }}><input type="checkbox" checked={boxIds.includes(String(box.id))} disabled={saving} onChange={event => toggleBox(box, event.target.checked)} /><span>{box.nombre}</span></label>)}
           {!boxes.length && <small>No hay cajas configuradas.</small>}
+        </fieldset>
+        <fieldset className="user-form-panels"><legend>PANELES</legend>
+          {panels.filter(panel => boxIds.includes(String(panel.caja_id))).map(panel => {
+            const box = boxes.find(item => String(item.id) === String(panel.caja_id))
+            return <label className={`user-choice user-panel-choice ${panelIds.includes(String(panel.id)) ? 'selected' : ''}`} key={panel.id} style={{ '--choice-color': box?.colores?.hex || 'var(--line)' }}>
+              <input type="checkbox" checked={panelIds.includes(String(panel.id))} disabled={saving} onChange={event => togglePanel(panel, event.target.checked)} />
+              <span>{box ? `${box.nombre} - ${panel.nombre}` : panel.nombre}</span>
+            </label>
+          })}
+          {!boxIds.length && <small>Seleccioná una caja para ver sus paneles.</small>}
+          {!!boxIds.length && !panels.some(panel => boxIds.includes(String(panel.caja_id))) && <small>No hay paneles configurados para las cajas seleccionadas.</small>}
+        </fieldset>
+        <fieldset className="user-form-categories"><legend>CATEGORÍAS</legend>
+          {userCategories.map(category => <label className={`user-choice user-category-choice ${categoryIds.includes(String(category.id)) ? 'selected' : ''}`} key={category.id} style={{ '--choice-color': category.colores?.hex || 'var(--line)' }}>
+            <input type="checkbox" checked={categoryIds.includes(String(category.id))} disabled={saving} onChange={event => setCategoryIds(current => event.target.checked
+              ? [...new Set([...current, String(category.id)])]
+              : current.filter(id => id !== String(category.id)))} />
+            {category.emote_tipo && <span className="user-category-emoji">{category.emote_tipo}</span>}
+            <span>{category.nombre}</span>
+          </label>)}
+          {!userCategories.length && <small>No hay categorías configuradas.</small>}
         </fieldset>
         <fieldset className="user-form-platforms"><legend>PLATAFORMAS</legend>
           {platforms.filter(platform => boxIds.includes(String(platform.caja_id))).map(platform => {

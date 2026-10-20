@@ -46,7 +46,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   requireSupabase()
   const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini, colores(nombre, hex)', request => request.order('id', { ascending: true }))
   const [users, panels, userCategories] = await Promise.all([
-    query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(id, nombre), telefonos_usuario(id, numero), titulares_usuario(id, nombre), paneles_x_usuario(id, caja_id, panel_id, paneles(id, nombre), cajas(nombre)), subplataformas_x_usuario(subplataforma_id, subplataformas(id, nombre, plataforma_id, plataformas(id, nombre, caja_id)))', request => request.order('fecha_creacion', { ascending: false })),
+    query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(id, nombre), telefonos_usuario(id, numero), titulares_usuario(id, nombre), paneles_x_usuario(id, caja_id, panel_id, paneles(id, nombre, caja_id), cajas(id, nombre, colores(hex))), categorias_x_usuario(categoria_id, categorias_usuario(id, nombre, color_id, emote_tipo, colores(nombre, hex))), subplataformas_x_usuario(subplataforma_id, subplataformas(id, nombre, plataforma_id, plataformas(id, nombre, caja_id)))', request => request.order('fecha_creacion', { ascending: false })),
     query('paneles', 'id, nombre, caja_id', request => request.order('id', { ascending: true })),
     query('categorias_usuario', 'id, nombre, color_id, emote_tipo, colores(nombre, hex)', request => request.order('id', { ascending: true })),
   ])
@@ -1946,7 +1946,7 @@ async function findOrCreate(table, match, values) {
   return data
 }
 
-export async function createUser({ names, phones, holders, createdAt, panelId, boxIds = [], subplatformIds = [] }) {
+export async function createUser({ names, phones, holders, createdAt, panelIds = [], boxIds = [], categoryIds = [], subplatformIds = [] }) {
   requireSupabase()
   const userNames = names.map(name => name.trim()).filter(Boolean)
   const userPhones = phones.map(phone => phone.trim()).filter(Boolean)
@@ -1961,34 +1961,37 @@ export async function createUser({ names, phones, holders, createdAt, panelId, b
   }
 
   const selectedBoxes = new Set(boxIds.map(String))
-  let selectedPanelId = panelId ? Number(panelId) : null
-  let selectedPanelBoxId = null
-  if (selectedPanelId) {
-    const { data: panel, error } = await supabase.from('paneles')
+  const selectedPanelIds = [...new Set(panelIds.map(Number).filter(Number.isFinite))]
+  let panelRelations = []
+  if (selectedPanelIds.length) {
+    const { data: selectedPanels, error } = await supabase.from('paneles')
       .select('id, caja_id')
-      .eq('id', selectedPanelId)
-      .single()
+      .in('id', selectedPanelIds)
     if (error) throw error
-    selectedPanelBoxId = String(panel.caja_id)
-    selectedBoxes.add(selectedPanelBoxId)
+    if (selectedPanels.length !== selectedPanelIds.length) throw new Error('Uno o más paneles seleccionados ya no existen')
+    panelRelations = selectedPanels.map(panel => {
+      selectedBoxes.add(String(panel.caja_id))
+      return { caja_id: Number(panel.caja_id), panel_id: panel.id }
+    })
   }
+  const panelBoxIds = new Set(panelRelations.map(relation => String(relation.caja_id)))
+  const userBoxRelations = [
+    ...panelRelations,
+    ...[...selectedBoxes].filter(cajaId => !panelBoxIds.has(cajaId)).map(cajaId => ({ caja_id: Number(cajaId), panel_id: null })),
+  ]
   const { data: user, error: userError } = await supabase.from('usuarios')
     .insert(userValues)
     .select('id')
     .single()
   if (userError) throw userError
 
-  const boxRelations = [...selectedBoxes].map(cajaId => ({
-    usuario_id: user.id,
-    caja_id: Number(cajaId),
-    panel_id: selectedPanelBoxId === cajaId ? selectedPanelId : null,
-  }))
   const userSubplatformIds = [...new Set(subplatformIds.map(Number))]
   const writes = [
     { table: 'nombres_usuario', rows: userNames.map(nombre => ({ usuario_id: user.id, nombre })) },
     { table: 'telefonos_usuario', rows: userPhones.map(numero => ({ usuario_id: user.id, numero })) },
     { table: 'titulares_usuario', rows: userHolders.map(nombre => ({ usuario_id: user.id, nombre })) },
-    { table: 'paneles_x_usuario', rows: boxRelations },
+    { table: 'paneles_x_usuario', rows: userBoxRelations.map(relation => ({ ...relation, usuario_id: user.id })) },
+    { table: 'categorias_x_usuario', rows: [...new Set(categoryIds.map(Number).filter(Number.isFinite))].map(categoria_id => ({ usuario_id: user.id, categoria_id })) },
     { table: 'subplataformas_x_usuario', rows: userSubplatformIds.map(subplataforma_id => ({ usuario_id: user.id, subplataforma_id })) },
   ].filter(write => write.rows.length)
 
