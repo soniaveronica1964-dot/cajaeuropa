@@ -15,3 +15,10 @@ CREATE POLICY dev_insert_categorias_x_usuario
   ON public.categorias_x_usuario
   FOR INSERT TO anon
   WITH CHECK (true);
+
+DROP POLICY IF EXISTS dev_delete_categorias_x_usuario
+  ON public.categorias_x_usuario;
+CREATE POLICY dev_delete_categorias_x_usuario
+  ON public.categorias_x_usuario
+  FOR DELETE TO anon
+  USING (true);

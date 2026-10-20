@@ -2010,6 +2010,67 @@ export async function createUser({ names, phones, holders, createdAt, panelIds =
   return user
 }
 
+export async function updateUser({ userId, names, phones, holders, createdAt, panelIds = [], boxIds = [], categoryIds = [], subplatformIds = [] }) {
+  requireSupabase()
+  const userNames = names.map(name => name.trim()).filter(Boolean)
+  const userPhones = phones.map(phone => phone.trim()).filter(Boolean)
+  const userHolders = holders.map(holder => holder.trim()).filter(Boolean)
+  if (!userNames.length) throw new Error('Ingresá al menos un nombre de usuario')
+
+  const creationDate = new Date(createdAt)
+  if (!createdAt || Number.isNaN(creationDate.getTime())) throw new Error('Ingresá una fecha de creación válida')
+
+  const selectedBoxes = new Set(boxIds.map(String))
+  const selectedPanelIds = [...new Set(panelIds.map(Number).filter(Number.isFinite))]
+  let panelRelations = []
+  if (selectedPanelIds.length) {
+    const { data: selectedPanels, error } = await supabase.from('paneles')
+      .select('id, caja_id')
+      .in('id', selectedPanelIds)
+    if (error) throw error
+    if (selectedPanels.length !== selectedPanelIds.length) throw new Error('Uno o más paneles seleccionados ya no existen')
+    panelRelations = selectedPanels.map(panel => {
+      selectedBoxes.add(String(panel.caja_id))
+      return { caja_id: Number(panel.caja_id), panel_id: panel.id, usuario_id: userId }
+    })
+  }
+  const panelBoxIds = new Set(panelRelations.map(relation => String(relation.caja_id)))
+  const boxRelations = [
+    ...panelRelations,
+    ...[...selectedBoxes].filter(cajaId => !panelBoxIds.has(cajaId)).map(cajaId => ({
+      caja_id: Number(cajaId),
+      panel_id: null,
+      usuario_id: userId,
+    })),
+  ]
+  const categories = [...new Set(categoryIds.map(Number).filter(Number.isFinite))]
+    .map(categoria_id => ({ usuario_id: userId, categoria_id }))
+  const subplatforms = [...new Set(subplatformIds.map(Number).filter(Number.isFinite))]
+    .map(subplataforma_id => ({ usuario_id: userId, subplataforma_id }))
+
+  const { error: userError } = await supabase.from('usuarios')
+    .update({ fecha_creacion: creationDate.toISOString() })
+    .eq('id', userId)
+  if (userError) throw userError
+
+  const replacements = [
+    { table: 'nombres_usuario', rows: userNames.map(nombre => ({ usuario_id: userId, nombre })) },
+    { table: 'telefonos_usuario', rows: userPhones.map(numero => ({ usuario_id: userId, numero })) },
+    { table: 'titulares_usuario', rows: userHolders.map(nombre => ({ usuario_id: userId, nombre })) },
+    { table: 'paneles_x_usuario', rows: boxRelations },
+    { table: 'categorias_x_usuario', rows: categories },
+    { table: 'subplataformas_x_usuario', rows: subplatforms },
+  ]
+  for (const { table, rows } of replacements) {
+    const { error } = await supabase.from(table).delete().eq('usuario_id', userId)
+    if (error) throw error
+    if (rows.length) {
+      const { error: insertError } = await supabase.from(table).insert(rows)
+      if (insertError) throw insertError
+    }
+  }
+}
+
 async function ensureAdvertisingLines(shiftId) {
   const advertising = await findOrCreate('publicidad', { turno_id: shiftId }, { turno_id: shiftId })
   const { data: lines, error } = await supabase

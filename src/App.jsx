@@ -101,6 +101,7 @@ import {
   closeShift,
   createState,
   createUser,
+  updateUser,
   deleteState,
   formatDatabase,
   loadBonusCatalog,
@@ -271,6 +272,7 @@ function App() {
   const [openGoal, setOpenGoal] = useState(false)
   const [toast, setToast] = useState('')
   const [userCreateOpen, setUserCreateOpen] = useState(false)
+  const [userEditing, setUserEditing] = useState(null)
   const [closeBoxDialogOpen, setCloseBoxDialogOpen] = useState(false)
   const [appData, setAppData] = useState(null)
   const [shiftHistory, setShiftHistory] = useState([])
@@ -557,7 +559,7 @@ function App() {
           {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
-          {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} />}
+          {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} onEdit={setUserEditing} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} onCloseBox={openCloseBoxDialog} />}
           </fieldset>
@@ -569,13 +571,18 @@ function App() {
         onClosed={finishCloseBox}
         setToast={setToast}
       />}
-      {userCreateOpen && appData && <UserCreateModal
+      {(userCreateOpen || userEditing) && appData && <UserCreateModal
+        key={userEditing?.id || 'new-user'}
         boxes={appData.boxes || []}
         panels={appData.panels || []}
         userCategories={appData.userCategories || []}
         platforms={appData.platforms || []}
         subplatforms={appData.subplatforms || []}
-        onClose={() => setUserCreateOpen(false)}
+        user={userEditing}
+        onClose={() => {
+          setUserCreateOpen(false)
+          setUserEditing(null)
+        }}
         onSaved={reloadData}
         setToast={setToast}
       />}
@@ -3061,7 +3068,7 @@ function LiveLogistics({ data, setToast, onSaved }) {
   </section>
 }
 
-function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
+function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit }) {
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
   const [boxFilters, setBoxFilters] = useState(null)
@@ -3127,6 +3134,7 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
       <span>Usuario</span>
       <span>Titulares</span>
       <span>Cajas</span>
+      <span>Categorías</span>
       <span>Estado</span>
       <span />
     </div>}
@@ -3141,8 +3149,17 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
         </div>
         <div className="tags">{user.titulares_usuario?.length ? user.titulares_usuario.map(holder => <span key={holder.id}>{holder.nombre}</span>) : <small className="directory-muted">Sin titular</small>}</div>
         <div className="directory-user-boxes">{[...new Set(user.paneles_x_usuario?.map(link => link.cajas?.nombre).filter(Boolean))].map(boxName => <span key={boxName}>{boxName}</span>)}</div>
+        <div className="directory-user-categories">{(user.categorias_x_usuario || []).map(link => {
+          const category = link.categorias_usuario
+          if (!category) return null
+          return <span className="directory-category-chip" key={category.id} style={{ '--category-color': category.colores?.hex || 'var(--line)' }}>
+            <i aria-hidden="true" />
+            {category.emote_tipo && <span>{category.emote_tipo}</span>}
+            <span>{category.nombre}</span>
+          </span>
+        })}</div>
         <span className={`directory-status ${user.bloqueado ? 'blocked' : ''}`}><i />{user.bloqueado ? 'Bloqueado' : 'Activo'}</span>
-        <button type="button" className="icon-button" aria-label={`Ver detalles de ${name}`} onClick={() => setExpanded(isExpanded ? null : user.id)}><Settings2 size={15} /></button>
+        <button type="button" className="icon-button" aria-label={`Editar ${name}`} title={`Editar ${name}`} onClick={() => onEdit(user)}><Pencil size={14} /></button>
         {isExpanded && <div className="user-detail">
           <label>Nombres<input value={(user.nombres_usuario || []).map(item => item.nombre).join(', ')} readOnly /></label>
           <label>Teléfonos<input value={(user.telefonos_usuario || []).map(item => item.numero).join(', ')} readOnly /></label>
@@ -3168,15 +3185,23 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
   </section>
 }
 
-function UserCreateModal({ boxes, panels, userCategories, platforms, subplatforms, onClose, onSaved, setToast }) {
-  const [names, setNames] = useState([''])
-  const [phones, setPhones] = useState([''])
-  const [holders, setHolders] = useState([''])
-  const [createdAt, setCreatedAt] = useState(currentDateTimeInput)
-  const [panelIds, setPanelIds] = useState([])
-  const [boxIds, setBoxIds] = useState([])
-  const [categoryIds, setCategoryIds] = useState([])
-  const [subplatformIds, setSubplatformIds] = useState([])
+function UserCreateModal({ boxes, panels, userCategories, platforms, subplatforms, user = null, onClose, onSaved, setToast }) {
+  const namesForUser = user?.nombres_usuario?.map(item => item.nombre).filter(Boolean)
+  const phonesForUser = user?.telefonos_usuario?.map(item => item.numero).filter(Boolean)
+  const holdersForUser = user?.titulares_usuario?.map(item => item.nombre).filter(Boolean)
+  const [names, setNames] = useState(() => namesForUser?.length ? namesForUser : [''])
+  const [phones, setPhones] = useState(() => phonesForUser?.length ? phonesForUser : [''])
+  const [holders, setHolders] = useState(() => holdersForUser?.length ? holdersForUser : [''])
+  const [createdAt, setCreatedAt] = useState(() => {
+    if (!user?.fecha_creacion) return currentDateTimeInput()
+    const date = new Date(user.fecha_creacion)
+    if (Number.isNaN(date.getTime())) return currentDateTimeInput()
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+  })
+  const [panelIds, setPanelIds] = useState(() => (user?.paneles_x_usuario || []).map(link => String(link.panel_id)).filter(id => id !== 'null' && id !== 'undefined'))
+  const [boxIds, setBoxIds] = useState(() => [...new Set((user?.paneles_x_usuario || []).map(link => String(link.caja_id)))])
+  const [categoryIds, setCategoryIds] = useState(() => (user?.categorias_x_usuario || []).map(link => String(link.categoria_id)))
+  const [subplatformIds, setSubplatformIds] = useState(() => (user?.subplataformas_x_usuario || []).map(link => String(link.subplataforma_id)))
   const [saving, setSaving] = useState(false)
 
   const updateList = (setter, index, value) => setter(current => current.map((item, itemIndex) => itemIndex === index ? value : item))
@@ -3226,9 +3251,13 @@ function UserCreateModal({ boxes, panels, userCategories, platforms, subplatform
     event.preventDefault()
     setSaving(true)
     try {
-      await createUser({ names, phones, holders, createdAt, panelIds, boxIds, categoryIds, subplatformIds })
+      if (user) {
+        await updateUser({ userId: user.id, names, phones, holders, createdAt, panelIds, boxIds, categoryIds, subplatformIds })
+      } else {
+        await createUser({ names, phones, holders, createdAt, panelIds, boxIds, categoryIds, subplatformIds })
+      }
       onClose()
-      setToast('Usuario guardado')
+      setToast(user ? 'Usuario actualizado' : 'Usuario guardado')
       onSaved()
     } catch (error) {
       setToast(error.message || 'No se pudo guardar el usuario')
@@ -3238,10 +3267,10 @@ function UserCreateModal({ boxes, panels, userCategories, platforms, subplatform
   }
 
   return <div className="modal-backdrop user-modal-backdrop" onMouseDown={event => { if (event.target === event.currentTarget && !saving) onClose() }}>
-    <form className="modal user-form-modal" role="dialog" aria-modal="true" aria-label="Nuevo usuario" onSubmit={submit}>
+    <form className="modal user-form-modal" role="dialog" aria-modal="true" aria-label={user ? 'Editar usuario' : 'Nuevo usuario'} onSubmit={submit}>
       <header>
         <div className="modal-icon"><UserRound size={20} /></div>
-        <div><h2>Nuevo usuario</h2><p>Solo el nombre de usuario es obligatorio.</p></div>
+        <div><h2>{user ? 'Editar usuario' : 'Nuevo usuario'}</h2><p>Solo el nombre de usuario es obligatorio.</p></div>
         <button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" disabled={saving} onClick={onClose}><X size={17} /></button>
       </header>
       <div className="user-form-fields">
@@ -3288,7 +3317,7 @@ function UserCreateModal({ boxes, panels, userCategories, platforms, subplatform
       </div>
       <footer>
         <button type="button" className="secondary-button" disabled={saving} onClick={onClose}>Cancelar</button>
-        <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Guardando...' : 'Guardar'} <Check size={14} /></button>
+        <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Guardando...' : user ? 'Guardar cambios' : 'Guardar'} <Check size={14} /></button>
       </footer>
     </form>
   </div>

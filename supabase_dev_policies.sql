@@ -41,6 +41,7 @@ ALTER TABLE paneles_x_usuario ENABLE ROW LEVEL SECURITY;
 ALTER TABLE paneles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categorias_usuario ENABLE ROW LEVEL SECURITY;
 ALTER TABLE categorias_x_usuario ENABLE ROW LEVEL SECURITY;
+ALTER TABLE subplataformas_x_usuario ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subobjetivos_x_turno ENABLE ROW LEVEL SECURITY;
 ALTER TABLE subobjetivos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE objetivos ENABLE ROW LEVEL SECURITY;
@@ -65,7 +66,7 @@ BEGIN
     'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'tipos_gasto', 'lineas_logistica', 'logistica',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario',
-    'paneles_x_usuario', 'paneles', 'categorias_usuario', 'categorias_x_usuario', 'subobjetivos_x_turno', 'subobjetivos',
+    'paneles_x_usuario', 'paneles', 'categorias_usuario', 'categorias_x_usuario', 'subplataformas_x_usuario', 'subobjetivos_x_turno', 'subobjetivos',
     'objetivos', 'fichas', 'plataformas', 'subplataformas', 'cargas_fichas', 'condiciones_bono', 'tipos_estado',
     'estados', 'lineas_estado', 'app_config'
   ] LOOP
@@ -132,7 +133,7 @@ BEGIN
     'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja',
     'cuentas_x_caja', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'tipos_gasto', 'lineas_logistica', 'logistica', 'usuarios',
-    'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'paneles', 'categorias_usuario', 'categorias_x_usuario',
+    'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'paneles', 'categorias_usuario', 'categorias_x_usuario', 'subplataformas_x_usuario',
     'subobjetivos_x_turno', 'subobjetivos', 'objetivos', 'fichas', 'plataformas', 'cargas_fichas',
     'condiciones_bono', 'app_config', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas'
   ] LOOP
