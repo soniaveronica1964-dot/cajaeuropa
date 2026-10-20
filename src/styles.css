@@ -2280,6 +2280,9 @@ input[type="time"] { color-scheme: dark; }
 }
 .config-list-row input,
 .config-list-row select,
+.user-panel-config-row input,
+.user-category-config-row input,
+.user-category-config-row select,
 .wallet-config-row input,
 .wallet-config-row select,
 .account-settings-fields input,
@@ -2293,6 +2296,11 @@ input[type="time"] { color-scheme: dark; }
   color: var(--text);
   padding: 7px 9px;
   font-size: 11px;
+}
+.user-panel-config-row input:focus,
+.user-category-config-row input:focus,
+.user-category-config-row select:focus {
+  border-color: var(--accent);
 }
 .config-list-row input { flex: 1; }
 .bonus-type-config-row {
@@ -2787,6 +2795,9 @@ html:has(.app-shell[data-theme='light']) {
 }
 .app-shell[data-theme='light'] .config-list-row input,
 .app-shell[data-theme='light'] .config-list-row select,
+.app-shell[data-theme='light'] .user-panel-config-row input,
+.app-shell[data-theme='light'] .user-category-config-row input,
+.app-shell[data-theme='light'] .user-category-config-row select,
 .app-shell[data-theme='light'] .account-settings-fields input,
 .app-shell[data-theme='light'] .account-settings-fields select,
 .app-shell[data-theme='light'] .account-settings-fields textarea,
