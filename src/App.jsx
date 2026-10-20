@@ -2926,9 +2926,20 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
       : effectiveBoxFilter === 'all'
         ? 'No hay usuarios registrados para mostrar.'
         : 'Podés cambiar de caja o ver el registro completo.'
+  const userCountLabel = `${matchingUsers.length} ${matchingUsers.length === 1 ? 'usuario' : 'usuarios'}`
 
   return <section className="panel directory">
-    <PanelTitle icon={Users} title="Usuarios" meta={`${matchingUsers.length}${effectiveBoxFilter === 'all' ? '' : ` / ${users.length}`} registros`} action={<button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Nuevo usuario</button>} />
+    <header className="directory-header">
+      <div className="directory-header-title">
+        <span className="directory-header-icon"><Users size={17} /></span>
+        <span><h2>Usuarios</h2><small>Registro general de usuarios</small></span>
+      </div>
+      <div className="directory-header-actions">
+        {effectiveBoxFilter !== 'all' && <span className="directory-scope"><span className="directory-scope-dot" />{selectedBox?.nombre || 'Caja'}</span>}
+        <span className="directory-count">{userCountLabel}</span>
+        <button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Nuevo usuario</button>
+      </div>
+    </header>
     <div className="directory-filters">
       <div className="search-line"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
       <label className="directory-box-filter"><span>Caja</span><select aria-label="Filtrar usuarios por caja" value={effectiveBoxFilter} onChange={event => setBoxFilter(event.target.value)}>
