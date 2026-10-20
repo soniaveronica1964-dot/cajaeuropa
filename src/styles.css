@@ -388,14 +388,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workspace {
   display: flex;
   min-height: calc(100vh - var(--topbar-height));
-  align-items: flex-start;
+  min-height: calc(100dvh - var(--topbar-height));
+  align-items: stretch;
   background: linear-gradient(90deg, rgba(11, 15, 18, 0.98) 0, rgba(11, 15, 18, 0.98) 72px, rgba(11, 16, 18, 0.85) 72px, rgba(11, 16, 18, 0.85) 100%);
 }
 .sidebar {
   width: 100px;
   flex: 0 0 100px;
   height: calc(100vh - var(--topbar-height));
+  height: calc(100dvh - var(--topbar-height));
   min-height: calc(100vh - var(--topbar-height));
+  min-height: calc(100dvh - var(--topbar-height));
   padding: 12px 8px;
   border-right: 1px solid var(--line);
   background: rgba(8, 13, 16, 0.94);
@@ -405,7 +408,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   gap: 8px;
   position: sticky;
   top: var(--topbar-height);
-  align-self: flex-start;
+  align-self: stretch;
   z-index: 2;
 }
 .sidebar-label {
@@ -685,6 +688,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: 50%;
   background: var(--green);
   box-shadow: 0 0 8px var(--green);
+}
+.summary-status.status-closed i {
+  background: var(--orange);
+  box-shadow: 0 0 8px var(--orange);
 }
 .metric {
   display: flex;
@@ -1885,14 +1892,40 @@ input[type="time"] { color-scheme: dark; }
 .transfer-field input { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 10px 'DM Mono', monospace; }
 .transfer-field select:focus,
 .transfer-field input:focus { border-color: var(--accent); }
+.transfer-form:not(.savings-transfer-form) { grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) minmax(70px, .75fr) 30px; }
+.transfer-box-select { position: relative; display: block; min-width: 0; }
+.transfer-box-select > i {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--transfer-box-color);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--transfer-box-color) 65%, transparent);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.transfer-box-select > select {
+  padding-left: 22px;
+  border-color: color-mix(in srgb, var(--transfer-box-color) 48%, var(--line));
+  background: color-mix(in srgb, var(--transfer-box-color) 9%, rgba(12, 17, 20, .62));
+}
+.transfer-box-select > select:focus { border-color: var(--transfer-box-color); }
 .transfer-swap { display: grid; place-items: center; width: 28px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--muted-2); }
 .transfer-swap:hover { border-color: var(--accent-border); color: var(--accent); }
 .transfer-account { grid-column: 1 / 3; }
-.transfer-amount { grid-column: 3; }
-.transfer-submit { grid-column: 4; height: 34px; }
+.transfer-form:not(.savings-transfer-form) .transfer-notes { grid-column: 3 / -1; }
+.transfer-submit { height: 34px; }
+.transfer-form:not(.savings-transfer-form) .transfer-submit { grid-column: 5; }
 .transfer-notes { grid-column: 1 / -1; width: 100%; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; }
 .transfer-notes:focus { border-color: var(--accent); }
 .transfer-notes::placeholder { color: var(--muted); }
+.savings-transfer-form { grid-template-columns: repeat(4, minmax(0, 1fr)) 30px 30px; }
+.savings-transfer-form .transfer-notes { grid-column: auto; height: 34px; }
+.transfer-withdraw { border-color: color-mix(in srgb, var(--orange) 42%, var(--line)); background: color-mix(in srgb, var(--orange) 12%, var(--panel-2)); color: var(--orange); }
+.transfer-withdraw:hover { background: color-mix(in srgb, var(--orange) 23%, var(--panel-2)); }
 .savings-toggle input { width: 13px; height: 13px; accent-color: var(--accent); }
 .chip-control-card { min-width: 0; }
 .chip-control-head,
@@ -3697,6 +3730,17 @@ html:has(.app-shell[data-theme='light']) {
   white-space: nowrap;
 }
 .directory-count { background: rgba(12, 17, 20, .35); }
+.stats-development {
+  display: grid;
+  min-height: 180px;
+  place-items: center;
+}
+.stats-development h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  font-weight: 600;
+}
 .directory-list-head,
 .directory-row {
   display: grid;

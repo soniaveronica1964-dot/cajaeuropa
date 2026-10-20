@@ -221,7 +221,7 @@ function signedExpenseImpact(rows = []) {
   }, 0)
 }
 
-function calculateCashDiscrepancy({ cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney }) {
+function calculateCashDiscrepancy({ cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney, savingsMovements }) {
   const bonusImpact = bonusNetTotal(bonuses)
   return cashDifference
     - countedChipDifference
@@ -229,6 +229,7 @@ function calculateCashDiscrepancy({ cashDifference, countedChipDifference, round
     + bonusImpact
     + sumMovementAmounts(expenses)
     + sumMovementAmounts(taCharges)
+    + sumMovementAmounts(savingsMovements)
     - sumMovementAmounts(tips)
     - sumMovementAmounts(foundMoney)
 }
@@ -396,6 +397,7 @@ function App() {
     tips: appData?.tips || [],
     taCharges: appData?.taCharges || [],
     foundMoney: appData?.foundMoney || [],
+    savingsMovements: (appData?.movements || []).filter(movement => movement.es_ahorro),
   })
   const cashDiscrepancy = cashDiscrepancyPreview ?? savedCashDiscrepancy
   const cashDiscrepancyTone = cashDiscrepancy === 0 ? 'neutral' : cashDiscrepancy > 0 ? 'positive' : 'negative'
@@ -559,7 +561,7 @@ function App() {
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
           {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
-          {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
+          {!loadError && appData && view === 'stats' && <LiveStatistics />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} onEdit={setUserEditing} onSaved={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
@@ -769,6 +771,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onBonusCrea
     tips: data.tips,
     taCharges: data.taCharges,
     foundMoney: data.foundMoney,
+    savingsMovements: (data.movements || []).filter(movement => movement.es_ahorro),
   })
   useLayoutEffect(() => {
     onDiscrepancyChange(cashDiscrepancy)
@@ -776,7 +779,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onBonusCrea
   return <>
     <GoalStrip open={openGoal} onToggle={() => setOpenGoal(value => !value)} goals={goals} />
     <section className="summary-bar">
-      <div className="summary-status"><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div>
+      <div className={`summary-status ${data.shift.abierto ? '' : 'status-closed'}`}><span className="eyebrow">Resumen</span><b><i /> {data.shift.abierto ? 'ABIERTA' : 'CERRADA'}</b></div>
       <Metric label="Caja inicial" value={moneyWithCents.format(cashInitial)} tone="positive" />
       <Metric label="Caja final" value={moneyWithCents.format(total)} tone="positive" />
       <Metric label="Diferencia caja" value={moneyWithCents.format(cashDifference)} tone={cashDifference < 0 ? 'negative' : 'positive'} />
@@ -2489,26 +2492,47 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   const [fromBoxId, setFromBoxId] = useState(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
   const [toBoxId, setToBoxId] = useState(boxes.find(box => String(box.id) !== String(shift.caja_id))?.id?.toString() || '')
   const [accountId, setAccountId] = useState(accounts[0]?.id?.toString() || '')
+  const [savingsHolderId, setSavingsHolderId] = useState('')
+  const [savingsWalletId, setSavingsWalletId] = useState('')
   const [value, setValue] = useState('')
   const [notes, setNotes] = useState('')
   const [savings, setSavings] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showAllRows, setShowAllRows] = useState(false)
-  const add = async (event) => {
-    event.preventDefault()
+  const savingsAccounts = accounts.filter(account => account.accountType?.ahorro)
+  const savingsHolders = [...new Map(savingsAccounts.map(account => [
+    String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
+    account.cuentas?.titulares?.nombre || 'Sin titular',
+  ])).entries()]
+  const selectedSavingsHolderId = savingsHolderId || savingsHolders[0]?.[0] || ''
+  const savingsWallets = savingsAccounts.filter(account => String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === selectedSavingsHolderId)
+  const selectedSavingsWalletId = savingsWalletId || String(savingsWallets[0]?.cuentas?.billetera_id ?? savingsWallets[0]?.cuentas?.billeteras?.id ?? '')
+  const selectedSavingsAccount = savingsWallets.find(account => String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '') === selectedSavingsWalletId)
+  const boxColor = id => boxes.find(box => String(box.id) === String(id))?.colores?.hex || 'var(--line)'
+  const add = async (event, movementType = 'transfer') => {
+    event?.preventDefault()
     const amount = parseLocalizedAmount(value)
-    if (boxes.length < 2) { setToast('Se necesitan dos cajas para crear un movimiento'); return }
-    if (!accountId) { setToast('Seleccioná una cuenta'); return }
+    if (boxes.length < 2 || String(fromBoxId) === String(toBoxId)) { setToast('Se necesitan dos cajas distintas para crear un movimiento'); return }
+    const selectedAccountId = movementType === 'transfer' ? accountId : selectedSavingsAccount?.id?.toString()
+    if (!selectedAccountId) { setToast(movementType === 'transfer' ? 'Seleccioná una cuenta' : 'No hay una billetera de ahorro disponible para este titular'); return }
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
-      await createTransferMovement(shift.id, { fromBoxId, toBoxId, accountShiftId: accountId, value: amount, notes, savings })
+      const depositing = movementType !== 'withdrawal'
+      await createTransferMovement(shift.id, {
+        fromBoxId: depositing ? fromBoxId : toBoxId,
+        toBoxId: depositing ? toBoxId : fromBoxId,
+        accountShiftId: selectedAccountId,
+        value: amount,
+        notes,
+        savings: movementType !== 'transfer',
+      })
       setValue('')
       setNotes('')
-      setToast('Movimiento guardado')
-      onSaved()
+      setToast(movementType === 'withdrawal' ? 'Retiro de ahorro guardado' : movementType === 'deposit' ? 'Depósito de ahorro guardado' : 'Movimiento guardado')
+      await onSaved()
     } catch (error) {
-      setToast(error.message || 'No se pudo guardar el movimiento')
+      setToast(error.message || `No se pudo guardar ${movementType === 'withdrawal' ? 'el retiro' : movementType === 'deposit' ? 'el depósito' : 'el movimiento'}`)
     } finally {
       setSaving(false)
     }
@@ -2522,35 +2546,64 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
     setFromBoxId(toBoxId)
     setToBoxId(fromBoxId)
   }
+  const toggleSavings = checked => {
+    setSavings(checked)
+    if (checked && savingsAccounts.length) {
+      const firstSavingAccount = savingsAccounts[0]
+      const currentBoxId = String(shift.caja_id ?? boxes[0]?.id ?? '')
+      const otherBoxId = boxes.find(box => String(box.id) !== currentBoxId)?.id?.toString() || ''
+      setFromBoxId(currentBoxId)
+      setToBoxId(otherBoxId)
+      setSavingsHolderId(String(firstSavingAccount.cuentas?.titular_id ?? firstSavingAccount.cuentas?.titulares?.id ?? ''))
+      setSavingsWalletId(String(firstSavingAccount.cuentas?.billetera_id ?? firstSavingAccount.cuentas?.billeteras?.id ?? ''))
+    }
+  }
   return <section className="panel operation-card transfer-card">
     <PanelTitle
       icon={ArrowLeftRight}
       title="Movimientos"
       meta={`${rows.length} registros`}
       action={<div className="operation-panel-actions">
-        <label className="savings-toggle"><span>Movimientos de ahorro</span><input type="checkbox" checked={savings} onChange={event => setSavings(event.target.checked)} disabled={saving} /></label>
+        <label className="savings-toggle"><span>Movimientos de ahorro</span><input type="checkbox" checked={savings} onChange={event => toggleSavings(event.target.checked)} disabled={saving} /></label>
         <button className="icon-button" type="button" title={showAllRows ? 'Mostrar últimos movimientos' : 'Ver todos los movimientos'} aria-label={showAllRows ? 'Mostrar últimos movimientos' : 'Ver todos los movimientos'} onClick={() => setShowAllRows(current => !current)}><Eye size={15} /></button>
       </div>}
     />
-    <form className="transfer-form" onSubmit={add}>
-      <label className="transfer-field"><span>Desde</span><select aria-label="Caja de origen" value={fromBoxId} onChange={event => { const nextFrom = event.target.value; setFromBoxId(nextFrom); if (nextFrom === toBoxId) setToBoxId(boxes.find(box => String(box.id) !== nextFrom)?.id?.toString() || '') }} disabled={saving || boxes.length < 2}>
-        {boxes.map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
-      </select></label>
-      <button className="transfer-swap" type="button" title="Intercambiar cajas" aria-label="Intercambiar caja de origen y destino" onClick={swapBoxes} disabled={saving || boxes.length < 2}><ArrowLeftRight size={16} /></button>
-      <label className="transfer-field"><span>Hasta</span><select aria-label="Caja de destino" value={toBoxId} onChange={event => setToBoxId(event.target.value)} disabled={saving || boxes.length < 2}>
-        {boxes.filter(box => String(box.id) !== String(fromBoxId)).map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
-      </select></label>
-      <label className="transfer-field transfer-account"><span>Cuenta</span><select aria-label="Cuenta del movimiento" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
-        {accounts.map(account => <option value={account.id} key={account.id}>{accountName(account.id)}</option>)}
-      </select></label>
-      <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
-      <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !accounts.length}><Send size={14} /></button>
-      <input className="transfer-notes" aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
-    </form>
+    {savings
+      ? <form className="transfer-form savings-transfer-form" onSubmit={event => add(event, 'deposit')}>
+        <label className="transfer-field"><span>Titular</span><select aria-label="Titular del ahorro" value={selectedSavingsHolderId} onChange={event => { setSavingsHolderId(event.target.value); setSavingsWalletId('') }} disabled={saving || !savingsHolders.length}>
+          {savingsHolders.map(([holderId, holderName]) => <option value={holderId} key={holderId}>{holderName}</option>)}
+          {!savingsHolders.length && <option value="">Sin titulares de ahorro</option>}
+        </select></label>
+        <label className="transfer-field"><span>Billetera</span><select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !savingsWallets.length}>
+          {savingsWallets.map(account => <option value={account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
+          {!savingsWallets.length && <option value="">Sin billeteras de ahorro</option>}
+        </select></label>
+        <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del ahorro" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
+        <input className="transfer-notes savings-transfer-notes" aria-label="Nota del movimiento de ahorro" placeholder="Nota" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
+        <button className="operation-submit transfer-submit" type="submit" title="Depositar en ahorro" aria-label="Depositar en ahorro" disabled={saving || boxes.length < 2 || !selectedSavingsAccount}><Send size={14} /></button>
+        <button className="operation-submit transfer-withdraw" type="button" title="Retirar del ahorro" aria-label="Retirar del ahorro" onClick={() => add(null, 'withdrawal')} disabled={saving || boxes.length < 2 || !selectedSavingsAccount}><Download size={14} /></button>
+      </form>
+      : <form className="transfer-form" onSubmit={event => add(event)}>
+        <label className="transfer-field transfer-box-field"><span>Desde</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(fromBoxId) }}><i aria-hidden="true" /><select aria-label="Caja de origen" value={fromBoxId} onChange={event => { const nextFrom = event.target.value; setFromBoxId(nextFrom); if (nextFrom === toBoxId) setToBoxId(boxes.find(box => String(box.id) !== nextFrom)?.id?.toString() || '') }} disabled={saving || boxes.length < 2}>
+          {boxes.map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
+        </select></span></label>
+        <button className="transfer-swap" type="button" title="Intercambiar cajas" aria-label="Intercambiar caja de origen y destino" onClick={swapBoxes} disabled={saving || boxes.length < 2}><ArrowLeftRight size={16} /></button>
+        <label className="transfer-field transfer-box-field"><span>Hasta</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(toBoxId) }}><i aria-hidden="true" /><select aria-label="Caja de destino" value={toBoxId} onChange={event => setToBoxId(event.target.value)} disabled={saving || boxes.length < 2}>
+          {boxes.filter(box => String(box.id) !== String(fromBoxId)).map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
+        </select></span></label>
+        <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
+        <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !accounts.length}><Send size={14} /></button>
+        <label className="transfer-field transfer-account"><span>Cuenta</span><select aria-label="Cuenta del movimiento" value={accountId} onChange={event => setAccountId(event.target.value)} disabled={saving || !accounts.length}>
+          {accounts.map(account => <option value={account.id} key={account.id}>{accountName(account.id)}</option>)}
+        </select></label>
+        <input className="transfer-notes" aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
+      </form>}
     <div className="operation-recent-list">
       <small>Últimos movimientos</small>
       {(showAllRows ? rows : rows.slice(0, 4)).map(row => <div className="operation-recent-row" key={row.id}>
-        <span>{row.es_ahorro ? 'Ahorro · ' : ''}{boxName(row.caja_desde_id)} &gt; {boxName(row.caja_hasta_id)} · {accountName(row.cuenta_x_turno_id)}</span>
+        <span>{row.es_ahorro
+          ? `Ahorro · ${String(row.caja_desde_id) === String(shift.caja_id) ? 'Depósito' : 'Retiro'} · ${accountName(row.cuenta_x_turno_id)}`
+          : `${boxName(row.caja_desde_id)} > ${boxName(row.caja_hasta_id)} · ${accountName(row.cuenta_x_turno_id)}`}</span>
         <b>{money.format(row.monto)}</b>
       </div>)}
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
@@ -2829,11 +2882,10 @@ function EmojiSelect({ value = '', onChange, ariaLabel }) {
 
 function ConfigList({ title, items, select }) { return <section className="panel config-list"><div className="panel-title"><h2>{title}</h2><small>{items.length} elementos</small></div>{items.map(item => <div className="config-row" key={item.id || item}><span className="drag">⠿</span><input defaultValue={item.nombre || item} />{select && <select defaultValue="Cobros + retiros"><option>Cobros + retiros</option><option>Solo cobros</option><option>Solo depósito</option></select>}<button className="icon-button"><Trash2 size={14} /></button></div>)}{!items.length && <EmptyInline text="No hay registros configurados." />}<button className="secondary-button"><Plus size={14} /> Agregar</button></section> }
 
-function LiveStatistics({ data }) {
-  const tips = data.tips.reduce((sum, row) => sum + Number(row.monto || 0), 0)
-  const expenses = data.expenses.reduce((sum, row) => sum + Number(row.monto || 0), 0)
-  const bonuses = bonusNetTotal(data.bonuses)
-  return <><section className="panel stats-toolbar"><div><span className="eyebrow">Turno actual</span><h2>{data.shift ? new Date(data.shift.fecha_hora_inicio).toLocaleString('es-AR') : 'Sin turno abierto'}</h2></div><div className="stats-filters"><span className="muted-copy">Las estadísticas históricas estarán disponibles cuando existan turnos cerrados.</span></div></section><div className="stats-grid"><section className="panel stat-card featured"><div className="stat-head"><h2>Turno actual</h2><small>1 turno</small></div><h3>GENERAL</h3><div className="stat-line"><span>Caja inicial</span><b>{money.format(data.shift?.caja_inicial || 0)}</b></div><div className="stat-line"><span>Propinas</span><b>{money.format(tips)}</b></div><div className="stat-line"><span>Gastos</span><b>{money.format(expenses)}</b></div><h3>BONOS</h3><div className="stat-line"><span>Bonos netos</span><b>{money.format(bonuses)}</b></div><h3>DATOS</h3><div className="stat-line"><span>Cuentas activas</span><b>{data.accounts.length}</b></div><div className="stat-line"><span>Movimientos</span><b>{data.tips.length + data.expenses.length + data.bonuses.length}</b></div></section><section className="panel stat-card"><EmptyInline text="No hay otros turnos cerrados en el rango cargado." /></section></div></>
+function LiveStatistics() {
+  return <section className="panel stats-development">
+    <h2>En desarrollo</h2>
+  </section>
 }
 
 function dateTone(value) {
