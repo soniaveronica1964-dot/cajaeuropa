@@ -45,9 +45,10 @@ export async function loadShiftHistory(boxId = null) {
 export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   requireSupabase()
   const boxes = await query('cajas', 'id, nombre, color_id, imagen_mini, colores(nombre, hex)', request => request.order('id', { ascending: true }))
-  const [users, panels] = await Promise.all([
+  const [users, panels, userCategories] = await Promise.all([
     query('usuarios', 'id, fecha_creacion, bloqueado, nombres_usuario(id, nombre), telefonos_usuario(id, numero), titulares_usuario(id, nombre), paneles_x_usuario(id, caja_id, panel_id, paneles(id, nombre), cajas(nombre)), subplataformas_x_usuario(subplataforma_id, subplataformas(id, nombre, plataforma_id, plataformas(id, nombre, caja_id)))', request => request.order('fecha_creacion', { ascending: false })),
     query('paneles', 'id, nombre, caja_id', request => request.order('id', { ascending: true })),
+    query('categorias_usuario', 'id, nombre, color_id, emote_tipo, colores(nombre, hex)', request => request.order('id', { ascending: true })),
   ])
   let shiftRequest = supabase
     .from('turnos')
@@ -76,7 +77,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
       query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
       query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     ])
-    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
+    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, userCategories, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
   if (shift.abierto) {
@@ -126,7 +127,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     return { ...line, cuentas_x_turno: { ...(accountLink || {}), cuentas: accountById.get(accountLink?.cuenta_id) || null } }
   })
 
-  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
+  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
 
 export async function loadConfigurationData() {
@@ -1139,6 +1140,63 @@ export async function deletePlatform(id) {
   if (error) throw error
 }
 
+export async function createPanel({ name, boxId }) {
+  requireSupabase()
+  if (boxId == null) throw new Error('Seleccioná una caja para asociar el panel')
+  const trimmedName = name.trim()
+  if (!trimmedName) throw new Error('Ingresá un nombre para el panel')
+  const { data, error } = await supabase.from('paneles').insert({ nombre: trimmedName, caja_id: boxId }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updatePanel(id, { name }) {
+  requireSupabase()
+  const trimmedName = name.trim()
+  if (!trimmedName) throw new Error('Ingresá un nombre para el panel')
+  const { data, error } = await supabase.from('paneles').update({ nombre: trimmedName }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deletePanel(id) {
+  requireSupabase()
+  const { error } = await supabase.from('paneles').delete().eq('id', id)
+  if (error) throw error
+}
+
+export async function createUserCategory({ name, colorId = null, emoteType = null }) {
+  requireSupabase()
+  const trimmedName = name.trim()
+  if (!trimmedName) throw new Error('Ingresá un nombre para la categoría')
+  const { data, error } = await supabase.from('categorias_usuario').insert({
+    nombre: trimmedName,
+    color_id: colorId || null,
+    emote_tipo: emoteType?.trim() || null,
+  }).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function updateUserCategory(id, { name, colorId = null, emoteType = null }) {
+  requireSupabase()
+  const trimmedName = name.trim()
+  if (!trimmedName) throw new Error('Ingresá un nombre para la categoría')
+  const { data, error } = await supabase.from('categorias_usuario').update({
+    nombre: trimmedName,
+    color_id: colorId || null,
+    emote_tipo: emoteType?.trim() || null,
+  }).eq('id', id).select().single()
+  if (error) throw error
+  return data
+}
+
+export async function deleteUserCategory(id) {
+  requireSupabase()
+  const { error } = await supabase.from('categorias_usuario').delete().eq('id', id)
+  if (error) throw error
+}
+
 export async function createSubplatform({ name, platformId, colorId = null }) {
   requireSupabase()
   if (platformId == null) throw new Error('Seleccioná una plataforma para asociar la subplataforma')
@@ -1894,10 +1952,13 @@ export async function createUser({ names, phones, holders, createdAt, panelId, b
   const userPhones = phones.map(phone => phone.trim()).filter(Boolean)
   const userHolders = holders.map(holder => holder.trim()).filter(Boolean)
   if (!userNames.length) throw new Error('Ingresá al menos un nombre de usuario')
-  if (!userPhones.length) throw new Error('Ingresá al menos un número de teléfono')
 
-  const creationDate = new Date(createdAt)
-  if (!createdAt || Number.isNaN(creationDate.getTime())) throw new Error('Ingresá una fecha de creación válida')
+  const userValues = {}
+  if (createdAt) {
+    const creationDate = new Date(createdAt)
+    if (Number.isNaN(creationDate.getTime())) throw new Error('Ingresá una fecha de creación válida')
+    userValues.fecha_creacion = creationDate.toISOString()
+  }
 
   const selectedBoxes = new Set(boxIds.map(String))
   let selectedPanelId = panelId ? Number(panelId) : null
@@ -1911,10 +1972,8 @@ export async function createUser({ names, phones, holders, createdAt, panelId, b
     selectedPanelBoxId = String(panel.caja_id)
     selectedBoxes.add(selectedPanelBoxId)
   }
-  if (!selectedBoxes.size) throw new Error('Seleccioná al menos una caja')
-
   const { data: user, error: userError } = await supabase.from('usuarios')
-    .insert({ fecha_creacion: creationDate.toISOString() })
+    .insert(userValues)
     .select('id')
     .single()
   if (userError) throw userError

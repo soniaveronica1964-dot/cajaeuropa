@@ -59,6 +59,8 @@ import {
   createInitialSetup,
   closeAndStartNextShift,
   createPlatform,
+  createPanel,
+  createUserCategory,
   createSubplatform,
   createShiftType,
   createTip,
@@ -88,6 +90,8 @@ import {
   deleteExpenseType,
   deleteHolder,
   deletePlatform,
+  deletePanel,
+  deleteUserCategory,
   deleteSubplatform,
   deleteShiftType,
   deleteWallet,
@@ -124,6 +128,8 @@ import {
   updateExpenseType,
   updateHolder,
   updatePlatform,
+  updatePanel,
+  updateUserCategory,
   updateShiftRounding,
   updateState,
   updateShiftType,
@@ -3020,15 +3026,15 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
     setSubplatformIds(current => checked ? [...new Set([...current, normalizedId])] : current.filter(item => item !== normalizedId))
   }
 
-  const renderTextList = (title, values, setter, placeholder, maxLength, addLabel) => <div className="user-form-list">
+  const renderTextList = (title, values, setter, placeholder, maxLength, addLabel, required = false) => <div className="user-form-list">
     <span className="user-form-label">{title}</span>
     {values.map((value, index) => <div className="user-form-list-row" key={`${title}-${index}`}>
       <input
         aria-label={`${title} ${index + 1}`}
-        placeholder={`${placeholder}${index === 0 ? ' *' : ''}`}
+        placeholder={`${placeholder}${required && index === 0 ? ' *' : ''}`}
         value={value}
         maxLength={maxLength}
-        required={index === 0}
+        required={required && index === 0}
         disabled={saving}
         onChange={event => updateList(setter, index, event.target.value)}
       />
@@ -3039,10 +3045,6 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
 
   const submit = async event => {
     event.preventDefault()
-    if (!boxIds.length && !panelId) {
-      setToast('Seleccioná al menos una caja')
-      return
-    }
     setSaving(true)
     try {
       await createUser({ names, phones, holders, createdAt, panelId, boxIds, subplatformIds })
@@ -3060,12 +3062,12 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
     <form className="modal user-form-modal" role="dialog" aria-modal="true" aria-label="Nuevo usuario" onSubmit={submit}>
       <header>
         <div className="modal-icon"><UserRound size={20} /></div>
-        <div><h2>Nuevo usuario</h2><p>Completá los datos obligatorios para dar de alta.</p></div>
+        <div><h2>Nuevo usuario</h2><p>Solo el nombre de usuario es obligatorio.</p></div>
         <button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" disabled={saving} onClick={onClose}><X size={17} /></button>
       </header>
       <div className="user-form-fields">
-        {renderTextList('NOMBRE DE USUARIO *', names, setNames, 'Nombre de usuario', 150, 'nombre de usuario')}
-        {renderTextList('NÚMERO DE TELÉFONO *', phones, setPhones, 'Número de teléfono', 50, 'número de teléfono')}
+        {renderTextList('NOMBRE DE USUARIO *', names, setNames, 'Nombre de usuario', 150, 'nombre de usuario', true)}
+        {renderTextList('NÚMERO DE TELÉFONO', phones, setPhones, 'Número de teléfono', 50, 'número de teléfono')}
         {renderTextList('TITULAR', holders, setHolders, 'Titular', 150, 'titular')}
         <label className="user-form-panel"><span>PANEL</span><select value={panelId} disabled={saving} onChange={event => {
           const selectedPanel = panels.find(panel => String(panel.id) === event.target.value)
@@ -3078,7 +3080,7 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
             return <option value={panel.id} key={panel.id}>{panel.nombre}{box ? ` · ${box.nombre}` : ''}</option>
           })}
         </select></label>
-        <label className="user-form-created"><span>FECHA CREACIÓN</span><input type="datetime-local" required value={createdAt} disabled={saving} onChange={event => setCreatedAt(event.target.value)} /></label>
+        <label className="user-form-created"><span>FECHA CREACIÓN</span><input type="datetime-local" value={createdAt} disabled={saving} onChange={event => setCreatedAt(event.target.value)} /></label>
         <fieldset className="user-form-boxes"><legend>CAJAS</legend>
           {boxes.map(box => <label className="user-choice" key={box.id}><input type="checkbox" checked={boxIds.includes(String(box.id))} disabled={saving} onChange={event => toggleBox(box, event.target.checked)} /><span>{box.nombre}</span></label>)}
           {!boxes.length && <small>No hay cajas configuradas.</small>}
@@ -3097,7 +3099,7 @@ function UserCreateModal({ boxes, panels, platforms, subplatforms, onClose, onSa
       </div>
       <footer>
         <button type="button" className="secondary-button" disabled={saving} onClick={onClose}>Cancelar</button>
-        <button type="submit" className="primary-button" disabled={saving || !boxes.length}>{saving ? 'Guardando...' : 'Guardar'} <Check size={14} /></button>
+        <button type="submit" className="primary-button" disabled={saving}>{saving ? 'Guardando...' : 'Guardar'} <Check size={14} /></button>
       </footer>
     </form>
   </div>
@@ -3339,10 +3341,26 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
           const color = localData.colors?.find((item) => item.id === subplatform.color_id)
           return { id: subplatform.id, nombre: subplatform.nombre || 'Subplataforma', platformId: subplatform.plataforma_id, colorId: subplatform.color_id, colorHex: color?.hex || null }
         }),
+      panels: (localData.panels || [])
+        .filter(panel => String(panel.caja_id) === String(currentBoxId))
+        .sort((left, right) => Number(left.id) - Number(right.id))
+        .map(panel => ({ id: panel.id, nombre: panel.nombre, cajaId: panel.caja_id })),
+      userCategories: [...(localData.userCategories || [])]
+        .sort((left, right) => Number(left.id) - Number(right.id))
+        .map(category => {
+          const color = localData.colors?.find(item => String(item.id) === String(category.color_id)) || category.colores
+          return {
+            id: category.id,
+            nombre: category.nombre,
+            colorId: category.color_id == null ? '' : String(category.color_id),
+            colorHex: color?.hex || null,
+            emoteType: category.emote_tipo || '',
+          }
+        }),
       bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
       bonusTypes: (localData.bonusTypes || []).map((type) => ({ id: type.id, name: type.nombre || 'Tipo', percentageCount: Number(type.cantidad_porcentaje ?? 1) })),
     }
-  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.subplatforms, localData.expenseTypes, localData.bonusConditions, localData.bonusTypes, currentBoxId])
+  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.subplatforms, localData.panels, localData.userCategories, localData.expenseTypes, localData.bonusConditions, localData.bonusTypes, currentBoxId])
 
   const [tab, setTab] = useState('boxes')
   const [draft, setDraft] = useState(buildDefaultConfig)
@@ -4099,17 +4117,83 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
         </section>
       </div>}
 
-      {tab === 'users' && <>
+      {tab === 'users' && <div className="user-settings-grid">
         <section className="config-card">
-          <div className="config-list-head"><h3>Usuarios</h3><span>{(data.users || []).length} registros</span></div>
-          {(data.users || []).length ? (data.users || []).slice(0, 12).map((user) => (
-            <div className="config-list-row" key={user.id}>
-              <span>{user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`}</span>
-              <small className="muted-copy">{user.bloqueado ? 'Bloqueado' : 'Activo'}</small>
+          <div className="config-list-head"><h3>Paneles</h3><span>{draft.panels.length} elementos · {currentBox?.nombre || 'Sin caja'}</span></div>
+          {draft.panels.map((panel, index) => {
+            const panelBox = localData.boxes?.find(box => String(box.id) === String(panel.cajaId))
+            return <div className="user-panel-config-row" key={panel.id}>
+              <span className="box-config-dot" style={{ backgroundColor: panelBox?.colores?.hex || panelBox?.color_hex || '#879598' }} />
+              <input value={panel.nombre} aria-label={`Nombre del panel ${index + 1}`} onChange={event => setDraft(current => ({
+                ...current,
+                panels: current.panels.map((item, itemIndex) => itemIndex === index ? { ...item, nombre: event.target.value } : item),
+              }))} onBlur={event => {
+                const name = event.target.value.trim()
+                const target = localData.panels?.find(item => item.id === panel.id)
+                if (!target || !name || name === target.nombre) return
+                persistUpdate(() => updatePanel(target.id, { name }), 'Panel actualizado en Supabase')
+              }} placeholder="Nombre del panel" />
+              <button type="button" className="delete-button" title={`Eliminar panel ${panel.nombre}`} onClick={() => {
+                if (!window.confirm(`¿Eliminar el panel "${panel.nombre}"? Los usuarios asociados conservarán la caja, pero perderán esta asignación de panel.`)) return
+                persistUpdate(() => deletePanel(panel.id), 'Panel eliminado de Supabase')
+              }}><Trash2 size={14} /></button>
             </div>
-          )) : <div className="empty-inline-block">No hay usuarios activos en Supabase.</div>}
+          })}
+          {!currentBox && <div className="empty-inline-block">Creá una caja para poder agregar paneles.</div>}
+          {currentBox && !draft.panels.length && <div className="empty-inline-block">Todavía no hay paneles para {currentBox.nombre}.</div>}
+          <button type="button" className="config-add" disabled={!currentBox} onClick={() => {
+            if (!currentBoxId) return
+            persistUpdate(() => createPanel({ name: 'Nuevo panel', boxId: currentBoxId }), 'Panel creado en Supabase')
+          }}><Plus size={15} /> Agregar panel</button>
         </section>
-      </>}
+
+        <section className="config-card">
+          <div className="config-list-head"><h3>Categorías de usuario</h3><span>{draft.userCategories.length} elementos</span></div>
+          {draft.userCategories.map((category, index) => (
+            <div className="user-category-config-row" key={category.id}>
+              <span className="box-config-dot" style={{ backgroundColor: category.colorHex || '#879598' }} />
+              <input value={category.nombre} aria-label={`Nombre de categoría ${index + 1}`} onChange={event => setDraft(current => ({
+                ...current,
+                userCategories: current.userCategories.map((item, itemIndex) => itemIndex === index ? { ...item, nombre: event.target.value } : item),
+              }))} onBlur={event => {
+                const name = event.target.value.trim()
+                const target = localData.userCategories?.find(item => item.id === category.id)
+                if (!target || !name || name === target.nombre) return
+                persistUpdate(() => updateUserCategory(target.id, { name, colorId: category.colorId, emoteType: category.emoteType }), 'Categoría actualizada en Supabase')
+              }} placeholder="Nombre de categoría" />
+              <input value={category.emoteType} aria-label={`Emote de ${category.nombre}`} maxLength={100} onChange={event => setDraft(current => ({
+                ...current,
+                userCategories: current.userCategories.map((item, itemIndex) => itemIndex === index ? { ...item, emoteType: event.target.value } : item),
+              }))} onBlur={() => {
+                const target = localData.userCategories?.find(item => item.id === category.id)
+                if (!target || (target.emote_tipo || '') === category.emoteType) return
+                persistUpdate(() => updateUserCategory(target.id, { name: category.nombre, colorId: category.colorId, emoteType: category.emoteType }), 'Emote de categoría actualizado')
+              }} placeholder="Emote" />
+              <select value={category.colorId} aria-label={`Color de ${category.nombre}`} onChange={event => {
+                const colorId = event.target.value
+                const color = localData.colors?.find(item => String(item.id) === colorId)
+                setDraft(current => ({
+                  ...current,
+                  userCategories: current.userCategories.map((item, itemIndex) => itemIndex === index ? { ...item, colorId, colorHex: color?.hex || null } : item),
+                }))
+                persistUpdate(() => updateUserCategory(category.id, { name: category.nombre, colorId, emoteType: category.emoteType }), 'Color de categoría actualizado')
+              }}>
+                <option value="">Sin color</option>
+                {[...(localData.colors || [])].sort((left, right) => Number(left.id) - Number(right.id)).map(color => <option value={String(color.id)} key={color.id}>{color.nombre}</option>)}
+              </select>
+              <button type="button" className="delete-button" title={`Eliminar categoría ${category.nombre}`} onClick={() => {
+                if (!window.confirm(`¿Eliminar la categoría "${category.nombre}"? También se quitará de los usuarios que la tengan asignada.`)) return
+                persistUpdate(() => deleteUserCategory(category.id), 'Categoría eliminada de Supabase')
+              }}><Trash2 size={14} /></button>
+            </div>
+          ))}
+          {!draft.userCategories.length && <div className="empty-inline-block">Todavía no hay categorías de usuario.</div>}
+          <button type="button" className="config-add" onClick={() => persistUpdate(() => createUserCategory({
+            name: 'Nueva categoría',
+            colorId: localData.colors?.[0]?.id ?? null,
+          }), 'Categoría creada en Supabase')}><Plus size={15} /> Agregar categoría</button>
+        </section>
+      </div>}
 
       {tab === 'bonuses' && <>
         <div className="config-two-columns bonus-settings-grid">

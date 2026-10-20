@@ -2137,6 +2137,32 @@ input[type="time"] { color-scheme: dark; }
   align-items: start;
   gap: 14px;
 }
+.user-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+  gap: 14px;
+}
+.user-panel-config-row,
+.user-category-config-row {
+  display: grid;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(121, 146, 146, .18);
+}
+.user-panel-config-row {
+  grid-template-columns: 10px minmax(0, 1fr) 28px;
+}
+.user-category-config-row {
+  grid-template-columns: 10px minmax(0, 1fr) minmax(70px, 92px) minmax(96px, 120px) 28px;
+}
+.user-panel-config-row input,
+.user-category-config-row input,
+.user-category-config-row select { width: 100%; min-width: 0; }
+.user-category-config-row input,
+.user-category-config-row select { min-height: 36px; }
+.user-category-config-row input[placeholder="Emote"] { text-align: center; }
 .config-list-row.subplatform-config-row {
   display: grid;
   grid-template-columns: 12px minmax(0, 1fr) minmax(88px, 112px) minmax(92px, 112px) 28px;
@@ -2692,6 +2718,12 @@ input[type="time"] { color-scheme: dark; }
 }
 @media (max-width: 900px) {
   .chip-platforms-grid { grid-template-columns: minmax(0, 1fr); }
+  .user-settings-grid { grid-template-columns: minmax(0, 1fr); }
+  .user-category-config-row { grid-template-columns: 10px minmax(0, 1fr) 28px; }
+  .user-category-config-row > input:first-of-type { grid-column: 2; grid-row: 1; }
+  .user-category-config-row > input[placeholder="Emote"] { grid-column: 2; grid-row: 2; text-align: left; }
+  .user-category-config-row > select { grid-column: 2; grid-row: 3; }
+  .user-category-config-row > .delete-button { grid-column: 3; grid-row: 1; }
   .app-color-row input[type="color"] {
     width: 72px;
   }
