@@ -2204,79 +2204,26 @@ input[type="time"] { color-scheme: dark; }
   top: calc(100% + 5px);
   right: 0;
   z-index: 50;
-  width: 290px;
-  max-width: min(290px, calc(100vw - 32px));
-  padding: 9px;
+  width: min(340px, calc(100vw - 32px));
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #182222;
   box-shadow: 0 12px 30px rgba(0, 0, 0, .32);
+  --epr-bg-color: #182222;
+  --epr-category-label-bg-color: #182222e6;
+  --epr-search-input-bg-color: #101919;
+  --epr-search-input-bg-color-active: #101919;
+  --epr-picker-border-color: var(--line);
+  --epr-text-color: var(--text);
+  --epr-highlight-color: var(--accent);
+  --epr-hover-bg-color: var(--accent-soft);
+  --epr-focus-bg-color: var(--accent-soft);
+  --epr-emoji-size: 25px;
+  --epr-emoji-padding: 5px;
 }
-.emoji-select-search {
-  width: 100%;
-  min-height: 34px;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: rgba(15, 25, 25, .9);
-  color: var(--text);
-  font: inherit;
-  font-size: 11px;
-}
-.emoji-select-search:focus { border-color: var(--accent); outline: none; }
-.emoji-select-groups {
-  display: flex;
-  gap: 4px;
-  margin: 8px 0;
-  overflow-x: auto;
-}
-.emoji-select-groups button {
-  flex: 0 0 auto;
-  padding: 5px 7px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 10px;
-  cursor: pointer;
-}
-.emoji-select-groups button:hover,
-.emoji-select-groups button.active {
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.emoji-select-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 3px;
-  max-height: 190px;
-  overflow-y: auto;
-  padding-top: 2px;
-}
-.emoji-select-option {
-  display: grid;
-  place-items: center;
-  min-width: 0;
-  min-height: 32px;
-  padding: 2px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  background: transparent;
-  font-size: 19px;
-  cursor: pointer;
-}
-.emoji-select-option:hover,
-.emoji-select-option:focus-visible,
-.emoji-select-option.selected {
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-  outline: none;
-}
-.emoji-select-empty {
-  grid-column: 1 / -1;
-  padding: 10px 4px;
+.emoji-select-loading {
+  display: block;
+  padding: 18px 12px;
   color: var(--muted);
   font-size: 11px;
   text-align: center;
@@ -3039,14 +2986,21 @@ html:has(.app-shell[data-theme='light']) {
 .app-shell[data-theme='light'] .color-select-menu {
   box-shadow: 0 12px 30px rgba(28, 52, 43, .16);
 }
-.app-shell[data-theme='light'] .emoji-select-trigger,
-.app-shell[data-theme='light'] .emoji-select-menu,
-.app-shell[data-theme='light'] .emoji-select-search {
-  background: #fff;
+.app-shell[data-theme='light'] .emoji-select-trigger {
+  background: #f7faf8;
   color: var(--text);
 }
 .app-shell[data-theme='light'] .emoji-select-menu {
   box-shadow: 0 12px 30px rgba(28, 52, 43, .16);
+  --epr-bg-color: #fff;
+  --epr-category-label-bg-color: #ffffffe6;
+  --epr-search-input-bg-color: #f7faf8;
+  --epr-search-input-bg-color-active: #f7faf8;
+  --epr-picker-border-color: var(--line);
+  --epr-text-color: var(--text);
+  --epr-highlight-color: var(--accent);
+  --epr-hover-bg-color: var(--accent-soft);
+  --epr-focus-bg-color: var(--accent-soft);
 }
 .app-shell[data-theme='light'] input[type="time"],
 .app-shell[data-theme='light'] input[type="number"] { color-scheme: light; }

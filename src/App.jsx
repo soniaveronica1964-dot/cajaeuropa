@@ -41,6 +41,9 @@ import {
   WalletCards,
   X,
 } from 'lucide-react'
+
+const EmojiPicker = React.lazy(() => import('emoji-picker-react'))
+const loadSpanishEmojiData = () => import('emoji-picker-react/data/emojis-es')
 import {
   createAccount,
   createAccountType,
@@ -2745,21 +2748,10 @@ function ColorSelect({ colors = [], value, onChange, ariaLabel, allowNone = fals
   </div>
 }
 
-const EMOJI_GROUPS = [
-  { name: 'Personas', emojis: ['😀', '😎', '🤩', '🥳', '😇', '🤓', '🧑', '👩', '👨', '👑', '🧙', '🦸', '💃', '🕺', '🙋', '💁', '🤷', '🧏', '🧑‍💻', '🧑‍🎤'] },
-  { name: 'Símbolos', emojis: ['❤️', '💜', '💙', '💚', '💛', '🧡', '🖤', '🤍', '💖', '💯', '✨', '⭐', '🌟', '🔥', '⚡', '💎', '🔮', '♠️', '🎯', '✅'] },
-  { name: 'Celebración', emojis: ['🎉', '🎊', '🎁', '🎂', '🎈', '🥂', '🍾', '🎀', '🎆', '🎇', '🏆', '🥇', '🎵', '🎤', '🎧', '🎸', '🎹', '🪩', '🎭', '🎬'] },
-  { name: 'Objetos', emojis: ['💰', '💵', '💳', '🪙', '🏦', '📦', '📌', '📣', '💡', '🔑', '🛠️', '🧰', '📱', '💻', '📷', '🕯️', '🧸', '☕', '🍀', '🌈'] },
-  { name: 'Animales', emojis: ['🐶', '🐱', '🐼', '🐨', '🦊', '🐸', '🐵', '🦄', '🐝', '🦋', '🐢', '🦁', '🐯', '🐙', '🦜', '🐬', '🦈', '🐉', '🦖', '🐾'] },
-]
-
 function EmojiSelect({ value = '', onChange, ariaLabel }) {
   const [open, setOpen] = useState(false)
-  const [search, setSearch] = useState('')
-  const [activeGroup, setActiveGroup] = useState(EMOJI_GROUPS[0].name)
   const rootRef = useRef(null)
   const triggerRef = useRef(null)
-  const searchRef = useRef(null)
 
   useEffect(() => {
     if (!open) return undefined
@@ -2767,19 +2759,8 @@ function EmojiSelect({ value = '', onChange, ariaLabel }) {
       if (!rootRef.current?.contains(event.target)) setOpen(false)
     }
     document.addEventListener('pointerdown', closeOnOutsidePointer)
-    searchRef.current?.focus()
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
   }, [open])
-
-  const normalizedSearch = search.trim().toLocaleLowerCase()
-  const groups = normalizedSearch
-    ? EMOJI_GROUPS.map(group => ({
-      ...group,
-      emojis: group.name.toLocaleLowerCase().includes(normalizedSearch)
-        ? group.emojis
-        : group.emojis.filter(emoji => emoji.includes(normalizedSearch)),
-    })).filter(group => group.emojis.length)
-    : EMOJI_GROUPS.filter(group => group.name === activeGroup)
 
   return <div className={`emoji-select ${open ? 'open' : ''}`} ref={rootRef}>
     <button
@@ -2791,43 +2772,47 @@ function EmojiSelect({ value = '', onChange, ariaLabel }) {
       aria-expanded={open}
       onClick={() => setOpen(current => !current)}
     >
-      <span>{value || 'Elegir'}</span>
+      <span className="emoji-select-value">{value || 'Elegir'}</span>
       <ChevronDown size={13} aria-hidden="true" />
     </button>
-    {open && <div className="emoji-select-menu" role="dialog" aria-label={ariaLabel}>
-      <input
-        ref={searchRef}
-        className="emoji-select-search"
-        type="search"
-        aria-label="Buscar emoji"
-        placeholder="Filtrar categoría o pegar emoji"
-        value={search}
-        onChange={event => setSearch(event.target.value)}
-      />
-      {!normalizedSearch && <div className="emoji-select-groups" aria-label="Categorías de emojis">
-        {EMOJI_GROUPS.map(group => <button
-          key={group.name}
-          type="button"
-          className={activeGroup === group.name ? 'active' : ''}
-          onClick={() => setActiveGroup(group.name)}
-        >{group.name}</button>)}
-      </div>}
-      <div className="emoji-select-grid">
-        {groups.flatMap(group => group.emojis).map((emoji, index) => <button
-          key={`${emoji}-${index}`}
-          type="button"
-          className={`emoji-select-option ${value === emoji ? 'selected' : ''}`}
-          aria-label={`Seleccionar ${emoji}`}
-          aria-pressed={value === emoji}
-          onClick={() => {
+    {open && <div className="emoji-select-menu">
+      <React.Suspense fallback={<span className="emoji-select-loading">Cargando emojis...</span>}>
+        <EmojiPicker
+          emojiData={loadSpanishEmojiData}
+          emojiStyle="native"
+          colorScheme="dark"
+          width="100%"
+          height={360}
+          lazyLoadEmojis
+          autoFocusSearch
+          labels={{
+            searchPlaceholder: 'Buscar emojis...',
+            searchLabel: 'Buscar emojis',
+            searchClear: 'Limpiar búsqueda',
+            searchResultsNone: 'No se encontraron emojis',
+            searchResultsOne: '%n emoji encontrado',
+            searchResultsMany: '%n emojis encontrados',
+            categoryNavigation: 'Categorías de emojis',
+            reactions: 'Reacciones',
+            expandReactions: 'Mostrar todos los emojis',
+            loading: 'Cargando emojis...',
+            loadingError: 'No se pudieron cargar los emojis',
+            retryLoading: 'Reintentar',
+            skinToneNeutral: 'Tono de piel predeterminado',
+            skinToneLight: 'Tono de piel claro',
+            skinToneMediumLight: 'Tono de piel medio claro',
+            skinToneMedium: 'Tono de piel medio',
+            skinToneMediumDark: 'Tono de piel medio oscuro',
+            skinToneDark: 'Tono de piel oscuro',
+          }}
+          previewConfig={{ showPreview: false }}
+          onEmojiClick={({ emoji }) => {
             onChange(emoji)
             setOpen(false)
-            setSearch('')
             triggerRef.current?.focus()
           }}
-        >{emoji}</button>)}
-        {!groups.length && <span className="emoji-select-empty">No se encontraron emojis.</span>}
-      </div>
+        />
+      </React.Suspense>
     </div>}
   </div>
 }
