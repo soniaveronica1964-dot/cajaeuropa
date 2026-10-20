@@ -2782,7 +2782,7 @@ function EmojiSelect({ value = '', onChange, ariaLabel }) {
           emojiStyle="native"
           colorScheme="dark"
           width="100%"
-          height={360}
+          height={320}
           lazyLoadEmojis
           autoFocusSearch
           labels={{

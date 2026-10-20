@@ -2204,7 +2204,7 @@ input[type="time"] { color-scheme: dark; }
   top: calc(100% + 5px);
   right: 0;
   z-index: 50;
-  width: min(340px, calc(100vw - 32px));
+  width: min(310px, calc(100vw - 32px));
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -2218,8 +2218,15 @@ input[type="time"] { color-scheme: dark; }
   --epr-highlight-color: var(--accent);
   --epr-hover-bg-color: var(--accent-soft);
   --epr-focus-bg-color: var(--accent-soft);
-  --epr-emoji-size: 25px;
-  --epr-emoji-padding: 5px;
+  --epr-horizontal-padding: 8px;
+  --epr-header-padding: 10px var(--epr-horizontal-padding);
+  --epr-search-input-padding: 0 32px 0 38px;
+  --epr-search-input-height: 34px;
+  --epr-search-bar-inner-padding: 10px;
+  --epr-category-navigation-button-size: 25px;
+  --epr-category-label-height: 34px;
+  --epr-emoji-size: 23px;
+  --epr-emoji-padding: 3px;
 }
 .emoji-select-loading {
   display: block;
