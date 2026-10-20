@@ -2865,6 +2865,7 @@ html:has(.app-shell[data-theme='light']) {
 .bonus-recent-list { display: grid; gap: 2px; margin-top: 9px; }
 .bonus-recent-list > small { margin-bottom: 2px; color: var(--muted); font: 8px 'DM Mono', monospace; text-transform: uppercase; }
 .bonus-recent-row { display: grid; grid-template-columns: minmax(0, 1fr) 158px; gap: 6px; align-items: center; min-height: 15px; color: var(--bonus-type-color); font-size: 9px; }
+.bonus-pending-status { color: var(--muted); font-size: 8px; }
 .bonus-recent-value { display: grid; grid-template-columns: 58px 8px minmax(0, 1fr); align-items: center; gap: 3px; min-width: 0; }
 .bonus-recent-value time { color: var(--muted-2); font: 8px 'DM Mono', monospace; text-align: right; white-space: nowrap; }
 .bonus-recent-value > span { color: var(--muted-2); font: 8px 'DM Mono', monospace; text-align: center; }

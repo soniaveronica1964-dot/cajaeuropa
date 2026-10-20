@@ -452,6 +452,13 @@ function App() {
       chips: current.chips.map(chip => chip.id === chipId ? { ...chip, fichas_final: value } : chip),
     } : current)
   }
+  const updateBonusData = (bonus) => {
+    setAppData(current => current ? {
+      ...current,
+      bonuses: [bonus, ...(current.bonuses || []).filter(row => String(row.id) !== String(bonus.id))],
+    } : current)
+    setCashDiscrepancyPreview(null)
+  }
   const updateRoundingData = (value) => {
     setAppData(current => current?.shift ? { ...current, shift: { ...current.shift, redondeo: value } } : current)
   }
@@ -538,7 +545,7 @@ function App() {
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} onCreate={() => setUserCreateOpen(true)} />}
@@ -635,7 +642,7 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onCreateUser, onChipFinalSaved, onRoundingChange, onDiscrepancyChange }) {
+function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onBonusCreated, onCreateUser, onChipFinalSaved, onRoundingChange, onDiscrepancyChange }) {
   const [rounding, setRounding] = useState(null)
   const [accountValueDrafts, setAccountValueDrafts] = useState({})
   const [chipFinalDrafts, setChipFinalDrafts] = useState({})
@@ -759,7 +766,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onCreateUse
     </section>
     <div className="dashboard-grid">
       <div className="dashboard-main">
-        <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
+        <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} /></div>
         <div className="operations-grid">
@@ -915,16 +922,20 @@ function bonusNetTotal(rows) {
   }, 0)
 }
 
-function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
+function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
   const [mode, setMode] = useState('granted')
   const [value, setValue] = useState('')
   const [saving, setSaving] = useState(false)
+  const [optimisticRows, setOptimisticRows] = useState([])
+  const pendingIdCounter = useRef(0)
   const [savingRecentId, setSavingRecentId] = useState(null)
   const [hiddenRecentIds, setHiddenRecentIds] = useState(() => new Set())
   const [historyOpen, setHistoryOpen] = useState(false)
-  const recentRows = rows.slice(0, 5)
+  const displayRows = [...rows, ...optimisticRows.filter(optimistic => !rows.some(row => String(row.id) === String(optimistic.id)))]
+    .sort((left, right) => new Date(right.fecha_hora_creacion) - new Date(left.fecha_hora_creacion))
+  const recentRows = displayRows.slice(0, 5)
   const modeOrder = ['granted', 'recovered', 'publicity']
-  const net = bonusNetTotal(rows)
+  const net = bonusNetTotal(displayRows)
 
   const cycleMode = () => setMode(current => modeOrder[(modeOrder.indexOf(current) + 1) % modeOrder.length])
   const create = async (event) => {
@@ -937,14 +948,27 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
       return
     }
     const type = key === '+' ? 'recovered' : key === '-' ? 'publicity' : mode
+    const pendingId = `pending-${++pendingIdCounter.current}`
+    const pendingBonus = {
+      id: pendingId,
+      valor: amount,
+      recuperado: type === 'recovered',
+      es_publicidad: type === 'publicity',
+      fecha_hora_creacion: new Date().toISOString(),
+      pending: true,
+    }
+    setOptimisticRows(current => [pendingBonus, ...current])
+    setValue('')
     setSaving(true)
     try {
-      await createBonusLine(shiftId, { value: amount, type, bonusId: rows[0]?.bono_id })
-      setValue('')
+      const createdBonus = await createBonusLine(shiftId, { value: amount, type, bonusId: rows[0]?.bono_id })
+      setOptimisticRows(current => current.map(bonus => bonus.id === pendingId ? createdBonus : bonus))
       setMode('granted')
       setToast(`${bonusTypeLabels[type]} guardado`)
-      onSaved()
+      onCreated(createdBonus)
     } catch (error) {
+      setOptimisticRows(current => current.filter(bonus => bonus.id !== pendingId))
+      setValue(current => current || value)
       setToast(error.message || 'No se pudo guardar el bono')
     } finally {
       setSaving(false)
@@ -1000,7 +1024,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
     <div className="bonus-recent-list">
       <small className="bonus-recent-heading">Últimos 5 bonos</small>
       {recentRows.filter(bonus => !hiddenRecentIds.has(bonus.id)).map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
-        <span>{bonusTypeLabels[bonusTypeOf(bonus)]}</span>
+        <span>{bonusTypeLabels[bonusTypeOf(bonus)]}{bonus.pending && <small className="bonus-pending-status"> · Guardando…</small>}</span>
         <div className="bonus-recent-value">
           <time>{new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
           <span aria-hidden="true">-</span>
@@ -1008,7 +1032,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
             aria-label={`Monto de bono ${bonusTypeLabels[bonusTypeOf(bonus)]}`}
             defaultValue={moneyWithCents.format(bonus.valor)}
             inputMode="decimal"
-            disabled={savingRecentId === bonus.id}
+            disabled={bonus.pending || savingRecentId === bonus.id}
             onFocus={event => { event.currentTarget.value = numberWithCents.format(bonus.valor); event.currentTarget.select() }}
             onKeyDown={event => saveRecentAmount(event, bonus)}
           />
@@ -1016,7 +1040,7 @@ function BonusList({ shiftId, shift, rows, onSaved, setToast }) {
       </div>)}
       {!recentRows.length && <span className="bonus-recent-empty">Sin bonos registrados</span>}
     </div>
-    {historyOpen && <BonusHistoryModal bonuses={rows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />}
+    {historyOpen && <BonusHistoryModal bonuses={displayRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />}
   </section>
 }
 
