@@ -2912,6 +2912,20 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
     ...(user.titulares_usuario || []).map(item => item.nombre),
   ].join(' ').toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es')))
   const selectedBox = boxes.find(box => String(box.id) === effectiveBoxFilter)
+  const emptyTitle = !users.length
+    ? 'Todavía no hay usuarios'
+    : search.trim()
+      ? 'No encontramos coincidencias'
+      : effectiveBoxFilter === 'all'
+        ? 'No hay usuarios para mostrar'
+        : `Sin usuarios en ${selectedBox?.nombre || 'esta caja'}`
+  const emptyDescription = !users.length
+    ? 'Creá el primer registro para empezar a organizar tus usuarios.'
+    : search.trim()
+      ? 'Probá con otro nombre, teléfono o titular.'
+      : effectiveBoxFilter === 'all'
+        ? 'No hay usuarios registrados para mostrar.'
+        : 'Podés cambiar de caja o ver el registro completo.'
 
   return <section className="panel directory">
     <PanelTitle icon={Users} title="Usuarios" meta={`${matchingUsers.length}${effectiveBoxFilter === 'all' ? '' : ` / ${users.length}`} registros`} action={<button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Nuevo usuario</button>} />
@@ -2922,14 +2936,26 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
         {boxes.map(box => <option value={String(box.id)} key={box.id}>{box.nombre}</option>)}
       </select></label>
     </div>
+    {!!matchingUsers.length && <div className="directory-list-head" aria-hidden="true">
+      <span />
+      <span>Usuario</span>
+      <span>Titulares</span>
+      <span>Cajas</span>
+      <span>Estado</span>
+      <span />
+    </div>}
     {matchingUsers.map(user => {
       const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`
       const isExpanded = expanded === user.id
       return <div className={`directory-row ${isExpanded ? 'expanded' : ''}`} key={user.id}>
         <button type="button" className="expand-button" aria-label={`${isExpanded ? 'Contraer' : 'Expandir'} ${name}`} onClick={() => setExpanded(isExpanded ? null : user.id)}>{isExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}</button>
-        <b>{name}</b>
-        <div className="tags">{user.titulares_usuario?.map(holder => <span key={holder.id}>{holder.nombre}</span>)}</div>
-        <span className="directory-user-boxes">{[...new Set(user.paneles_x_usuario?.map(link => link.cajas?.nombre).filter(Boolean))].join(' · ')}</span>
+        <div className="directory-user-heading">
+          <span className="directory-avatar"><UserRound size={15} /></span>
+          <span><b>{name}</b><small>{user.telefonos_usuario?.[0]?.numero || `Alta ${new Date(user.fecha_creacion).toLocaleDateString('es-AR')}`}</small></span>
+        </div>
+        <div className="tags">{user.titulares_usuario?.length ? user.titulares_usuario.map(holder => <span key={holder.id}>{holder.nombre}</span>) : <small className="directory-muted">Sin titular</small>}</div>
+        <div className="directory-user-boxes">{[...new Set(user.paneles_x_usuario?.map(link => link.cajas?.nombre).filter(Boolean))].map(boxName => <span key={boxName}>{boxName}</span>)}</div>
+        <span className={`directory-status ${user.bloqueado ? 'blocked' : ''}`}><i />{user.bloqueado ? 'Bloqueado' : 'Activo'}</span>
         <button type="button" className="icon-button" aria-label={`Ver detalles de ${name}`} onClick={() => setExpanded(isExpanded ? null : user.id)}><Settings2 size={15} /></button>
         {isExpanded && <div className="user-detail">
           <label>Nombres<input value={(user.nombres_usuario || []).map(item => item.nombre).join(', ')} readOnly /></label>
@@ -2942,7 +2968,16 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
         </div>}
       </div>
     })}
-    {!matchingUsers.length && <EmptyInline text={!users.length ? 'No hay usuarios registrados en Supabase.' : search.trim() ? 'No se encontraron usuarios con esa búsqueda.' : effectiveBoxFilter === 'all' ? 'No hay usuarios registrados en Supabase.' : `No hay usuarios asignados a ${selectedBox?.nombre || 'esta caja'}.`} />}
+    {!matchingUsers.length && <div className="directory-empty">
+      <span className="directory-empty-icon"><UserRound size={20} /></span>
+      <strong>{emptyTitle}</strong>
+      <p>{emptyDescription}</p>
+      {!users.length
+        ? <button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Crear usuario</button>
+        : search.trim()
+          ? <button type="button" className="secondary-button" onClick={() => setSearch('')}>Limpiar búsqueda</button>
+          : effectiveBoxFilter !== 'all' && <button type="button" className="secondary-button" onClick={() => setBoxFilter('all')}>Ver todas las cajas</button>}
+    </div>}
   </section>
 }
 
