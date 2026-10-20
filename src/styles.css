@@ -1650,7 +1650,13 @@ input[type="time"] { color-scheme: dark; }
 .logistics-hidden { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding-top: 6px; color: var(--muted); font-size: 9px; }
 .logistics-hidden > span { margin-right: 3px; }
 .logistics-hidden button { display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 3px 7px; border: 1px solid var(--accent-border); border-radius: 4px; background: transparent; color: var(--accent); cursor: pointer; font-size: 9px; }
-.logistics-page > .empty-inline { margin: 0; padding: 12px; }
+.logistics-page > .empty-inline {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 12px;
+  text-align: center;
+  white-space: nowrap;
+}
 
 .entry-form {
   display: grid;
@@ -3337,6 +3343,36 @@ html:has(.app-shell[data-theme='light']) {
 
 .directory { min-height: 300px; }
 .directory > .panel-title { margin-bottom: 14px; }
+.directory-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 240px);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.directory-filters .search-line { min-width: 0; }
+.directory-box-filter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(17, 23, 24, 0.8);
+  color: var(--muted);
+  font-size: 10px;
+}
+.directory-box-filter select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 10px;
+}
+.directory-box-filter option { background: var(--panel); color: var(--text); }
 .directory-row {
   display: grid;
   grid-template-columns: 28px minmax(120px, 1fr) minmax(90px, auto) minmax(80px, auto) 30px;
@@ -3486,6 +3522,7 @@ html:has(.app-shell[data-theme='light']) {
 .user-form-platforms { grid-column: 2 / 4; }
 
 @media (max-width: 700px) {
+  .directory-filters { grid-template-columns: minmax(0, 1fr); }
   .directory-row { grid-template-columns: 26px minmax(0, 1fr) 30px; }
   .directory-row > .tags,
   .directory-user-boxes { grid-column: 2; }

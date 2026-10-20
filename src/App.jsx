@@ -548,7 +548,7 @@ function App() {
           {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
-          {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} onCreate={() => setUserCreateOpen(true)} />}
+          {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} onCloseBox={openCloseBoxDialog} />}
           </fieldset>
@@ -2899,18 +2899,29 @@ function LiveLogistics({ data, setToast, onSaved }) {
   </section>
 }
 
-function LiveUsersView({ users, onCreate }) {
+function LiveUsersView({ users, boxes, selectedBoxId, onCreate }) {
   const [expanded, setExpanded] = useState(null)
   const [search, setSearch] = useState('')
-  const matchingUsers = users.filter(user => [
+  const [boxFilter, setBoxFilter] = useState(null)
+  const effectiveBoxFilter = boxFilter ?? (selectedBoxId == null ? 'all' : String(selectedBoxId))
+  const boxFilteredUsers = users.filter(user => effectiveBoxFilter === 'all'
+    || user.paneles_x_usuario?.some(link => String(link.caja_id) === effectiveBoxFilter))
+  const matchingUsers = boxFilteredUsers.filter(user => [
     ...(user.nombres_usuario || []).map(item => item.nombre),
     ...(user.telefonos_usuario || []).map(item => item.numero),
     ...(user.titulares_usuario || []).map(item => item.nombre),
   ].join(' ').toLocaleLowerCase('es').includes(search.trim().toLocaleLowerCase('es')))
+  const selectedBox = boxes.find(box => String(box.id) === effectiveBoxFilter)
 
   return <section className="panel directory">
-    <PanelTitle icon={Users} title="Usuarios" meta={`${users.length} registros`} action={<button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Nuevo usuario</button>} />
-    <div className="search-line wide"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
+    <PanelTitle icon={Users} title="Usuarios" meta={`${matchingUsers.length}${effectiveBoxFilter === 'all' ? '' : ` / ${users.length}`} registros`} action={<button type="button" className="primary-button" onClick={onCreate}><Plus size={14} /> Nuevo usuario</button>} />
+    <div className="directory-filters">
+      <div className="search-line"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
+      <label className="directory-box-filter"><span>Caja</span><select aria-label="Filtrar usuarios por caja" value={effectiveBoxFilter} onChange={event => setBoxFilter(event.target.value)}>
+        <option value="all">Todas las cajas</option>
+        {boxes.map(box => <option value={String(box.id)} key={box.id}>{box.nombre}</option>)}
+      </select></label>
+    </div>
     {matchingUsers.map(user => {
       const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`
       const isExpanded = expanded === user.id
@@ -2931,7 +2942,7 @@ function LiveUsersView({ users, onCreate }) {
         </div>}
       </div>
     })}
-    {!matchingUsers.length && <EmptyInline text={users.length ? 'No se encontraron usuarios.' : 'No hay usuarios registrados en Supabase.'} />}
+    {!matchingUsers.length && <EmptyInline text={!users.length ? 'No hay usuarios registrados en Supabase.' : search.trim() ? 'No se encontraron usuarios con esa búsqueda.' : effectiveBoxFilter === 'all' ? 'No hay usuarios registrados en Supabase.' : `No hay usuarios asignados a ${selectedBox?.nombre || 'esta caja'}.`} />}
   </section>
 }
 
