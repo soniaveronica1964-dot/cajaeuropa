@@ -1927,7 +1927,7 @@ input[type="time"] { color-scheme: dark; }
 .transfer-field input { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 10px 'DM Mono', monospace; }
 .transfer-field select:focus,
 .transfer-field input:focus { border-color: var(--accent); }
-.transfer-form:not(.savings-transfer-form) { grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr) minmax(70px, .75fr) 30px; }
+.transfer-form:not(.savings-transfer-form) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(70px, .75fr) 30px; }
 .transfer-box-select { position: relative; display: block; min-width: 0; }
 .transfer-box-select > i {
   position: absolute;
@@ -1951,7 +1951,7 @@ input[type="time"] { color-scheme: dark; }
 .transfer-swap { display: grid; place-items: center; width: 28px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--muted-2); }
 .transfer-swap:hover { border-color: var(--accent-border); color: var(--accent); }
 .transfer-submit { height: 34px; }
-.transfer-form:not(.savings-transfer-form) .transfer-submit { grid-column: 5; }
+.transfer-form:not(.savings-transfer-form) .transfer-submit { grid-column: 4; }
 .transfer-notes { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; }
 .transfer-notes:focus { border-color: var(--accent); }
 .transfer-notes::placeholder { color: var(--muted); }

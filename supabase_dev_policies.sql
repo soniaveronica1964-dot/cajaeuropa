@@ -5,6 +5,12 @@
 
 BEGIN;
 
+ALTER TABLE public.movimientos
+  ADD COLUMN IF NOT EXISTS turno_destino_id BIGINT
+  REFERENCES public.turnos(id) ON DELETE RESTRICT;
+CREATE INDEX IF NOT EXISTS idx_movimientos_turno_destino
+  ON public.movimientos(turno_destino_id);
+
 -- Tablas que la interfaz consulta.
 ALTER TABLE cajas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE turnos ENABLE ROW LEVEL SECURITY;
@@ -29,6 +35,7 @@ ALTER TABLE propinas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cargas_ta ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dinero_encontrado ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gastos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE movimientos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notas_turno ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tipos_gasto ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lineas_logistica ENABLE ROW LEVEL SECURITY;
@@ -64,7 +71,7 @@ BEGIN
     'cajas', 'turnos', 'dias_turno', 'tipos_turno', 'colores', 'tipos_billetera', 'tipos_cuenta',
     'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja', 'cuentas_x_caja',
     'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
-    'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'tipos_gasto', 'lineas_logistica', 'logistica',
+    'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'movimientos', 'notas_turno', 'tipos_gasto', 'lineas_logistica', 'logistica',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario',
     'paneles_x_usuario', 'paneles', 'categorias_usuario', 'categorias_x_usuario', 'subplataformas_x_usuario', 'subobjetivos_x_turno', 'subobjetivos',
     'objetivos', 'fichas', 'plataformas', 'subplataformas', 'cargas_fichas', 'condiciones_bono', 'tipos_estado',
@@ -144,6 +151,49 @@ BEGIN
     EXECUTE format('CREATE POLICY dev_delete_%I ON public.%I FOR DELETE TO anon USING (true)', table_name, table_name);
   END LOOP;
 END $$;
+
+DROP POLICY IF EXISTS dev_insert_movimientos ON public.movimientos;
+CREATE POLICY dev_insert_movimientos ON public.movimientos
+  FOR INSERT TO anon
+  WITH CHECK (
+    monto > 0
+    AND caja_desde_id <> caja_hasta_id
+    AND EXISTS (
+      SELECT 1
+      FROM public.turnos AS origin_shift
+      JOIN public.cuentas_x_turno AS account_links
+        ON account_links.turno_id = origin_shift.id
+      WHERE origin_shift.id = movimientos.turno_id
+        AND origin_shift.abierto IS TRUE
+        AND account_links.id = movimientos.cuenta_x_turno_id
+        AND (
+          (
+            movimientos.es_ahorro IS FALSE
+            AND movimientos.turno_destino_id IS NOT NULL
+            AND movimientos.caja_desde_id = origin_shift.caja_id
+            AND EXISTS (
+              SELECT 1
+              FROM public.turnos AS destination_shift
+              WHERE destination_shift.id = movimientos.turno_destino_id
+                AND destination_shift.abierto IS TRUE
+                AND destination_shift.id <> origin_shift.id
+                AND destination_shift.caja_id = movimientos.caja_hasta_id
+            )
+          )
+          OR (
+            movimientos.es_ahorro IS TRUE
+            AND movimientos.turno_destino_id IS NULL
+            AND (
+              movimientos.caja_desde_id = origin_shift.caja_id
+              OR movimientos.caja_hasta_id = origin_shift.caja_id
+            )
+          )
+        )
+    )
+  );
+
+GRANT SELECT, INSERT ON public.movimientos TO anon;
+GRANT SELECT ON public.turnos, public.cuentas_x_turno TO anon;
 
 -- Bucket público para la imagen original y la miniatura de la aplicación.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

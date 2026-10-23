@@ -221,12 +221,19 @@ function signedExpenseImpact(rows = []) {
   }, 0)
 }
 
-function calculateCashDiscrepancy({ cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney, savingsMovements }) {
+function calculateCashDiscrepancy({ shiftId, cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney, savingsMovements, transferMovements }) {
   const bonusImpact = bonusNetTotal(bonuses)
+  const transferImpact = (transferMovements || []).reduce((sum, movement) => {
+    const amount = Number(movement.monto || 0)
+    if (String(movement.turno_id) === String(shiftId)) return sum + amount
+    if (String(movement.turno_destino_id) === String(shiftId)) return sum - amount
+    return sum
+  }, 0)
   return cashDifference
     - countedChipDifference
     + rounding
     + bonusImpact
+    + transferImpact
     + sumMovementAmounts(expenses)
     + sumMovementAmounts(taCharges)
     + sumMovementAmounts(savingsMovements)
@@ -390,6 +397,7 @@ function App() {
   const cashTotal = (appData?.accounts || []).reduce((sum, account) => sum + Number(account.valor || 0), 0)
   const countedChipDifference = calculateChipDifference(appData?.chips || [])
   const savedCashDiscrepancy = calculateCashDiscrepancy({
+    shiftId: shift?.id,
     cashDifference: cashTotal - Number(shift?.caja_inicial || 0),
     countedChipDifference,
     rounding: Number(shift?.redondeo || 0),
@@ -399,6 +407,7 @@ function App() {
     taCharges: appData?.taCharges || [],
     foundMoney: appData?.foundMoney || [],
     savingsMovements: (appData?.movements || []).filter(movement => movement.es_ahorro),
+    transferMovements: (appData?.movements || []).filter(movement => !movement.es_ahorro),
   })
   const cashDiscrepancy = cashDiscrepancyPreview ?? savedCashDiscrepancy
   const cashDiscrepancyTone = cashDiscrepancy === 0 ? 'neutral' : cashDiscrepancy > 0 ? 'positive' : 'negative'
@@ -775,6 +784,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onBonusCrea
   const taChargesTotal = sumMovementAmounts(data.taCharges)
   const realDifference = cashDifference + signedExpenseImpact(data.expenses) + taChargesTotal
   const cashDiscrepancy = calculateCashDiscrepancy({
+    shiftId: data.shift.id,
     cashDifference,
     countedChipDifference,
     rounding: roundingAmount,
@@ -784,6 +794,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onBonusCrea
     taCharges: data.taCharges,
     foundMoney: data.foundMoney,
     savingsMovements: (data.movements || []).filter(movement => movement.es_ahorro),
+    transferMovements: (data.movements || []).filter(movement => !movement.es_ahorro),
   })
   useLayoutEffect(() => {
     onDiscrepancyChange(cashDiscrepancy)
@@ -810,7 +821,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onBonusCrea
           <TaChargesCard shiftId={data.shift.id} rows={data.taCharges || []} onSaved={onSaved} setToast={setToast} />
           <FoundMoneyCard accounts={accounts} rows={data.foundMoney || []} onSaved={onSaved} setToast={setToast} />
           <ShiftNotesCard shiftId={data.shift.id} notes={data.shiftNotes} onSaved={onSaved} setToast={setToast} />
-          <TransferMovementsCard shift={data.shift} boxes={data.boxes} accounts={accounts} rows={data.movements || []} onSaved={onSaved} setToast={setToast} />
+          <TransferMovementsCard shift={data.shift} boxes={data.boxes} activeTurns={data.activeTurns || []} accounts={accounts} rows={data.movements || []} onSaved={onSaved} setToast={setToast} />
           <ChipControlCard chips={chips} onSaved={onSaved} onChipFinalSaved={onChipFinalSaved} setToast={setToast} />
         </div>
       </div>
@@ -2518,9 +2529,10 @@ function ShiftNotesCard({ shiftId, notes, onSaved, setToast }) {
   </section>
 }
 
-function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast }) {
+function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSaved, setToast }) {
   const [fromBoxId, setFromBoxId] = useState(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
   const [toBoxId, setToBoxId] = useState(boxes.find(box => String(box.id) !== String(shift.caja_id))?.id?.toString() || '')
+  const [destinationShiftId, setDestinationShiftId] = useState('')
   const [savingsHolderId, setSavingsHolderId] = useState('')
   const [savingsWalletId, setSavingsWalletId] = useState('')
   const [value, setValue] = useState('')
@@ -2529,6 +2541,11 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   const [saving, setSaving] = useState(false)
   const [showAllRows, setShowAllRows] = useState(false)
   const selectedTransferAccount = accounts[0]
+  const destinationTurns = activeTurns.filter(turn => (
+    String(turn.id) !== String(shift.id)
+    && String(turn.caja_id) !== String(shift.caja_id)
+  ))
+  const selectedDestinationTurn = destinationTurns.find(turn => String(turn.id) === String(destinationShiftId))
   const savingsAccounts = accounts.filter(account => account.accountType?.ahorro)
   const savingsHolders = [...new Map(savingsAccounts.map(account => [
     String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
@@ -2542,16 +2559,20 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   const add = async (event, movementType = 'transfer') => {
     event?.preventDefault()
     const amount = parseLocalizedAmount(value)
-    if (boxes.length < 2 || String(fromBoxId) === String(toBoxId)) { setToast('Se necesitan dos cajas distintas para crear un movimiento'); return }
+    if (movementType === 'transfer' && !selectedDestinationTurn) { setToast('Seleccioná un turno abierto de destino'); return }
+    if (movementType !== 'transfer' && (boxes.length < 2 || String(fromBoxId) === String(toBoxId))) { setToast('Se necesitan dos cajas distintas para crear un movimiento'); return }
     const selectedAccountId = movementType === 'transfer' ? selectedTransferAccount?.id?.toString() : selectedSavingsAccount?.id?.toString()
     if (!selectedAccountId) { setToast(movementType === 'transfer' ? 'No hay cuentas configuradas para registrar el movimiento' : 'No hay una billetera de ahorro disponible para este titular'); return }
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
       const depositing = movementType !== 'withdrawal'
+      const movementFromBoxId = movementType === 'transfer' ? shift.caja_id : depositing ? fromBoxId : toBoxId
+      const movementToBoxId = movementType === 'transfer' ? selectedDestinationTurn.caja_id : depositing ? toBoxId : fromBoxId
       await createTransferMovement(shift.id, {
-        fromBoxId: depositing ? fromBoxId : toBoxId,
-        toBoxId: depositing ? toBoxId : fromBoxId,
+        fromBoxId: movementFromBoxId,
+        toBoxId: movementToBoxId,
+        destinationShiftId: movementType === 'transfer' ? selectedDestinationTurn.id : null,
         accountShiftId: selectedAccountId,
         value: amount,
         notes: movementType === 'transfer' ? '' : notes,
@@ -2571,10 +2592,6 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   const accountName = id => {
     const account = accounts.find(item => String(item.id) === String(id))
     return account ? `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}` : 'Cuenta'
-  }
-  const swapBoxes = () => {
-    setFromBoxId(toBoxId)
-    setToBoxId(fromBoxId)
   }
   const toggleSavings = checked => {
     setSavings(checked)
@@ -2613,15 +2630,16 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
         <button className="operation-submit transfer-withdraw" type="button" title="Retirar del ahorro" aria-label="Retirar del ahorro" onClick={() => add(null, 'withdrawal')} disabled={saving || boxes.length < 2 || !selectedSavingsAccount}><Download size={14} /></button>
       </form>
       : <form className="transfer-form" onSubmit={event => add(event)}>
-        <label className="transfer-field transfer-box-field"><span>Desde</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(fromBoxId) }}><i aria-hidden="true" /><select aria-label="Caja de origen" value={fromBoxId} onChange={event => { const nextFrom = event.target.value; setFromBoxId(nextFrom); if (nextFrom === toBoxId) setToBoxId(boxes.find(box => String(box.id) !== nextFrom)?.id?.toString() || '') }} disabled={saving || boxes.length < 2}>
-          {boxes.map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
-        </select></span></label>
-        <button className="transfer-swap" type="button" title="Intercambiar cajas" aria-label="Intercambiar caja de origen y destino" onClick={swapBoxes} disabled={saving || boxes.length < 2}><ArrowLeftRight size={16} /></button>
-        <label className="transfer-field transfer-box-field"><span>Hasta</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(toBoxId) }}><i aria-hidden="true" /><select aria-label="Caja de destino" value={toBoxId} onChange={event => setToBoxId(event.target.value)} disabled={saving || boxes.length < 2}>
-          {boxes.filter(box => String(box.id) !== String(fromBoxId)).map(box => <option value={box.id} key={box.id}>{box.nombre}</option>)}
-        </select></span></label>
+        <label className="transfer-field transfer-box-field"><span>Desde</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(shift.caja_id) }}><i aria-hidden="true" /><select aria-label="Caja de origen" value={shift.caja_id} disabled><option value={shift.caja_id}>{boxes.find(box => String(box.id) === String(shift.caja_id))?.nombre || 'Caja'}</option></select></span></label>
+        <label className="transfer-field transfer-box-field"><span>Turno destino</span><select aria-label="Turno abierto de destino" value={destinationShiftId} onChange={event => setDestinationShiftId(event.target.value)} disabled={saving || !destinationTurns.length}>
+          <option value="">Seleccionar turno</option>
+          {destinationTurns.map(turn => {
+            const destinationBox = boxes.find(box => String(box.id) === String(turn.caja_id))
+            return <option value={turn.id} key={turn.id}>{destinationBox?.nombre || turn.cajas?.nombre || 'Caja'} · {turn.dias_turno?.nombre || 'Turno'}</option>
+          })}
+        </select></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
-        <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !selectedTransferAccount}><Send size={14} /></button>
+        <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || !destinationTurns.length || !selectedDestinationTurn || !selectedTransferAccount}><Send size={14} /></button>
       </form>}
     <div className="operation-recent-list">
       <small>Últimos movimientos</small>

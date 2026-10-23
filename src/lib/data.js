@@ -112,7 +112,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     query('cargas_ta', 'id, usuario_texto, monto, notas, fecha_hora_creacion', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('dinero_encontrado', 'id, cuenta_x_turno_id, monto, notas, fecha_hora_creacion, cuentas_x_turno!inner(turno_id)', request => request.eq('cuentas_x_turno.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('notas_turno', 'id, nota_general, nota_heredable', request => request.eq('turno_id', shift.id)),
-    query('movimientos', 'id, caja_desde_id, caja_hasta_id, fecha_hora_creacion, monto, es_ahorro, cuenta_x_turno_id, notas', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
+    query('movimientos', 'id, caja_desde_id, caja_hasta_id, turno_id, turno_destino_id, fecha_hora_creacion, monto, es_ahorro, cuenta_x_turno_id, notas', request => request.or(`turno_id.eq.${shift.id},turno_destino_id.eq.${shift.id}`).order('fecha_hora_creacion', { ascending: false })),
   ])
 
   const accountIds = accountLinks.map(account => account.cuenta_id)
@@ -701,13 +701,14 @@ export async function saveShiftNotes(shiftId, { general, inheritable }) {
   return data
 }
 
-export async function createTransferMovement(shiftId, { fromBoxId, toBoxId, accountShiftId, value, notes, savings }) {
+export async function createTransferMovement(shiftId, { fromBoxId, toBoxId, destinationShiftId, accountShiftId, value, notes, savings }) {
   requireSupabase()
   if (String(fromBoxId) === String(toBoxId)) throw new Error('Elegí dos cajas distintas')
   const { data, error } = await supabase.from('movimientos').insert({
     turno_id: shiftId,
     caja_desde_id: fromBoxId,
     caja_hasta_id: toBoxId,
+    turno_destino_id: savings ? null : destinationShiftId,
     cuenta_x_turno_id: accountShiftId,
     monto: Number(value) || 0,
     notas: notes?.trim() || null,

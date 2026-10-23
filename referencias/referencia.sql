@@ -355,6 +355,8 @@ CREATE TABLE movimientos (
     fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     turno_id BIGINT NOT NULL REFERENCES turnos(id)
         ON DELETE CASCADE,
+    turno_destino_id BIGINT REFERENCES turnos(id)
+        ON DELETE RESTRICT,
     monto NUMERIC(14,2) NOT NULL,
     es_ahorro BOOLEAN NOT NULL DEFAULT FALSE,
     cuenta_x_turno_id BIGINT NOT NULL REFERENCES cuentas_x_turno(id)
@@ -753,6 +755,7 @@ CREATE INDEX idx_dinero_encontrado_cuenta_x_turno ON dinero_encontrado(cuenta_x_
 CREATE INDEX idx_gastos_turno ON gastos(turno_id);
 CREATE INDEX idx_gastos_tipo_gasto ON gastos(tipo_gasto_id);
 CREATE INDEX idx_movimientos_turno ON movimientos(turno_id);
+CREATE INDEX idx_movimientos_turno_destino ON movimientos(turno_destino_id);
 CREATE INDEX idx_movimientos_desde ON movimientos(caja_desde_id);
 CREATE INDEX idx_movimientos_hasta ON movimientos(caja_hasta_id);
 
