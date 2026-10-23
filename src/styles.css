@@ -181,7 +181,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   min-width: 0;
 }
 
-.header-box-label {
+.page-box-label {
   max-width: 180px;
   overflow: hidden;
   padding: 7px 12px;
@@ -574,6 +574,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   gap: 16px;
   margin-bottom: 16px;
 }
+.page-heading-dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(210px, 1fr);
+  align-items: end;
+}
+.page-box-label {
+  justify-self: center;
+}
 .eyebrow {
   display: inline-block;
   margin-bottom: 8px;
@@ -596,6 +604,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   font-size: 12px;
 }
 .shift-discrepancy {
+  justify-self: end;
   display: grid;
   justify-items: center;
   gap: 3px;
@@ -1938,17 +1947,16 @@ input[type="time"] { color-scheme: dark; }
 .transfer-box-select > select:focus { border-color: var(--transfer-box-color); }
 .transfer-swap { display: grid; place-items: center; width: 28px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--muted-2); }
 .transfer-swap:hover { border-color: var(--accent-border); color: var(--accent); }
-.transfer-form:not(.savings-transfer-form) .transfer-notes { grid-column: 1 / -1; }
 .transfer-submit { height: 34px; }
 .transfer-form:not(.savings-transfer-form) .transfer-submit { grid-column: 5; }
-.transfer-notes { grid-column: 1 / -1; width: 100%; min-width: 0; height: 32px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; }
+.transfer-notes { width: 100%; min-width: 0; height: 34px; padding: 0 8px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; }
 .transfer-notes:focus { border-color: var(--accent); }
 .transfer-notes::placeholder { color: var(--muted); }
 .savings-transfer-form { grid-template-columns: repeat(4, minmax(0, 1fr)) 30px 30px; }
 .savings-transfer-form .transfer-notes { grid-column: auto; height: 34px; }
 .savings-transfer-form .operation-submit { height: 34px; }
-.transfer-withdraw { border-color: color-mix(in srgb, var(--orange) 42%, var(--line)); background: color-mix(in srgb, var(--orange) 12%, var(--panel-2)); color: var(--orange); }
-.transfer-withdraw:hover { background: color-mix(in srgb, var(--orange) 23%, var(--panel-2)); }
+.transfer-withdraw { border-color: var(--accent-border); background: color-mix(in srgb, var(--accent) 12%, var(--panel-2)); color: var(--accent); }
+.transfer-withdraw:hover { background: color-mix(in srgb, var(--accent) 22%, var(--panel-2)); }
 .savings-toggle input { width: 13px; height: 13px; accent-color: var(--accent); }
 .chip-control-card { min-width: 0; }
 .chip-control-head,
@@ -1989,8 +1997,6 @@ input[type="time"] { color-scheme: dark; }
 @media (max-width: 980px) {
   .topbar { gap: 10px; }
   .topbar-leading { gap: 10px; }
-  .header-box-label { display: none; }
-
   .top-panels {
     grid-template-columns: 1fr;
   }
@@ -3629,7 +3635,6 @@ html:has(.app-shell[data-theme='light']) {
 @media (max-width: 700px) {
   .topbar { display: flex; padding: 0 15px; gap: 8px; }
   .topbar-leading { flex: 1; gap: 8px; }
-  .header-box-label { display: none; }
   .brand { min-width: 0; }
   .shift-nav { gap: 8px; }
   .box-select { min-width: 140px; }
@@ -3641,6 +3646,8 @@ html:has(.app-shell[data-theme='light']) {
   .sidebar-bottom { display: none; }
   .main-content { margin-left: 0; padding: 20px 15px 40px; }
   .page-heading { flex-direction: column; align-items: flex-start; }
+  .page-heading-dashboard { display: flex; }
+  .page-heading-dashboard .page-box-label { align-self: center; }
   .page-heading h1 { font-size: 2rem; }
   .shift-discrepancy { width: 100%; }
   .summary-bar { grid-template-columns: 1fr 1fr; }

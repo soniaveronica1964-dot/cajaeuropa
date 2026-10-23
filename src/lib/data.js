@@ -721,21 +721,12 @@ export async function createChipLoad(chipId, value) {
   requireSupabase()
   const amount = Number(value)
   if (!Number.isFinite(amount) || amount <= 0) throw new Error('Ingresá un monto mayor a cero')
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const { data: chip, error: readError } = await supabase.from('fichas').select('fichas_inicial').eq('id', chipId).single()
-    if (readError) throw readError
-    const currentInitial = Number(chip.fichas_inicial || 0)
-    const { data, error: updateError } = await supabase
-      .from('fichas')
-      .update({ fichas_inicial: currentInitial + amount })
-      .eq('id', chipId)
-      .eq('fichas_inicial', currentInitial)
-      .select('id')
-      .maybeSingle()
-    if (updateError) throw updateError
-    if (data) return { id: chipId, fichas_id: chipId, valor: amount }
-  }
-  throw new Error('No se pudo actualizar el valor inicial de las fichas; intentá nuevamente')
+  const { data, error } = await supabase.rpc('create_chip_load', {
+    p_chip_id: chipId,
+    p_value: amount,
+  })
+  if (error) throw error
+  return data
 }
 
 function colorHex(color) {

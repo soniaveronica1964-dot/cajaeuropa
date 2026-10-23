@@ -527,7 +527,6 @@ function App() {
             <button className="icon-button" title="Caja siguiente" aria-label="Caja siguiente" onClick={() => navigateShift(-1)} disabled={!canNavigateToNextShift || shiftNavigationLoading}><ChevronRight size={17} /></button>
           </div>
         </div>
-        <div className="header-box-label">{activeBox}</div>
         <div className="top-actions">
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={switchBox} />
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
@@ -563,8 +562,9 @@ function App() {
               event.stopPropagation()
             }}
           >
-          <section className="page-heading">
+          <section className={`page-heading ${view === 'dashboard' && shift ? 'page-heading-dashboard' : ''}`}>
             <div><span className="eyebrow">{view === 'bonuses' ? 'Catálogo de estados' : isReadOnlyShift ? 'Solo lectura · Turno cerrado' : shift ? `Turno iniciado · ${new Date(shift.fecha_hora_inicio).toLocaleString('es-AR')}` : 'Sin turno abierto'}</span><h1>{activeLabel === 'Caja' ? `${shiftName} / ${shiftTime}` : activeLabel}</h1><p>{view === 'bonuses' ? 'Administrá imágenes, tipos, porcentajes y condiciones' : shift ? `${new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${activeBox}` : 'Seleccioná una caja con un turno abierto'}</p></div>
+            {view === 'dashboard' && shift && <div className="page-box-label">Caja {activeBox}</div>}
             {view === 'dashboard' && shift && <div className="shift-discrepancy" aria-label={`Sobrante o faltante: ${cashDiscrepancyLabel}`}><span>Sobrante / Faltante</span><strong className={cashDiscrepancyTone}>{cashDiscrepancyLabel}</strong></div>}
           </section>
 
@@ -2429,13 +2429,13 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
     String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
     account.cuentas?.titulares?.nombre || 'Sin titular',
   ])).entries()]
-  const selectedHolderId = holderId || holders[0]?.[0] || ''
+  const selectedHolderId = holderId
   const holderAccounts = accounts.filter(account => String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === selectedHolderId)
   const wallets = [...new Map(holderAccounts.map(account => [
     String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? ''),
     account.cuentas?.billeteras?.nombre || 'Sin billetera',
   ])).entries()]
-  const selectedWalletId = walletId || wallets[0]?.[0] || ''
+  const selectedWalletId = walletId
   const selectedAccount = holderAccounts.find(account => String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '') === selectedWalletId)
   const add = async (event) => {
     event.preventDefault()
@@ -2460,11 +2460,11 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
     <PanelTitle icon={Search} title="Dinero encontrado" action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title="Ver dinero encontrado" aria-label="Ver dinero encontrado" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
     <form className="operation-form operation-found-money-form" onSubmit={add}>
       <select aria-label="Titular donde se encontró dinero" value={selectedHolderId} onChange={event => { setHolderId(event.target.value); setWalletId('') }} disabled={saving || !holders.length}>
-        {!holders.length && <option value="">Titular</option>}
+        <option value="">Seleccionar titular</option>
         {holders.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
       </select>
-      <select aria-label="Billetera donde se encontró dinero" value={selectedWalletId} onChange={event => setWalletId(event.target.value)} disabled={saving || !wallets.length}>
-        {!wallets.length && <option value="">Billetera</option>}
+      <select aria-label="Billetera donde se encontró dinero" value={selectedWalletId} onChange={event => setWalletId(event.target.value)} disabled={saving || !selectedHolderId || !wallets.length}>
+        <option value="">Seleccionar billetera</option>
         {wallets.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
       </select>
       <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
@@ -2534,9 +2534,9 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
     String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
     account.cuentas?.titulares?.nombre || 'Sin titular',
   ])).entries()]
-  const selectedSavingsHolderId = savingsHolderId || savingsHolders[0]?.[0] || ''
+  const selectedSavingsHolderId = savingsHolderId
   const savingsWallets = savingsAccounts.filter(account => String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === selectedSavingsHolderId)
-  const selectedSavingsWalletId = savingsWalletId || String(savingsWallets[0]?.cuentas?.billetera_id ?? savingsWallets[0]?.cuentas?.billeteras?.id ?? '')
+  const selectedSavingsWalletId = savingsWalletId
   const selectedSavingsAccount = savingsWallets.find(account => String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '') === selectedSavingsWalletId)
   const boxColor = id => boxes.find(box => String(box.id) === String(id))?.colores?.hex || 'var(--line)'
   const add = async (event, movementType = 'transfer') => {
@@ -2554,7 +2554,7 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
         toBoxId: depositing ? toBoxId : fromBoxId,
         accountShiftId: selectedAccountId,
         value: amount,
-        notes,
+        notes: movementType === 'transfer' ? '' : notes,
         savings: movementType !== 'transfer',
       })
       setValue('')
@@ -2579,13 +2579,12 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   const toggleSavings = checked => {
     setSavings(checked)
     if (checked && savingsAccounts.length) {
-      const firstSavingAccount = savingsAccounts[0]
       const currentBoxId = String(shift.caja_id ?? boxes[0]?.id ?? '')
       const otherBoxId = boxes.find(box => String(box.id) !== currentBoxId)?.id?.toString() || ''
       setFromBoxId(currentBoxId)
       setToBoxId(otherBoxId)
-      setSavingsHolderId(String(firstSavingAccount.cuentas?.titular_id ?? firstSavingAccount.cuentas?.titulares?.id ?? ''))
-      setSavingsWalletId(String(firstSavingAccount.cuentas?.billetera_id ?? firstSavingAccount.cuentas?.billeteras?.id ?? ''))
+      setSavingsHolderId('')
+      setSavingsWalletId('')
     }
   }
   return <section className="panel operation-card transfer-card">
@@ -2601,11 +2600,11 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
     {savings
       ? <form className="transfer-form savings-transfer-form" onSubmit={event => add(event, 'deposit')}>
         <label className="transfer-field"><span>Titular</span><select aria-label="Titular del ahorro" value={selectedSavingsHolderId} onChange={event => { setSavingsHolderId(event.target.value); setSavingsWalletId('') }} disabled={saving || !savingsHolders.length}>
-          {!savingsHolders.length && <option value="">Titular</option>}
+          <option value="">Seleccionar titular</option>
           {savingsHolders.map(([holderId, holderName]) => <option value={holderId} key={holderId}>{holderName}</option>)}
         </select></label>
-        <label className="transfer-field"><span>Billetera</span><select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !savingsWallets.length}>
-          {!savingsWallets.length && <option value="">Billetera</option>}
+        <label className="transfer-field"><span>Billetera</span><select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !selectedSavingsHolderId || !savingsWallets.length}>
+          <option value="">Seleccionar billetera</option>
           {savingsWallets.map(account => <option value={account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
         </select></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del ahorro" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
@@ -2623,7 +2622,6 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
         </select></span></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
         <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !selectedTransferAccount}><Send size={14} /></button>
-        <input className="transfer-notes" aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       </form>}
     <div className="operation-recent-list">
       <small>Últimos movimientos</small>
@@ -2686,10 +2684,10 @@ function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
     setSavingId('load')
     try {
       await createChipLoad(loadPlatformId, amount)
+      await onSaved()
       setLoadAmount('')
       setLoadModalOpen(false)
       setToast('Carga de fichas guardada')
-      onSaved()
     } catch (error) {
       setToast(error.message || 'No se pudo guardar la carga de fichas')
     } finally {
