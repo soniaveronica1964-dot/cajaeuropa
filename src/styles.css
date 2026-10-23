@@ -114,9 +114,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .topbar {
   height: var(--topbar-height);
   padding: 0 18px 0 16px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(12, 17, 20, 0.96);
