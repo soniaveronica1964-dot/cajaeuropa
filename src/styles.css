@@ -114,9 +114,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .topbar {
   height: var(--topbar-height);
   padding: 0 18px 0 16px;
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
-  justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid var(--line);
   background: rgba(12, 17, 20, 0.96);
@@ -130,7 +130,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 210px;
+  min-width: 0;
   cursor: pointer;
 }
 
@@ -167,20 +167,39 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .shift-nav {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  position: static;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px;
   justify-content: center;
+}
+
+.topbar-leading {
+  display: flex;
+  align-items: center;
+  gap: clamp(10px, 1.5vw, 22px);
+  min-width: 0;
+}
+
+.header-box-label {
+  max-width: 180px;
+  overflow: hidden;
+  padding: 7px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shift-title {
   display: flex;
   flex-direction: column;
   align-items: center;
+  min-width: 0;
   gap: 3px;
   text-align: center;
 }
@@ -190,7 +209,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: center;
   justify-content: center;
   gap: 6px;
-  color: var(--lavender);
+  color: var(--accent);
   font-size: 12px;
   font-weight: 800;
 }
@@ -218,6 +237,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 .top-actions { display: flex; align-items: center; gap: 12px; }
+.top-actions { justify-self: end; }
 .saved {
   display: inline-flex;
   align-items: center;
@@ -1111,7 +1131,7 @@ input[type="time"] { color-scheme: dark; }
 
 .publicity-row {
   display: grid;
-  grid-template-columns: minmax(95px, .85fr) minmax(188px, 1.55fr) minmax(34px, .3fr) minmax(100px, 1fr) 62px;
+  grid-template-columns: minmax(35px, .35fr) minmax(200px, 2fr) minmax(34px, .3fr) minmax(100px, 1fr) 62px;
   gap: 6px;
   align-items: center;
   min-height: 48px;
@@ -1918,7 +1938,6 @@ input[type="time"] { color-scheme: dark; }
 .transfer-box-select > select:focus { border-color: var(--transfer-box-color); }
 .transfer-swap { display: grid; place-items: center; width: 28px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel-2); color: var(--muted-2); }
 .transfer-swap:hover { border-color: var(--accent-border); color: var(--accent); }
-.transfer-account { grid-column: 1 / 3; }
 .transfer-form:not(.savings-transfer-form) .transfer-notes { grid-column: 1 / -1; }
 .transfer-submit { height: 34px; }
 .transfer-form:not(.savings-transfer-form) .transfer-submit { grid-column: 5; }
@@ -1927,6 +1946,7 @@ input[type="time"] { color-scheme: dark; }
 .transfer-notes::placeholder { color: var(--muted); }
 .savings-transfer-form { grid-template-columns: repeat(4, minmax(0, 1fr)) 30px 30px; }
 .savings-transfer-form .transfer-notes { grid-column: auto; height: 34px; }
+.savings-transfer-form .operation-submit { height: 34px; }
 .transfer-withdraw { border-color: color-mix(in srgb, var(--orange) 42%, var(--line)); background: color-mix(in srgb, var(--orange) 12%, var(--panel-2)); color: var(--orange); }
 .transfer-withdraw:hover { background: color-mix(in srgb, var(--orange) 23%, var(--panel-2)); }
 .savings-toggle input { width: 13px; height: 13px; accent-color: var(--accent); }
@@ -1967,6 +1987,10 @@ input[type="time"] { color-scheme: dark; }
 .chip-load-modal-actions > button { min-height: 34px; }
 
 @media (max-width: 980px) {
+  .topbar { gap: 10px; }
+  .topbar-leading { gap: 10px; }
+  .header-box-label { display: none; }
+
   .top-panels {
     grid-template-columns: 1fr;
   }
@@ -3603,7 +3627,9 @@ html:has(.app-shell[data-theme='light']) {
 }
 
 @media (max-width: 700px) {
-  .topbar { padding: 0 15px; }
+  .topbar { display: flex; padding: 0 15px; gap: 8px; }
+  .topbar-leading { flex: 1; gap: 8px; }
+  .header-box-label { display: none; }
   .brand { min-width: 0; }
   .shift-nav { gap: 8px; }
   .box-select { min-width: 140px; }

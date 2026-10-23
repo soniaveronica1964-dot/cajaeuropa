@@ -280,6 +280,7 @@ function App() {
   const [appData, setAppData] = useState(null)
   const [shiftHistory, setShiftHistory] = useState([])
   const [shiftNavigationLoading, setShiftNavigationLoading] = useState(false)
+  const [boxLoading, setBoxLoading] = useState(false)
   const [selectedBoxId, setSelectedBoxId] = useState(null)
   const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
   const [loadError, setLoadError] = useState('')
@@ -301,7 +302,7 @@ function App() {
       if (cancelled) return
       setAppData(freshData)
       setSelectedBoxId(initialBoxId)
-      setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === initialBoxId)?.colores?.hex || '#72d7ca')
+      setSelectedBoxAccent(freshData.boxes?.find((box) => String(box.id) === String(initialBoxId))?.colores?.hex || '#72d7ca')
       setShiftHistory(history)
     }
     loadInitialData().catch((error) => {
@@ -383,7 +384,7 @@ function App() {
   const isReadOnlyShift = Boolean(shift && !shift.abierto)
   const shiftName = shift?.dias_turno?.nombre ?? 'Sin turno abierto'
   const shiftTime = shift?.dias_turno ? `${shift.dias_turno.hora_inicio.slice(0, 5)} - ${shift.dias_turno.hora_fin.slice(0, 5)}` : '--:-- - --:--'
-  const selectedBox = appData?.boxes?.find(boxItem => boxItem.id === selectedBoxId)
+  const selectedBox = appData?.boxes?.find(boxItem => String(boxItem.id) === String(selectedBoxId))
   const activeBox = shift?.cajas?.nombre ?? selectedBox?.nombre ?? 'Sin caja'
   const accentColor = selectedBox?.colores?.hex || selectedBoxAccent
   const cashTotal = (appData?.accounts || []).reduce((sum, account) => sum + Number(account.valor || 0), 0)
@@ -406,7 +407,7 @@ function App() {
     : moneyWithCents.format(cashDiscrepancy)
   const reloadData = async (boxId = selectedBoxId ?? shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null) => {
     setSelectedBoxId(boxId)
-    const requestedBoxAccent = appData?.boxes?.find((box) => box.id === boxId)?.colores?.hex || '#72d7ca'
+    const requestedBoxAccent = appData?.boxes?.find((box) => String(box.id) === String(boxId))?.colores?.hex || '#72d7ca'
     setSelectedBoxAccent(requestedBoxAccent)
     setLoadError('')
     try {
@@ -417,9 +418,17 @@ function App() {
       }
       setAppData(freshData)
       setShiftHistory(history)
-      setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === boxId)?.colores?.hex || requestedBoxAccent)
+      setSelectedBoxAccent(freshData.boxes?.find((box) => String(box.id) === String(boxId))?.colores?.hex || requestedBoxAccent)
     } catch (error) {
       setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.')
+    }
+  }
+  const switchBox = async (boxId) => {
+    setBoxLoading(true)
+    try {
+      await reloadData(boxId)
+    } finally {
+      setBoxLoading(false)
     }
   }
   const navigateShift = async (offset) => {
@@ -441,7 +450,7 @@ function App() {
   const updateSettingsData = (freshData) => {
     if (freshData) {
       setAppData(freshData)
-      setSelectedBoxAccent(freshData.boxes?.find((box) => box.id === selectedBoxId)?.colores?.hex || '#72d7ca')
+      setSelectedBoxAccent(freshData.boxes?.find((box) => String(box.id) === String(selectedBoxId))?.colores?.hex || '#72d7ca')
       return
     }
     reloadData()
@@ -482,12 +491,12 @@ function App() {
   const isLightTheme = Boolean(appConfig?.tema)
   const appImagePreview = getStoragePublicUrl(appConfig?.imagen_mini || appConfig?.imagen)
 
-  if (!appData && !loadError) {
+  if (boxLoading || (!appData && !loadError)) {
     return (
       <div className="loading-screen" role="status" aria-live="polite">
         <div className="loading-screen-content">
           <RefreshCw className="loading-screen-icon" size={22} aria-hidden="true" />
-          <span>{selectedBoxId == null ? 'Cargando caja y recursos...' : 'Cargando caja...'}</span>
+          <span>{boxLoading || selectedBoxId != null ? 'Cargando caja...' : 'Cargando caja y recursos...'}</span>
         </div>
       </div>
     )
@@ -503,21 +512,24 @@ function App() {
       onBlurCapture={finishFieldModification}
     >
       <header className="topbar">
-        <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
-          <div className="brand-mark">{appImagePreview ? <img className="brand-image" src={appImagePreview} alt="" /> : <Banknote size={21} />}</div>
-          <div><strong>Caja<span>{appName}</span></strong><small>Control operativo</small></div>
-        </div>
-        <div className="shift-nav">
-          <button className="icon-button" title="Caja anterior" aria-label="Ir a la caja anterior" onClick={() => navigateShift(1)} disabled={!canNavigateToPreviousShift || shiftNavigationLoading}><ChevronRight size={17} className="flip-x" /></button>
-          <div className="shift-title">
-            <span><Clock3 size={14} /> {shiftName}</span>
-            <b>{shift ? new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR') : '--/--'} <em>/</em> {shiftTime}</b>
-            {isReadOnlyShift && <small className="shift-read-only">Solo lectura</small>}
+        <div className="topbar-leading">
+          <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
+            <div className="brand-mark">{appImagePreview ? <img className="brand-image" src={appImagePreview} alt="" /> : <Banknote size={21} />}</div>
+            <div><strong>Caja<span>{appName}</span></strong><small>Control operativo</small></div>
           </div>
-          <button className="icon-button" title="Caja siguiente" aria-label="Ir a la caja siguiente" onClick={() => navigateShift(-1)} disabled={!canNavigateToNextShift || shiftNavigationLoading}><ChevronRight size={17} /></button>
+          <div className="shift-nav">
+            <button className="icon-button" title="Caja anterior" aria-label="Caja anterior" onClick={() => navigateShift(1)} disabled={!canNavigateToPreviousShift || shiftNavigationLoading}><ChevronRight size={17} className="flip-x" /></button>
+            <div className="shift-title">
+              <span><Clock3 size={14} /> {shiftName}</span>
+              <b>{shift ? new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR') : '--/--'} <em>/</em> {shiftTime}</b>
+              {isReadOnlyShift && <small className="shift-read-only">Solo lectura</small>}
+            </div>
+            <button className="icon-button" title="Caja siguiente" aria-label="Caja siguiente" onClick={() => navigateShift(-1)} disabled={!canNavigateToNextShift || shiftNavigationLoading}><ChevronRight size={17} /></button>
+          </div>
         </div>
+        <div className="header-box-label">{activeBox}</div>
         <div className="top-actions">
-          <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={reloadData} />
+          <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={switchBox} />
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
           <button className="camera-button" title="Cámara"><Camera size={16} /></button>
           <button className="lock-button" title="Cerrar caja y abrir siguiente turno" aria-label="Cerrar caja y abrir siguiente turno" onClick={openCloseBoxDialog} disabled={!shift || !shift.abierto}><LockKeyhole size={16} /></button>
@@ -882,7 +894,7 @@ function Publicity({ rows, boxes, setToast, onSaved }) {
       const newCount = getCount(row, 'nuevos')
       const repeated = getCount(row, 'repetidos')
       const derived = boxes.reduce((sum, box) => sum + getDistribution(row, box.id), 0)
-      const lineName = `Publicidad ${String.fromCharCode(65 + index)}`
+      const lineName = String.fromCharCode(65 + index)
       const stepper = (field, label, value) => {
         const key = `${row.id}:${field}`
         return <label key={field}><small>{label}</small><span className="publicity-stepper">
@@ -2500,7 +2512,7 @@ function ShiftNotesCard({ shiftId, notes, onSaved, setToast }) {
     }
   }
   return <section className="panel operation-card shift-notes-card">
-    <PanelTitle icon={FileText} title="Notas del turno" meta={saving ? 'Guardando...' : '2 notas'} />
+    <PanelTitle icon={FileText} title="Notas del turno" />
     <label className="shift-note-field"><span>Nota actual</span><textarea value={draft.general} onChange={event => setDraft(current => ({ ...current, general: event.target.value }))} onBlur={save} placeholder="Información importante de este turno" /></label>
     <label className="shift-note-field"><span>Para el próximo turno</span><textarea value={draft.inheritable} onChange={event => setDraft(current => ({ ...current, inheritable: event.target.value }))} onBlur={save} placeholder="Información que conviene heredar" /></label>
   </section>
@@ -2509,8 +2521,6 @@ function ShiftNotesCard({ shiftId, notes, onSaved, setToast }) {
 function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast }) {
   const [fromBoxId, setFromBoxId] = useState(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
   const [toBoxId, setToBoxId] = useState(boxes.find(box => String(box.id) !== String(shift.caja_id))?.id?.toString() || '')
-  const [holderId, setHolderId] = useState('')
-  const [walletId, setWalletId] = useState('')
   const [savingsHolderId, setSavingsHolderId] = useState('')
   const [savingsWalletId, setSavingsWalletId] = useState('')
   const [value, setValue] = useState('')
@@ -2518,18 +2528,7 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
   const [savings, setSavings] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showAllRows, setShowAllRows] = useState(false)
-  const holders = [...new Map(accounts.map(account => [
-    String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
-    account.cuentas?.titulares?.nombre || 'Sin titular',
-  ])).entries()]
-  const selectedHolderId = holderId || holders[0]?.[0] || ''
-  const holderAccounts = accounts.filter(account => String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === selectedHolderId)
-  const wallets = [...new Map(holderAccounts.map(account => [
-    String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? ''),
-    account.cuentas?.billeteras?.nombre || 'Sin billetera',
-  ])).entries()]
-  const selectedWalletId = walletId || wallets[0]?.[0] || ''
-  const selectedTransferAccount = holderAccounts.find(account => String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '') === selectedWalletId)
+  const selectedTransferAccount = accounts[0]
   const savingsAccounts = accounts.filter(account => account.accountType?.ahorro)
   const savingsHolders = [...new Map(savingsAccounts.map(account => [
     String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
@@ -2545,7 +2544,7 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
     const amount = parseLocalizedAmount(value)
     if (boxes.length < 2 || String(fromBoxId) === String(toBoxId)) { setToast('Se necesitan dos cajas distintas para crear un movimiento'); return }
     const selectedAccountId = movementType === 'transfer' ? selectedTransferAccount?.id?.toString() : selectedSavingsAccount?.id?.toString()
-    if (!selectedAccountId) { setToast(movementType === 'transfer' ? 'Seleccioná una cuenta' : 'No hay una billetera de ahorro disponible para este titular'); return }
+    if (!selectedAccountId) { setToast(movementType === 'transfer' ? 'No hay cuentas configuradas para registrar el movimiento' : 'No hay una billetera de ahorro disponible para este titular'); return }
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
@@ -2601,16 +2600,16 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
     />
     {savings
       ? <form className="transfer-form savings-transfer-form" onSubmit={event => add(event, 'deposit')}>
-        <select aria-label="Titular del ahorro" value={selectedSavingsHolderId} onChange={event => { setSavingsHolderId(event.target.value); setSavingsWalletId('') }} disabled={saving || !savingsHolders.length}>
+        <label className="transfer-field"><span>Titular</span><select aria-label="Titular del ahorro" value={selectedSavingsHolderId} onChange={event => { setSavingsHolderId(event.target.value); setSavingsWalletId('') }} disabled={saving || !savingsHolders.length}>
           {!savingsHolders.length && <option value="">Titular</option>}
           {savingsHolders.map(([holderId, holderName]) => <option value={holderId} key={holderId}>{holderName}</option>)}
-        </select>
-        <select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !savingsWallets.length}>
+        </select></label>
+        <label className="transfer-field"><span>Billetera</span><select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !savingsWallets.length}>
           {!savingsWallets.length && <option value="">Billetera</option>}
           {savingsWallets.map(account => <option value={account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
-        </select>
+        </select></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del ahorro" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
-        <input className="transfer-notes savings-transfer-notes" aria-label="Nota del movimiento de ahorro" placeholder="Nota" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
+        <label className="transfer-field"><span>Notas</span><input className="transfer-notes savings-transfer-notes" aria-label="Nota del movimiento de ahorro" placeholder="Nota" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} /></label>
         <button className="operation-submit transfer-submit" type="submit" title="Depositar en ahorro" aria-label="Depositar en ahorro" disabled={saving || boxes.length < 2 || !selectedSavingsAccount}><Send size={14} /></button>
         <button className="operation-submit transfer-withdraw" type="button" title="Retirar del ahorro" aria-label="Retirar del ahorro" onClick={() => add(null, 'withdrawal')} disabled={saving || boxes.length < 2 || !selectedSavingsAccount}><Download size={14} /></button>
       </form>
@@ -2624,14 +2623,6 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
         </select></span></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
         <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || boxes.length < 2 || !selectedTransferAccount}><Send size={14} /></button>
-        <select className="transfer-account" aria-label="Cuenta del movimiento" value={selectedTransferAccount?.id?.toString() || ''} onChange={event => {
-          const selected = accounts.find(account => String(account.id) === event.target.value)
-          setHolderId(selected ? String(selected.cuentas?.titular_id ?? selected.cuentas?.titulares?.id ?? '') : '')
-          setWalletId(selected ? String(selected.cuentas?.billetera_id ?? selected.cuentas?.billeteras?.id ?? '') : '')
-        }} disabled={saving || !accounts.length}>
-          {accounts.map(account => <option value={account.id} key={account.id}>{accountName(account.id)}</option>)}
-          {!accounts.length && <option value="">Cuenta</option>}
-        </select>
         <input className="transfer-notes" aria-label="Notas del movimiento" placeholder="Notas" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       </form>}
     <div className="operation-recent-list">
@@ -2639,7 +2630,7 @@ function TransferMovementsCard({ shift, boxes, accounts, rows, onSaved, setToast
       {(showAllRows ? rows : rows.slice(0, 4)).map(row => <div className="operation-recent-row" key={row.id}>
         <span>{row.es_ahorro
           ? `Ahorro · ${String(row.caja_desde_id) === String(shift.caja_id) ? 'Depósito' : 'Retiro'} · ${accountName(row.cuenta_x_turno_id)}`
-          : `${boxName(row.caja_desde_id)} > ${boxName(row.caja_hasta_id)} · ${accountName(row.cuenta_x_turno_id)}`}</span>
+          : `${boxName(row.caja_desde_id)} > ${boxName(row.caja_hasta_id)}`}</span>
         <b>{money.format(row.monto)}</b>
       </div>)}
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
