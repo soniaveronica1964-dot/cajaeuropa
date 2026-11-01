@@ -839,6 +839,7 @@ input[type="time"] { color-scheme: dark; }
 .top-panels {
   display: grid;
   grid-template-columns: 1.55fr 0.96fr 0.96fr;
+  grid-auto-rows: 1fr;
   gap: 18px;
   align-items: stretch;
 }
@@ -869,6 +870,7 @@ input[type="time"] { color-scheme: dark; }
 .top-panels > .bonus-quick-panel .bonus-recent-list,
 .top-panels > .chip-summary .chip-final-list {
   flex: 1 1 auto;
+  min-height: 0;
 }
 
 .three-panels {
