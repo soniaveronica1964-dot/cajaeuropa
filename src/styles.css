@@ -6,29 +6,32 @@
   background: #111719;
   font-synthesis: none;
   --topbar-height: 74px;
-  --bg: #111719;
-  --bg-2: #0d171b;
-  --surface: #101c1f;
-  --panel: #192123;
-  --panel-2: #202b2e;
-  --line: #2b383b;
-  --muted: #879598;
-  --muted-2: #a9b9bd;
-  --text: #eaf3f1;
+  --bg: #0d1518;
+  --bg-2: #0b1215;
+  --surface: #121b1e;
+  --panel: #171f22;
+  --panel-2: #1c2729;
+  --panel-elevated: rgba(15, 22, 24, 0.96);
+  --field-bg: rgba(20, 29, 31, 0.9);
+  --line: rgba(146, 158, 159, 0.26);
+  --line-strong: rgba(146, 158, 159, 0.44);
+  --muted: #8a9aa0;
+  --muted-2: #a8b7bc;
+  --text: #edf3f5;
   --accent: #72d7ca;
-  --accent-soft: color-mix(in srgb, var(--accent) 16%, transparent);
-  --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
+  --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent);
+  --accent-border: color-mix(in srgb, var(--accent) 30%, transparent);
   --cyan: var(--accent);
-  --green: #83d5a2;
-  --orange: #f5ad69;
-  --red: #ec817f;
+  --green: #7ad2a7;
+  --orange: #f2b067;
+  --red: #e58985;
   --lavender: var(--accent);
-  --box-soft: #1d302f;
-  --box-line: rgba(124, 155, 150, 0.4);
+  --box-soft: #1a2d2e;
+  --box-line: rgba(130, 146, 150, 0.34);
   --danger: #e74c3c;
-  --scrollbar-track: #111719;
-  --scrollbar-thumb: #354447;
-  --scrollbar-thumb-hover: #4a5d60;
+  --scrollbar-track: #0d1518;
+  --scrollbar-thumb: #374a4d;
+  --scrollbar-thumb-hover: #4d6265;
 }
 
 * { box-sizing: border-box; }
@@ -64,7 +67,7 @@ html, body, #root { min-height: 100%; }
 body {
   margin: 0;
   min-width: 320px;
-  background: radial-gradient(circle at 12% 110%, rgba(36, 93, 82, 0.7) 0%, transparent 25%), radial-gradient(circle at 80% 0%, rgba(130, 110, 185, 0.18) 0%, transparent 26%), var(--bg);
+  background: radial-gradient(circle at 12% 110%, rgba(64, 99, 103, 0.18) 0%, transparent 24%), radial-gradient(circle at 84% 0%, rgba(170, 150, 210, 0.08) 0%, transparent 30%), var(--bg);
   color: var(--text);
 }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -119,7 +122,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid var(--line);
-  background: rgba(12, 17, 20, 0.96);
+  background: rgba(9, 15, 17, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(12px);
   position: sticky;
   top: 0;
@@ -188,9 +192,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   max-width: 180px;
   overflow: hidden;
   padding: 7px 12px;
-  border: 1px solid var(--accent-border);
-  border-radius: 6px;
-  background: var(--accent-soft);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: rgba(19, 26, 28, 0.9);
   color: var(--accent);
   font-size: 13px;
   font-weight: 800;
@@ -270,14 +274,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 7px;
-  background: rgba(20, 29, 31, 0.82);
+  background: rgba(18, 25, 27, 0.85);
   color: var(--muted-2);
   transition: 120ms ease;
 }
 .icon-button:hover, .icon-button.selected {
-  border-color: var(--lavender);
+  border-color: var(--line-strong);
   color: var(--lavender);
-  background: color-mix(in srgb, var(--accent) 20%, #101719);
+  background: color-mix(in srgb, var(--accent) 14%, #101719);
 }
 .camera-button {
   background: var(--accent-soft);
@@ -301,8 +305,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   padding: 0 9px;
   border: 1px solid var(--box-line);
   border-radius: 0 0 10px 10px;
-  background: linear-gradient(135deg, rgba(48, 59, 74, 0.85), rgba(24, 31, 35, 0.95));
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  background: linear-gradient(135deg, rgba(36, 46, 50, 0.8), rgba(18, 24, 27, 0.94));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 .box-select > small {
   color: var(--lavender);
@@ -632,9 +636,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 .goal-strip, .summary-bar, .panel { border: 1px solid var(--line); }
 .goal-strip {
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--accent) 22%, #202329);
-  border-color: var(--accent-border);
+  border-radius: 8px;
+  background: rgba(22, 28, 30, 0.86);
+  border-color: var(--line);
   padding: 10px 14px;
   margin-bottom: 16px;
   overflow: hidden;
@@ -691,7 +695,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   display: grid;
   grid-template-columns: minmax(150px, 1.15fr) repeat(5, minmax(100px, 1fr));
   gap: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   margin-bottom: 18px;
   background: rgba(17, 23, 24, 0.86);
@@ -820,8 +824,8 @@ input[type="time"] { color-scheme: dark; }
 
 .panel {
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: rgba(25, 33, 35, 0.9);
+  border-radius: 8px;
+  background: rgba(18, 24, 27, 0.9);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
 }
 
