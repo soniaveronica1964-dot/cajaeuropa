@@ -844,6 +844,9 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .top-panels > .panel,
+.top-panels > .publicity,
+.top-panels > .bonus-quick-panel,
+.top-panels > .chip-summary,
 .three-panels > .panel,
 .account-panel,
 .mini-card,
@@ -852,6 +855,20 @@ input[type="time"] { color-scheme: dark; }
 .chip-summary {
   min-height: 116px;
   min-width: 0;
+}
+
+.top-panels > .publicity,
+.top-panels > .bonus-quick-panel,
+.top-panels > .chip-summary {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.top-panels > .publicity .publicity-rows,
+.top-panels > .bonus-quick-panel .bonus-recent-list,
+.top-panels > .chip-summary .chip-final-list {
+  flex: 1 1 auto;
 }
 
 .three-panels {
