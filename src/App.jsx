@@ -1751,7 +1751,11 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
           const account = holderAccounts.find(item => item.wallet === wallet)
           if (!account) return <span className="matrix-account-empty" key={`${keyPrefix}-${holder}-${wallet}`} aria-hidden="true" />
           const flags = flagOverrides[account.id] || account
-          const valueTone = flags.cobros && flags.retiros ? 'both-enabled' : flags.cobros ? 'collecting' : flags.retiros ? 'withdrawing' : ''
+          const canCollect = Boolean(account.accountType?.cobros)
+          const canWithdraw = Boolean(account.accountType?.retiros)
+          const collecting = canCollect && flags.cobros
+          const withdrawing = canWithdraw && flags.retiros
+          const valueTone = collecting && withdrawing ? 'both-enabled' : collecting ? 'collecting' : withdrawing ? 'withdrawing' : ''
           return <div
             className="matrix-account-cell"
             key={`${keyPrefix}-${holder}-${wallet}`}
@@ -1769,14 +1773,14 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
                 if (value !== null && value >= 0) onAccountValueDraft(account.id, value)
               }} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
             </label>
-            <div className="matrix-account-flags">
-              <label className="matrix-flag" title="Cobros">
+            {(canCollect || canWithdraw) && <div className="matrix-account-flags">
+              {canCollect && <label className="matrix-flag" title="Cobros">
                 <input type="checkbox" aria-label={`Cobros ${wallet}, ${holder}`} checked={Boolean(flags.cobros)} onChange={(event) => saveFlag(account, 'cobros', event.target.checked)} />
-              </label>
-              <label className="matrix-flag" title="Retiros">
+              </label>}
+              {canWithdraw && <label className="matrix-flag matrix-flag-withdrawals" title="Retiros">
                 <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} checked={Boolean(flags.retiros)} onChange={(event) => saveFlag(account, 'retiros', event.target.checked)} />
-              </label>
-            </div>
+              </label>}
+            </div>}
           </div>
         })}
         <b>{moneyWithCents.format(holderTotal)}</b>

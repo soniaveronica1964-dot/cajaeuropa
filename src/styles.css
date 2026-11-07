@@ -1594,7 +1594,7 @@ input[type="time"] { color-scheme: dark; }
   background: var(--green);
 }
 
-.matrix-account-flags .matrix-flag:last-child input:checked {
+.matrix-account-flags .matrix-flag-withdrawals input:checked {
   border-color: var(--orange);
   background: var(--orange);
 }
