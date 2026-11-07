@@ -91,7 +91,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
       query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
       query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     ])
-    return { shift: null, boxes, accounts: [], advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, userCategories, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
+    return { shift: null, boxes, accounts: [], sharedAccountBalances: {}, advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, userCategories, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
   if (shift.abierto) {
@@ -135,13 +135,49 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     : []
   const accountById = new Map(accounts.map(account => [account.id, account]))
   const linkedAccounts = accountLinks.map(link => ({ ...link, cuentas: accountById.get(link.cuenta_id) || null }))
+  const sharedAccountIds = accounts
+    .filter(account => accountTypes.some(type => String(type.id) === String(account.tipo_cuenta_id) && type.es_compartido))
+    .map(account => account.id)
+  const sharedValueLinks = shift.abierto && sharedAccountIds.length
+    ? await query(
+      'cuentas_x_turno',
+      'id, cuenta_id, caja_id, valor, turnos!inner(id, caja_id, abierto)',
+      request => request.in('cuenta_id', sharedAccountIds).eq('turnos.abierto', true),
+    )
+    : accountLinks
+  const sharedAccountBalances = {}
+  for (const accountId of sharedAccountIds) {
+    const candidates = sharedValueLinks.filter(link => String(link.cuenta_id) === String(accountId))
+    const ownerLinks = candidates.filter(link => String(link.caja_id) === String(link.turnos?.caja_id))
+    const selectedLink = ownerLinks.find(link => String(link.caja_id) === String(boxId))
+      || ownerLinks[0]
+      || accountLinks.find(link => String(link.cuenta_id) === String(accountId))
+    if (selectedLink) {
+      sharedAccountBalances[accountId] = {
+        value: Number(selectedLink.valor || 0),
+        ownerBoxId: selectedLink.caja_id,
+      }
+    }
+  }
+
+  const accountsForShift = linkedAccounts.map(link => {
+    const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
+    if (!accountType?.es_compartido) return link
+    const sharedBalance = sharedAccountBalances[link.cuenta_id]
+    return {
+      ...link,
+      valor: sharedBalance && String(sharedBalance.ownerBoxId) !== String(shift.caja_id)
+        ? 0
+        : sharedBalance?.value ?? Number(link.valor || 0),
+    }
+  })
 
   const logisticsWithAccounts = logistics.map(line => {
-    const accountLink = accountLinks.find(link => link.id === line.cuenta_x_turno_id)
+    const accountLink = accountsForShift.find(link => link.id === line.cuenta_x_turno_id)
     return { ...line, cuentas_x_turno: { ...(accountLink || {}), cuentas: accountById.get(accountLink?.cuenta_id) || null } }
   })
 
-  return { shift, boxes, accounts: linkedAccounts, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
+  return { shift, boxes, accounts: accountsForShift, sharedAccountBalances, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
 
 export async function loadConfigurationData() {
@@ -416,7 +452,7 @@ export async function updateAccountValue(accountShiftId, value) {
   requireSupabase()
   const { data: accountLink, error: accountLinkError } = await supabase
     .from('cuentas_x_turno')
-    .select('id, cuenta_id')
+    .select('id, cuenta_id, caja_id')
     .eq('id', accountShiftId)
     .single()
   if (accountLinkError) throw accountLinkError
@@ -440,19 +476,116 @@ export async function updateAccountValue(accountShiftId, value) {
 
   const { data: activeLinks, error: activeLinksError } = await supabase
     .from('cuentas_x_turno')
-    .select('id, turnos!inner(abierto)')
+    .select('id, caja_id, turnos!inner(caja_id, abierto)')
     .eq('cuenta_id', accountLink.cuenta_id)
     .eq('turnos.abierto', true)
   if (activeLinksError) throw activeLinksError
 
+  const ownerLink = activeLinks.find(link => (
+    String(link.caja_id) === String(link.turnos?.caja_id)
+    && String(link.turnos?.caja_id) === String(accountLink.caja_id)
+  )) || activeLinks.find(link => String(link.id) === String(accountShiftId))
   const activeIds = (activeLinks || []).map(link => link.id)
-  if (!activeIds.includes(accountShiftId)) activeIds.push(accountShiftId)
-  const { error: updateError } = await supabase
+  const { error: clearError } = await supabase
     .from('cuentas_x_turno')
-    .update({ valor: Number(value) || 0 })
+    .update({ valor: 0 })
     .in('id', activeIds)
-  if (updateError) throw updateError
-  return { ...accountLink, valor: Number(value) || 0 }
+  if (clearError) throw clearError
+  if (ownerLink) {
+    const { error: updateError } = await supabase
+      .from('cuentas_x_turno')
+      .update({ valor: Number(value) || 0 })
+      .eq('id', ownerLink.id)
+    if (updateError) throw updateError
+    return { ...ownerLink, valor: Number(value) || 0 }
+  }
+  throw new Error('No se encontró el turno activo propietario de esta cuenta compartida')
+}
+
+export async function updateAccountValueOwner(accountShiftId, ownerBoxId, previousOwnerBoxId) {
+  requireSupabase()
+  const { data: currentLink, error: currentError } = await supabase
+    .from('cuentas_x_turno')
+    .select('id, cuenta_id, caja_id')
+    .eq('id', accountShiftId)
+    .single()
+  if (currentError) throw currentError
+
+  const { data: account, error: accountError } = await supabase
+    .from('cuentas')
+    .select('tipo_cuenta_id')
+    .eq('id', currentLink.cuenta_id)
+    .single()
+  if (accountError) throw accountError
+  const { data: accountType, error: typeError } = await supabase
+    .from('tipos_cuenta')
+    .select('es_compartido')
+    .eq('id', account.tipo_cuenta_id)
+    .single()
+  if (typeError) throw typeError
+  if (!accountType.es_compartido) throw new Error('La selección de caja solo está disponible para cuentas compartidas')
+
+  const { data: activeLinks, error: linksError } = await supabase
+    .from('cuentas_x_turno')
+    .select('id, turno_id, cuenta_id, caja_id, valor, turnos!inner(id, caja_id, abierto)')
+    .eq('cuenta_id', currentLink.cuenta_id)
+    .eq('turnos.abierto', true)
+  if (linksError) throw linksError
+
+  const sourceLink = (activeLinks || []).find(link => (
+    String(link.turnos?.caja_id) === String(previousOwnerBoxId)
+    && String(link.caja_id) === String(previousOwnerBoxId)
+  )) || activeLinks.find(link => String(link.id) === String(accountShiftId))
+  if (!sourceLink) throw new Error('No se encontró el valor actual de la cuenta compartida')
+
+  const { data: boxMembership, error: membershipError } = await supabase
+    .from('cuentas_x_caja')
+    .select('cuenta_id')
+    .eq('cuenta_id', currentLink.cuenta_id)
+    .eq('caja_id', ownerBoxId)
+    .maybeSingle()
+  if (membershipError) throw membershipError
+  if (!boxMembership) await ensureAccountBoxLink({ accountId: currentLink.cuenta_id, boxId: ownerBoxId })
+
+  let targetLink = (activeLinks || []).find(link => String(link.turnos?.caja_id) === String(ownerBoxId))
+  if (!targetLink) {
+    const { data: targetShift, error: shiftError } = await supabase
+      .from('turnos')
+      .select('id, caja_id')
+      .eq('caja_id', ownerBoxId)
+      .eq('abierto', true)
+      .maybeSingle()
+    if (shiftError) throw shiftError
+    if (!targetShift) throw new Error('La caja elegida no tiene un turno activo')
+    const { data: createdLink, error: createError } = await supabase
+      .from('cuentas_x_turno')
+      .upsert({
+        turno_id: targetShift.id,
+        cuenta_id: currentLink.cuenta_id,
+        caja_id: ownerBoxId,
+        valor: 0,
+        cobros: false,
+        retiros: false,
+      }, { onConflict: 'turno_id,cuenta_id,caja_id', ignoreDuplicates: true })
+      .select('id, turno_id, cuenta_id, caja_id, valor')
+      .single()
+    if (createError) throw createError
+    targetLink = { ...createdLink, turnos: { id: targetShift.id, caja_id: targetShift.caja_id, abierto: true } }
+  }
+
+  for (const link of activeLinks || []) {
+    const { error } = await supabase
+      .from('cuentas_x_turno')
+      .update({ caja_id: ownerBoxId, valor: 0 })
+      .eq('id', link.id)
+    if (error) throw error
+  }
+
+  const { error: valueError } = await supabase
+    .from('cuentas_x_turno')
+    .update({ caja_id: ownerBoxId, valor: Number(sourceLink.valor) || 0 })
+    .eq('id', targetLink.id)
+  if (valueError) throw valueError
 }
 
 export function updateAccountFlags(accountShiftId, field, enabled) {

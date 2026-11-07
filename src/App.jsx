@@ -120,6 +120,7 @@ import {
   updateAccountFlags,
   updateAccountType,
   updateAccountValue,
+  updateAccountValueOwner,
   updateBonusLine,
   updateAdvertisingLine,
   updateAdvertisingDistribution,
@@ -686,14 +687,18 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       const next = { ...current }
       Object.entries(current).forEach(([accountId, value]) => {
         const account = data.accounts.find(item => String(item.id) === accountId)
-        if (account && Number(account.valor || 0) === value) {
+        const accountType = data.accountTypes?.find(type => String(type.id) === String(account?.cuentas?.tipo_cuenta_id))
+        const savedValue = accountType?.es_compartido
+          ? Number(data.sharedAccountBalances?.[account.cuenta_id]?.value ?? account.valor ?? 0)
+          : Number(account?.valor || 0)
+        if (account && savedValue === value) {
           delete next[accountId]
           changed = true
         }
       })
       return changed ? next : current
     })
-  }, [data.accounts])
+  }, [data.accounts, data.accountTypes, data.sharedAccountBalances])
   useEffect(() => {
     setChipFinalDrafts(current => {
       let changed = false
@@ -748,9 +753,23 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   if (!data.shift) return <section className="panel empty-state"><strong>No hay un turno abierto</strong><p>Creá o abrí un turno en Supabase para cargar la operación real de la caja.</p></section>
   const goals = mapGoals(data.goals)
   const accounts = data.accounts.map(account => {
-    const savedAmount = Number(account.valor || 0)
     const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account.cuentas?.tipo_cuenta_id)) || null
-    return { ...account, accountType, holder: account.cuentas?.titulares?.nombre || 'Sin titular', wallet: account.cuentas?.billeteras?.nombre || 'Sin billetera', savedAmount, amount: accountValueDrafts[String(account.id)] ?? savedAmount }
+    const sharedBalance = accountType?.es_compartido ? data.sharedAccountBalances?.[account.cuenta_id] : null
+    const displayAmount = Number(sharedBalance?.value ?? account.valor ?? 0)
+    const sharedOwnerBoxId = sharedBalance?.ownerBoxId ?? account.caja_id ?? data.shift.caja_id
+    const isSharedForeignValue = Boolean(accountType?.es_compartido) && String(sharedOwnerBoxId) !== String(data.shift.caja_id)
+    const amount = accountValueDrafts[String(account.id)] ?? (isSharedForeignValue ? 0 : displayAmount)
+    return {
+      ...account,
+      accountType,
+      displayAmount,
+      sharedOwnerBoxId,
+      isSharedForeignValue,
+      holder: account.cuentas?.titulares?.nombre || 'Sin titular',
+      wallet: account.cuentas?.billeteras?.nombre || 'Sin billetera',
+      savedAmount: displayAmount,
+      amount,
+    }
   })
   const total = accounts.reduce((sum, account) => sum + account.amount, 0)
   const chips = data.chips.map(chip => ({
@@ -803,7 +822,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
     <div className="dashboard-grid">
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
-        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
+        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} boxes={data.boxes || []} activeTurns={data.activeTurns || []} currentBoxId={data.shift.caja_id} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} /></div>
         <div className="operations-grid">
           <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
@@ -1648,11 +1667,12 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
   </section>
 }
-function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, setToast, onSaved, onAccountValueDraft }) {
+function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, currentBoxId, accentColor, isLightTheme, setToast, onSaved, onAccountValueDraft }) {
   const [flagOverrides, setFlagOverrides] = useState({})
   const [expandedAccountTypes, setExpandedAccountTypes] = useState({ deposit: true, shared: false, saving: false })
   const [hoveredAccount, setHoveredAccount] = useState(null)
   const [credentialTooltipPosition, setCredentialTooltipPosition] = useState(null)
+  const [sharedOwnerMenu, setSharedOwnerMenu] = useState(null)
   const credentialTooltipTimer = useRef(null)
   const credentialTooltipShowTimer = useRef(null)
   const accountTypeSections = [
@@ -1663,6 +1683,12 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
   const specialAccountIds = new Set(accountTypeSections.flatMap(section => section.accounts.map(account => account.cuenta_id)))
   const regularAccounts = accounts.filter(account => !specialAccountIds.has(account.cuenta_id))
   const columns = { '--wallet-count': wallets.length }
+  const activeOwnerBoxes = [...new Map(
+    activeTurns
+      .map(turn => boxes.find(box => String(box.id) === String(turn.caja_id)))
+      .filter(Boolean)
+      .map(box => [String(box.id), box]),
+  ).values()]
 
   const showAccountCredentials = (account, anchor) => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
@@ -1704,6 +1730,17 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
     if (credentialTooltipShowTimer.current) clearTimeout(credentialTooltipShowTimer.current)
   }, [])
 
+  useEffect(() => {
+    if (!sharedOwnerMenu) return undefined
+    const closeOnOutsideClick = event => {
+      if (event.target instanceof Element && !event.target.closest('.matrix-shared-owner-control, .matrix-shared-owner-menu')) {
+        setSharedOwnerMenu(null)
+      }
+    }
+    document.addEventListener('mousedown', closeOnOutsideClick)
+    return () => document.removeEventListener('mousedown', closeOnOutsideClick)
+  }, [sharedOwnerMenu])
+
   const saveAccount = async (account, event) => {
     const input = event.currentTarget
     const value = parseLocalizedAmount(input.value)
@@ -1736,6 +1773,31 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
       setToast(`No se pudo guardar ${field === 'cobros' ? 'cobros' : 'retiros'}`)
     })
   }
+  const changeSharedAccountOwner = async (account, ownerBoxId) => {
+    if (String(ownerBoxId) === String(account.sharedOwnerBoxId)) return
+    try {
+      await updateAccountValueOwner(account.id, ownerBoxId, account.sharedOwnerBoxId)
+      onAccountValueDraft(account.id, undefined)
+      onSaved()
+      setToast(`Valor compartido asignado a ${boxes.find(box => String(box.id) === String(ownerBoxId))?.nombre || 'la caja seleccionada'}`)
+    } catch (error) {
+      setToast(error.message || 'No se pudo cambiar la caja del valor compartido')
+    }
+  }
+  const toggleSharedOwnerMenu = (account, anchor) => {
+    if (sharedOwnerMenu?.accountId === account.id) {
+      setSharedOwnerMenu(null)
+      return
+    }
+    const rect = anchor.getBoundingClientRect()
+    const pageZoom = Number.parseFloat(window.getComputedStyle(document.documentElement).zoom) || 1
+    const menuWidth = 150
+    const left = Math.min(Math.max(8, rect.left / pageZoom), window.innerWidth - menuWidth - 8)
+    setSharedOwnerMenu({
+      accountId: account.id,
+      position: { left, top: rect.bottom / pageZoom + 4 },
+    })
+  }
   const renderRows = (matrixAccounts, keyPrefix) => holders
     .filter(holder => matrixAccounts.some(account => account.holder === holder))
     .map(holder => {
@@ -1753,22 +1815,38 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
           const collecting = canCollect && flags.cobros
           const withdrawing = canWithdraw && flags.retiros
           const valueTone = collecting && withdrawing ? 'both-enabled' : collecting ? 'collecting' : withdrawing ? 'withdrawing' : ''
+          const ownerBox = boxes.find(box => String(box.id) === String(account.sharedOwnerBoxId))
+          const displayOwnerBoxId = activeOwnerBoxes.some(box => String(box.id) === String(account.sharedOwnerBoxId))
+            ? account.sharedOwnerBoxId
+            : currentBoxId
+          const ownerColor = ownerBox?.colores?.hex || '#879598'
           return <div
             className="matrix-account-cell"
             key={`${keyPrefix}-${holder}-${wallet}`}
           >
             <label
-              className={`matrix-value ${valueTone}`}
+              className={`matrix-value ${valueTone} ${account.accountType?.es_compartido ? 'shared-owner-value' : ''}`}
+              style={account.accountType?.es_compartido ? { '--shared-owner-color': ownerColor } : undefined}
               onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget)}
               onMouseLeave={scheduleHideAccountCredentials}
               onFocus={(event) => showAccountCredentials(account, event.currentTarget)}
               onBlur={scheduleHideAccountCredentials}
             >
               <span>$</span>
-              <input defaultValue={account.savedAmount ? numberWithCents.format(account.savedAmount) : ''} placeholder="-" onFocus={(event) => event.target.select()} onChange={(event) => {
+              <input
+                key={`${account.id}-${account.displayAmount}-${account.sharedOwnerBoxId}`}
+                defaultValue={account.displayAmount ? numberWithCents.format(account.displayAmount) : ''}
+                placeholder="-"
+                readOnly={account.isSharedForeignValue}
+                title={account.isSharedForeignValue ? `Valor asignado a ${ownerBox?.nombre || 'otra caja'}; no afecta esta caja` : undefined}
+                onFocus={(event) => event.target.select()}
+                onChange={(event) => {
                 const value = parseLocalizedAmount(event.target.value)
                 if (value !== null && value >= 0) onAccountValueDraft(account.id, value)
-              }} onBlur={(event) => saveAccount(account, event)} aria-label={`Valor ${wallet}, ${holder}`} />
+              }}
+                onBlur={(event) => saveAccount(account, event)}
+                aria-label={`Valor ${wallet}, ${holder}`}
+              />
             </label>
             {(canCollect || canWithdraw) && <div className="matrix-account-flags">
               {canCollect && <label className="matrix-flag" title="Cobros">
@@ -1778,6 +1856,18 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
                 <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} checked={Boolean(flags.retiros)} onChange={(event) => saveFlag(account, 'retiros', event.target.checked)} />
               </label>}
             </div>}
+            {account.accountType?.es_compartido && activeOwnerBoxes.length > 1 && <button
+              type="button"
+              className="matrix-shared-owner-control"
+              aria-label={`Cambiar caja del valor compartido de ${wallet}, ${holder}`}
+              aria-haspopup="menu"
+              aria-expanded={sharedOwnerMenu?.accountId === account.id}
+              title={`Valor imputado a ${ownerBox?.nombre || 'la caja seleccionada'}`}
+              style={{ '--shared-owner-color': ownerColor }}
+              onClick={event => toggleSharedOwnerMenu(account, event.currentTarget)}
+            >
+              <span />
+            </button>}
           </div>
         })}
         <b>{moneyWithCents.format(holderTotal)}</b>
@@ -1840,6 +1930,27 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
             <strong>{label}</strong>
             <span>{value || '—'}</span>
           </div>
+        ))}
+      </div>,
+      document.body,
+    )}
+    {sharedOwnerMenu && createPortal(
+      <div className="matrix-shared-owner-menu" role="menu" data-theme={isLightTheme ? 'light' : 'dark'} style={sharedOwnerMenu.position}>
+        {activeOwnerBoxes.map(box => (
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={String(box.id) === String(accounts.find(account => account.id === sharedOwnerMenu.accountId)?.sharedOwnerBoxId)}
+            key={box.id}
+            onClick={() => {
+              const account = accounts.find(item => item.id === sharedOwnerMenu.accountId)
+              setSharedOwnerMenu(null)
+              if (account) changeSharedAccountOwner(account, box.id)
+            }}
+          >
+            <span style={{ '--shared-owner-color': box.colores?.hex || '#879598' }} />
+            {box.nombre}
+          </button>
         ))}
       </div>,
       document.body,
