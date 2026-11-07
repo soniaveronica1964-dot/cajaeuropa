@@ -1707,6 +1707,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
       .filter(Boolean)
       .map(box => [String(box.id), box]),
   ).values()]
+  const cashAccounts = accounts.filter(account => !account.accountType?.ahorro)
 
   const showAccountCredentials = (account, anchor) => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
