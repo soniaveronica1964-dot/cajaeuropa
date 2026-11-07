@@ -1477,11 +1477,6 @@ input[type="time"] { color-scheme: dark; }
   padding-right: 10px;
 }
 
-.matrix-row.has-credential-tooltip {
-  min-height: 168px;
-  align-items: start;
-}
-
 .matrix-row .matrix-value {
   display: flex;
   align-items: center;

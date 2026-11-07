@@ -1656,7 +1656,6 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
   const [flagOverrides, setFlagOverrides] = useState({})
   const [expandedAccountTypes, setExpandedAccountTypes] = useState({ deposit: true, shared: false, saving: false })
   const [hoveredAccount, setHoveredAccount] = useState(null)
-  const [hoveredRowKey, setHoveredRowKey] = useState(null)
   const [credentialTooltipPosition, setCredentialTooltipPosition] = useState(null)
   const credentialTooltipTimer = useRef(null)
   const accountTypeSections = [
@@ -1668,21 +1667,19 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
   const regularAccounts = accounts.filter(account => !specialAccountIds.has(account.cuenta_id))
   const columns = { '--wallet-count': wallets.length }
 
-  const showAccountCredentials = (account, anchor, rowKey) => {
+  const showAccountCredentials = (account, anchor) => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
     const rect = anchor.getBoundingClientRect()
     const tooltipWidth = Math.min(320, window.innerWidth - 16)
     const left = Math.min(Math.max(8, rect.left), window.innerWidth - tooltipWidth - 8)
     const top = rect.bottom + 8
     setHoveredAccount(account)
-    setHoveredRowKey(rowKey)
     setCredentialTooltipPosition({ left, top, maxHeight: Math.min(104, Math.max(36, window.innerHeight - top - 8)) })
   }
   const scheduleHideAccountCredentials = () => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
     credentialTooltipTimer.current = setTimeout(() => {
       setHoveredAccount(null)
-      setHoveredRowKey(null)
       setCredentialTooltipPosition(null)
       credentialTooltipTimer.current = null
     }, 250)
@@ -1734,7 +1731,7 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
       const holderAccounts = matrixAccounts.filter(account => account.holder === holder)
       const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0)
       const rowKey = `${keyPrefix}-${holder}`
-      return <div className={`matrix-row ${hoveredRowKey === rowKey ? 'has-credential-tooltip' : ''}`} key={rowKey}>
+      return <div className="matrix-row" key={rowKey}>
         <strong>{holder}</strong>
         {wallets.map(wallet => {
           const account = holderAccounts.find(item => item.wallet === wallet)
@@ -1744,9 +1741,9 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
           return <div
             className="matrix-account-cell"
             key={`${keyPrefix}-${holder}-${wallet}`}
-            onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget, rowKey)}
+            onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget.querySelector('.matrix-value') || event.currentTarget)}
             onMouseLeave={scheduleHideAccountCredentials}
-            onFocus={(event) => showAccountCredentials(account, event.currentTarget, rowKey)}
+            onFocus={(event) => showAccountCredentials(account, event.currentTarget)}
             onBlur={scheduleHideAccountCredentials}
           >
             <label className={`matrix-value ${valueTone}`}>
