@@ -101,6 +101,7 @@ import {
   deleteShiftType,
   deleteWallet,
   closeShift,
+  closeAndStartNextShift,
   createState,
   createUser,
   updateUser,
@@ -305,6 +306,7 @@ function App() {
   const [userCreateOpen, setUserCreateOpen] = useState(false)
   const [userEditing, setUserEditing] = useState(null)
   const [closeBoxDialogOpen, setCloseBoxDialogOpen] = useState(false)
+  const [closeShiftDialogOpen, setCloseShiftDialogOpen] = useState(false)
   const [appData, setAppData] = useState(null)
   const [shiftHistory, setShiftHistory] = useState([])
   const [shiftNavigationLoading, setShiftNavigationLoading] = useState(false)
@@ -513,8 +515,19 @@ function App() {
     }
     setCloseBoxDialogOpen(true)
   }
+  const openCloseShiftDialog = () => {
+    if (!appData?.shift?.abierto) {
+      setToast('No hay un turno abierto para cerrar')
+      return
+    }
+    setCloseShiftDialogOpen(true)
+  }
   const finishCloseBox = (boxId) => {
     setCloseBoxDialogOpen(false)
+    reloadData(boxId)
+  }
+  const finishCloseShift = (boxId) => {
+    setCloseShiftDialogOpen(false)
     reloadData(boxId)
   }
   const updateChipFinalData = (chipId, value) => {
@@ -578,7 +591,7 @@ function App() {
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={switchBox} />
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
           <button className="camera-button" title="Cámara"><Camera size={16} /></button>
-          <button className="lock-button" title="Reiniciar historial y abrir un turno nuevo" aria-label="Reiniciar historial y abrir un turno nuevo" onClick={openCloseBoxDialog} disabled={selectedBoxId == null}><LockKeyhole size={16} /></button>
+          <button className="lock-button" title="Cerrar caja y abrir el siguiente turno" aria-label="Cerrar caja y abrir el siguiente turno" onClick={openCloseShiftDialog} disabled={selectedBoxId == null || !shift?.abierto}><LockKeyhole size={16} /></button>
         </div>
       </header>
 
@@ -632,6 +645,13 @@ function App() {
         boxId={selectedBoxId}
         onClose={() => setCloseBoxDialogOpen(false)}
         onClosed={finishCloseBox}
+        setToast={setToast}
+      />}
+      {closeShiftDialogOpen && appData && <CloseAndStartShiftModal
+        data={appData}
+        boxId={selectedBoxId}
+        onClose={() => setCloseShiftDialogOpen(false)}
+        onClosed={finishCloseShift}
         setToast={setToast}
       />}
       {(userCreateOpen || userEditing) && appData && <UserCreateModal
@@ -3740,6 +3760,97 @@ function accountTypeFlagsAfterToggle(type, field, enabled) {
     })
   }
   return flags
+}
+
+function CloseAndStartShiftModal({ data, boxId, onClose, onClosed, setToast }) {
+  const [closing, setClosing] = useState(false)
+  const [finalAmount, setFinalAmount] = useState(numberWithCents.format(Number(data.shift?.caja_inicial || 0)))
+  const currentShift = data.shift
+  const targetBoxId = boxId ?? currentShift?.caja_id
+  const shiftTypes = (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(targetBoxId))
+  const shiftDays = (data.shiftDays || []).filter((day) => shiftTypes.some((type) => String(type.id) === String(day.tipo_turno_id)))
+  const currentDay = shiftDays.find((day) => String(day.id) === String(currentShift?.dias_turno?.id)) || currentShift?.dias_turno
+  const currentShiftTypeName = shiftTypes.find((type) => String(type.id) === String(currentDay?.tipo_turno_id))?.nombre
+    || currentDay?.tipos_turno?.nombre
+    || currentDay?.nombre
+  const now = new Date()
+  let nextShiftChoice = null
+  let scheduleError = ''
+  try {
+    if (!currentShift?.abierto) throw new Error('No hay un turno abierto para cerrar.')
+    if (targetBoxId == null) throw new Error('Seleccioná una caja para cerrar el turno.')
+    const matchingDay = findCurrentShiftDay(shiftDays, now)
+    const matchingShiftType = shiftTypes.find((type) => String(type.id) === String(matchingDay.tipo_turno_id))
+    nextShiftChoice = {
+      dayId: matchingDay.id,
+      name: matchingShiftType?.nombre || matchingDay.nombre || 'Turno actual',
+      date: now.toLocaleDateString('es-AR'),
+    }
+  } catch (error) {
+    scheduleError = error.message || 'No se pudo determinar el siguiente turno.'
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    const parsedFinalAmount = parseLocalizedAmount(finalAmount)
+    if (parsedFinalAmount === null || parsedFinalAmount < 0) {
+      setToast('Ingresá un monto final válido y no negativo.')
+      return
+    }
+    if (scheduleError || !nextShiftChoice || !currentShift?.id) {
+      setToast(scheduleError || 'No se pudo determinar el siguiente turno.')
+      return
+    }
+
+    setClosing(true)
+    try {
+      await closeAndStartNextShift({
+        shiftId: currentShift.id,
+        dayId: nextShiftChoice.dayId,
+        finalAmount: parsedFinalAmount,
+        startedAt: new Date().toISOString(),
+      })
+      setToast(`Caja cerrada; turno ${nextShiftChoice.name} abierto`)
+      onClosed(targetBoxId)
+    } catch (error) {
+      setToast(error.message || 'No se pudo cerrar la caja y abrir el siguiente turno.')
+    } finally {
+      setClosing(false)
+    }
+  }
+
+  return <div className="modal-backdrop shift-close-backdrop" onMouseDown={(event) => {
+    if (event.target === event.currentTarget && !closing) onClose()
+  }}>
+    <form className="modal shift-close-modal" role="dialog" aria-modal="true" aria-labelledby="close-shift-title" onSubmit={submit}>
+      <header className="shift-close-header">
+        <span className="shift-close-icon"><ArrowRight size={20} /></span>
+        <div><h2 id="close-shift-title">¿Cerrar caja y abrir el siguiente turno?</h2><p>El turno actual quedará guardado en el historial y el nuevo heredará los saldos, fichas, notas y logística.</p></div>
+        <button type="button" className="modal-close" title="Cancelar" aria-label="Cancelar" onClick={onClose} disabled={closing}><X size={17} /></button>
+      </header>
+      {scheduleError
+        ? <p className="shift-close-error">{scheduleError}</p>
+        : <div className="shift-close-summary">
+          <span>Turno actual</span><strong>{currentShiftTypeName || 'Turno actual'}</strong>
+          <ArrowRight size={15} aria-hidden="true" />
+          <span>Siguiente turno</span><strong>{nextShiftChoice.name} · {nextShiftChoice.date}</strong>
+        </div>}
+      <label className="shift-close-cash">
+        Caja final
+        <input
+          type="text"
+          inputMode="decimal"
+          value={finalAmount}
+          onChange={(event) => setFinalAmount(event.target.value)}
+          disabled={closing}
+        />
+      </label>
+      <footer className="shift-close-actions">
+        <button type="button" className="secondary-button" onClick={onClose} disabled={closing}>Cancelar</button>
+        <button type="submit" className="shift-close-confirm" disabled={closing || Boolean(scheduleError)}>{closing ? 'Cerrando...' : 'Cerrar caja'} <ArrowRight size={15} /></button>
+      </footer>
+    </form>
+  </div>
 }
 
 function ShiftCloseModal({ data, boxId, onClose, onClosed, setToast }) {
