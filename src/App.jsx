@@ -280,6 +280,24 @@ const navItems = [
   ['settings', 'Configuración', Settings2],
 ]
 
+const LAST_BOX_STORAGE_KEY = 'cajaeuropa:last-selected-box'
+const ACCOUNT_SECTIONS_STORAGE_KEY = 'cajaeuropa:account-sections'
+
+function readStoredAccountSections() {
+  try {
+    const stored = globalThis.localStorage.getItem(ACCOUNT_SECTIONS_STORAGE_KEY)
+    if (!stored) return { deposit: true, shared: false, saving: false }
+    const parsed = JSON.parse(stored)
+    return {
+      deposit: parsed.deposit ?? true,
+      shared: parsed.shared ?? false,
+      saving: parsed.saving ?? false,
+    }
+  } catch {
+    return { deposit: true, shared: false, saving: false }
+  }
+}
+
 function App() {
   const [view, setView] = useState('dashboard')
   const [openGoal, setOpenGoal] = useState(false)
@@ -303,8 +321,21 @@ function App() {
   useEffect(() => {
     let cancelled = false
     const loadInitialData = async () => {
-      let freshData = await loadCurrentShiftData()
-      const initialBoxId = freshData.shift?.caja_id ?? freshData.boxes?.[0]?.id ?? null
+      const initialData = await loadCurrentShiftData()
+      let initialBoxId = null
+      try {
+        const storedBoxId = globalThis.localStorage.getItem(LAST_BOX_STORAGE_KEY)
+        const storedBoxExists = storedBoxId != null
+          && initialData.boxes.some(box => String(box.id) === String(storedBoxId))
+        initialBoxId = storedBoxExists
+          ? initialData.boxes.find(box => String(box.id) === String(storedBoxId)).id
+          : initialData.shift?.caja_id ?? initialData.boxes?.[0]?.id ?? null
+      } catch {
+        initialBoxId = initialData.shift?.caja_id ?? initialData.boxes?.[0]?.id ?? null
+      }
+      let freshData = initialBoxId == null
+        ? initialData
+        : await loadCurrentShiftData(initialBoxId)
       const history = await loadShiftHistory(initialBoxId)
       if (!freshData.shift && history[0]) {
         freshData = await loadCurrentShiftData(initialBoxId, history[0].id)
@@ -421,6 +452,12 @@ function App() {
     : moneyWithCents.format(cashDiscrepancy)
   const reloadData = async (boxId = selectedBoxId ?? shift?.caja_id ?? appData?.boxes?.[0]?.id ?? null) => {
     setSelectedBoxId(boxId)
+    try {
+      if (boxId == null) globalThis.localStorage.removeItem(LAST_BOX_STORAGE_KEY)
+      else globalThis.localStorage.setItem(LAST_BOX_STORAGE_KEY, String(boxId))
+    } catch (error) {
+      console.error('No se pudo guardar la última caja seleccionada:', error)
+    }
     const requestedBoxAccent = appData?.boxes?.find((box) => String(box.id) === String(boxId))?.colores?.hex || '#72d7ca'
     setSelectedBoxAccent(requestedBoxAccent)
     setLoadError('')
@@ -1687,7 +1724,7 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
 }
 function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, currentBoxId, accentColor, isLightTheme, setToast, onSaved, onAccountValueDraft }) {
   const [flagOverrides, setFlagOverrides] = useState({})
-  const [expandedAccountTypes, setExpandedAccountTypes] = useState({ deposit: true, shared: false, saving: false })
+  const [expandedAccountTypes, setExpandedAccountTypes] = useState(readStoredAccountSections)
   const [hoveredAccount, setHoveredAccount] = useState(null)
   const [credentialTooltipPosition, setCredentialTooltipPosition] = useState(null)
   const [sharedOwnerMenu, setSharedOwnerMenu] = useState(null)
@@ -1708,6 +1745,14 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
       .map(box => [String(box.id), box]),
   ).values()]
   const cashAccounts = accounts.filter(account => !account.accountType?.ahorro)
+
+  useEffect(() => {
+    try {
+      globalThis.localStorage.setItem(ACCOUNT_SECTIONS_STORAGE_KEY, JSON.stringify(expandedAccountTypes))
+    } catch (error) {
+      console.error('No se pudo guardar el estado de las secciones de cuentas:', error)
+    }
+  }, [expandedAccountTypes])
 
   const showAccountCredentials = (account, anchor) => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
