@@ -1670,11 +1670,16 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
   const showAccountCredentials = (account, anchor) => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
     const rect = anchor.getBoundingClientRect()
-    const tooltipWidth = Math.min(320, window.innerWidth - 16)
-    const left = Math.min(Math.max(8, rect.left), window.innerWidth - tooltipWidth - 8)
-    const top = rect.bottom + 8
+    const pageZoom = Number.parseFloat(window.getComputedStyle(document.documentElement).zoom) || 1
+    const tooltipWidth = Math.min(320, (window.innerWidth - 16) / pageZoom)
+    const left = Math.min(Math.max(8, rect.left / pageZoom), window.innerWidth - tooltipWidth - 8)
+    const top = rect.bottom / pageZoom + 8
     setHoveredAccount(account)
-    setCredentialTooltipPosition({ left, top, maxHeight: Math.min(104, Math.max(36, window.innerHeight - top - 8)) })
+    setCredentialTooltipPosition({
+      left,
+      top,
+      maxHeight: Math.min(104, Math.max(36, (window.innerHeight - rect.bottom - 16) / pageZoom)),
+    })
   }
   const scheduleHideAccountCredentials = () => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
