@@ -1654,69 +1654,21 @@ export async function closeShift(id, finalAmount) {
   return data
 }
 
-export async function resetShiftHistory({ boxId, shiftId, dayId, finalAmount, startedAt = new Date().toISOString() }) {
+export async function resetShiftHistory({ boxId, shiftId, dayId, startedAt = new Date().toISOString() }) {
   requireSupabase()
   if (!boxId) throw new Error('No se pudo identificar la caja')
   if (!shiftId) throw new Error('No se pudo identificar el turno actual')
+  if (!dayId) throw new Error('No se pudo identificar el turno configurado para el horario actual')
 
-  const newShift = await closeAndStartNextShift({
-    shiftId,
-    dayId,
-    finalAmount,
-    startedAt,
+  const { data, error } = await supabase.rpc('reset_shift_history', {
+    p_box_id: boxId,
+    p_current_shift_id: shiftId,
+    p_day_id: dayId,
+    p_started_at: startedAt,
   })
-
-  const { data: previousTurns, error: previousTurnsError } = await supabase
-    .from('turnos')
-    .select('id')
-    .eq('caja_id', boxId)
-    .neq('id', newShift.id)
-    .order('fecha_hora_inicio', { ascending: false })
-  if (previousTurnsError) throw previousTurnsError
-
-  const previousTurnIds = (previousTurns || []).map(turn => turn.id)
-  if (!previousTurnIds.length) return newShift
-
-  const directTables = ['notas_turno', 'gastos', 'propinas', 'cargas_ta', 'dinero_encontrado', 'fichas', 'cuentas_x_turno', 'movimientos']
-  for (const table of directTables) {
-    const { error } = await supabase.from(table).delete().in('turno_id', previousTurnIds)
-    if (error) throw error
-  }
-
-  const { data: oldBonos, error: oldBonosError } = await supabase.from('bonos').select('id').in('turno_id', previousTurnIds)
-  if (oldBonosError) throw oldBonosError
-  const bonoIds = (oldBonos || []).map(row => row.id)
-  if (bonoIds.length) {
-    const { error: deleteBonusLinesError } = await supabase.from('lineas_bonos').delete().in('bono_id', bonoIds)
-    if (deleteBonusLinesError) throw deleteBonusLinesError
-  }
-  const { error: deleteBonosError } = await supabase.from('bonos').delete().in('turno_id', previousTurnIds)
-  if (deleteBonosError) throw deleteBonosError
-
-  const { data: oldPublicity, error: oldPublicityError } = await supabase.from('publicidad').select('id').in('turno_id', previousTurnIds)
-  if (oldPublicityError) throw oldPublicityError
-  const publicityIds = (oldPublicity || []).map(row => row.id)
-  if (publicityIds.length) {
-    const { error: deletePublicityLinesError } = await supabase.from('lineas_publicidad').delete().in('publicidad_id', publicityIds)
-    if (deletePublicityLinesError) throw deletePublicityLinesError
-  }
-  const { error: deletePublicityError } = await supabase.from('publicidad').delete().in('turno_id', previousTurnIds)
-  if (deletePublicityError) throw deletePublicityError
-
-  const { data: oldLogistics, error: oldLogisticsError } = await supabase.from('logistica').select('id').in('turno_id', previousTurnIds)
-  if (oldLogisticsError) throw oldLogisticsError
-  const logisticsIds = (oldLogistics || []).map(row => row.id)
-  if (logisticsIds.length) {
-    const { error: deleteLogisticsLinesError } = await supabase.from('lineas_logistica').delete().in('logistica_id', logisticsIds)
-    if (deleteLogisticsLinesError) throw deleteLogisticsLinesError
-  }
-  const { error: deleteLogisticsError } = await supabase.from('logistica').delete().in('turno_id', previousTurnIds)
-  if (deleteLogisticsError) throw deleteLogisticsError
-
-  const { error: deletePreviousTurnsError } = await supabase.from('turnos').delete().in('id', previousTurnIds)
-  if (deletePreviousTurnsError) throw deletePreviousTurnsError
-
-  return newShift
+  if (error) throw error
+  if (!data) throw new Error('Supabase no devolvió el identificador del turno nuevo')
+  return data
 }
 
 function exclusiveAccountTypeFlags(shared, deposit, saving) {

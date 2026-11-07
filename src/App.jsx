@@ -61,7 +61,6 @@ import {
   createHolder,
   createWalletType,
   createInitialSetup,
-  closeAndStartNextShift,
   resetShiftHistory,
   createPlatform,
   createPanel,
@@ -155,38 +154,32 @@ function currentDateTimeInput() {
   return localDate.toISOString().slice(0, 16)
 }
 
-function findNextShiftDay(days, currentDay) {
-  if (!currentDay || !Number.isFinite(Number(currentDay.dia_semana))) {
-    throw new Error('No se encontró el día configurado del turno actual.')
+function findCurrentShiftDay(days, now) {
+  const currentWeekday = now.getDay() || 7
+  const currentMinutes = now.getHours() * 60 + now.getMinutes()
+  const parseMinutes = (time) => {
+    const [hour, minute] = String(time || '').split(':').map(Number)
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+    return hour * 60 + minute
   }
-
-  const currentWeekday = Number(currentDay.dia_semana)
-  const [currentHour, currentMinute] = String(currentDay.hora_inicio || '').split(':').map(Number)
-  if (![currentHour, currentMinute].every(Number.isFinite)) {
-    throw new Error('El horario de inicio del turno actual no es válido.')
-  }
-  const currentStart = currentHour * 60 + currentMinute
-  const weekMinutes = 7 * 24 * 60
-  const candidates = days.flatMap((day) => {
+  const matchingDays = days.filter((day) => {
     const weekday = Number(day.dia_semana)
-    const [hour, minute] = String(day.hora_inicio || '').split(':').map(Number)
-    if (![weekday, hour, minute].every(Number.isFinite) || weekday < 1 || weekday > 7) return []
+    const start = parseMinutes(day.hora_inicio)
+    const end = parseMinutes(day.hora_fin)
+    if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7 || start === null || end === null) return false
 
-    let daysAhead = (weekday - currentWeekday + 7) % 7
-    let minutesAhead = daysAhead * 24 * 60 + hour * 60 + minute - currentStart
-    if (minutesAhead <= 0) {
-      if (daysAhead !== 0) return []
-      daysAhead = 7
-      minutesAhead += weekMinutes
+    if (day.cruza_medianoche) {
+      const followingWeekday = weekday === 7 ? 1 : weekday + 1
+      return (currentWeekday === weekday && currentMinutes >= start)
+        || (currentWeekday === followingWeekday && currentMinutes < end)
     }
-    return [{ day, daysAhead, minutesAhead }]
-  }).sort((left, right) => left.minutesAhead - right.minutesAhead)
 
-  if (!candidates.length) throw new Error('No hay otro turno configurado después del turno actual.')
-  if (candidates.length > 1 && candidates[0].minutesAhead === candidates[1].minutesAhead) {
-    throw new Error('Hay dos turnos configurados con el mismo horario siguiente.')
-  }
-  return candidates[0]
+    return currentWeekday === weekday && currentMinutes >= start && currentMinutes < end
+  })
+
+  if (!matchingDays.length) throw new Error('No hay un turno configurado que cubra el día y horario actuales.')
+  if (matchingDays.length > 1) throw new Error('Hay varios turnos configurados para el horario actual.')
+  return matchingDays[0]
 }
 
 function readLastSavedAt() {
@@ -3463,9 +3456,6 @@ function accountTypeFlagsAfterToggle(type, field, enabled) {
 }
 
 function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
-  const [finalAmountDraft, setFinalAmountDraft] = useState(String(
-    (data.accounts || []).reduce((sum, account) => sum + Number(account.valor || 0), 0),
-  ))
   const [closing, setClosing] = useState(false)
   const currentShift = data.shift
   const shiftTypes = (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(currentShift?.caja_id))
@@ -3474,18 +3464,17 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
   const currentShiftTypeName = shiftTypes.find((type) => String(type.id) === String(currentDay?.tipo_turno_id))?.nombre
     || currentDay?.tipos_turno?.nombre
     || currentDay?.nombre
-  let nextShiftChoice = null
+  const now = new Date()
+  let currentTimeShiftChoice = null
   let scheduleError = ''
   try {
     if (!currentShift) throw new Error('No hay un turno abierto para cerrar')
-    const nextShift = findNextShiftDay(shiftDays, currentDay)
-    const shiftStartDate = new Date(currentShift.fecha_hora_inicio)
-    shiftStartDate.setDate(shiftStartDate.getDate() + nextShift.daysAhead)
-    const nextShiftType = shiftTypes.find((type) => String(type.id) === String(nextShift.day.tipo_turno_id))
-    nextShiftChoice = {
-      dayId: nextShift.day.id,
-      name: nextShiftType?.nombre || nextShift.day.nombre || 'Siguiente turno',
-      date: shiftStartDate.toLocaleDateString('es-AR'),
+    const matchingDay = findCurrentShiftDay(shiftDays, now)
+    const matchingShiftType = shiftTypes.find((type) => String(type.id) === String(matchingDay.tipo_turno_id))
+    currentTimeShiftChoice = {
+      dayId: matchingDay.id,
+      name: matchingShiftType?.nombre || matchingDay.nombre || 'Turno actual',
+      date: now.toLocaleDateString('es-AR'),
     }
   } catch (error) {
     scheduleError = error.message || 'No se pudo determinar el siguiente turno'
@@ -3493,13 +3482,8 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
 
   const submit = async (event) => {
     event.preventDefault()
-    if (scheduleError || !nextShiftChoice || !currentShift) {
-      setToast(scheduleError || 'No se pudo determinar el siguiente turno')
-      return
-    }
-    const finalAmount = parseLocalizedAmount(finalAmountDraft)
-    if (finalAmount == null || finalAmount < 0) {
-      setToast('Ingresá una caja final válida, igual o mayor a cero')
+    if (scheduleError || !currentTimeShiftChoice || !currentShift) {
+      setToast(scheduleError || 'No se pudo determinar el turno del horario actual')
       return
     }
 
@@ -3508,11 +3492,10 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
       await resetShiftHistory({
         boxId: currentShift.caja_id,
         shiftId: currentShift.id,
-        dayId: nextShiftChoice.dayId,
-        finalAmount,
+        dayId: currentTimeShiftChoice.dayId,
         startedAt: new Date().toISOString(),
       })
-      setToast(`Historial reiniciado; turno ${nextShiftChoice.name} abierto`)
+      setToast(`Historial reiniciado; turno ${currentTimeShiftChoice.name} abierto`)
       onClosed(currentShift.caja_id)
     } catch (error) {
       setToast(error.message || 'No se pudo reiniciar el historial y abrir el turno nuevo')
@@ -3527,7 +3510,7 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
     <form className="modal shift-close-modal" role="dialog" aria-modal="true" aria-labelledby="shift-close-title" onSubmit={submit}>
       <header className="shift-close-header">
         <span className="shift-close-icon"><LockKeyhole size={20} /></span>
-        <div><h2 id="shift-close-title">¿Reiniciar historial de turnos?</h2><p>Se borrarán los turnos previos y se abrirá un turno nuevo con la misma lógica de herencia.</p></div>
+        <div><h2 id="shift-close-title">¿Reiniciar turnos de esta caja?</h2><p>Se borrarán sus turnos y datos vinculados. También se eliminarán los movimientos conectados a esos turnos; la configuración de las demás cajas se conserva.</p></div>
         <button type="button" className="modal-close" title="Cancelar" aria-label="Cancelar" onClick={onClose} disabled={closing}><X size={17} /></button>
       </header>
       {scheduleError
@@ -3535,12 +3518,9 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
         : <div className="shift-close-summary">
           <span>Turno actual</span><strong>{currentShiftTypeName || 'Turno actual'}</strong>
           <ArrowRight size={15} aria-hidden="true" />
-          <span>Turno siguiente</span><strong>{nextShiftChoice.name} · {nextShiftChoice.date}</strong>
+          <span>Turno nuevo</span><strong>{currentTimeShiftChoice.name} · {currentTimeShiftChoice.date}</strong>
         </div>}
-      <label className="shift-close-cash">Caja final del turno actual
-        <input type="number" min="0" step="0.01" inputMode="decimal" value={finalAmountDraft} onChange={(event) => setFinalAmountDraft(event.target.value)} disabled={closing} />
-      </label>
-      <p className="shift-close-inherit">El nuevo turno heredará este monto como caja inicial, los valores y estados de cobros/retiros de las cuentas, las fichas finales como fichas iniciales y la nota heredable como nota general.</p>
+      <p className="shift-close-inherit">El turno nuevo empezará desde cero, con las cuentas y plataformas habilitadas para esta caja. No se heredarán saldos, fichas, notas ni logística.</p>
       <footer className="shift-close-actions">
         <button type="button" className="secondary-button" onClick={onClose} disabled={closing}>Cancelar</button>
         <button type="submit" className="shift-close-confirm" disabled={closing || Boolean(scheduleError)}>{closing ? 'Reiniciando...' : 'Confirmar reinicio'} <ArrowRight size={15} /></button>
@@ -4660,7 +4640,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
         </div>
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(232, 207, 102, 0.45)' }}>
           <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Reinicio de turnos</span></div>
-          <p className="muted-copy">Borra los turnos anteriores, crea un turno nuevo e hereda el cierre actual con la misma lógica de continuación del sistema.</p>
+          <p className="muted-copy">Borra todos los turnos de esta caja y sus datos operativos; luego crea un turno limpio según el horario actual, sin heredar saldos ni registros.</p>
           <button type="button" className="secondary-button app-format-button" onClick={onCloseBox} disabled={!data.shift}>
             <LockKeyhole size={15} /> Reiniciar turnos
           </button>
