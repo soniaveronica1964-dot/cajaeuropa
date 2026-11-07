@@ -30,6 +30,20 @@ async function query(table, columns, configure = () => {}) {
   return data ?? []
 }
 
+async function queryBoxScopedEntities(table, columns, linkTable, entityColumn, boxId, configure) {
+  let linkedIds = null
+  if (boxId != null) {
+    const links = await query(linkTable, entityColumn, request => request.eq('caja_id', boxId))
+    linkedIds = [...new Set(links.map(link => link[entityColumn]))]
+    if (!linkedIds.length) return []
+  }
+  return query(table, columns, request => {
+    let scopedRequest = request.eq('is_off', false)
+    if (linkedIds) scopedRequest = scopedRequest.in('id', linkedIds)
+    return configure(scopedRequest)
+  })
+}
+
 export async function loadShiftHistory(boxId = null) {
   return query(
     'turnos',
@@ -62,8 +76,8 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   if (shiftError) throw shiftError
   if (!shift) {
     const [holders, wallets, walletTypes, accountTypes, expenseTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, platforms, subplatforms, bonusConditions, bonusTypes] = await Promise.all([
-      query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
-      query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
+      queryBoxScopedEntities('titulares', 'id, nombre, orden_num, is_off', 'titulares_x_caja', 'titular_id', boxId, request => request.order('orden_num', { ascending: true }).order('id', { ascending: true })),
+      queryBoxScopedEntities('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', 'billeteras_x_caja', 'billetera_id', boxId, request => request.order('orden_num', { ascending: true }).order('id', { ascending: true })),
       query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false).order('id', { ascending: true })),
       query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false).order('id', { ascending: true })),
       query('tipos_gasto', 'id, nombre, invertir_signo', request => request.order('id', { ascending: true })),
@@ -96,8 +110,8 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, is_off, cuenta_x_turno_id, logistica!inner(turno_id)', request => request.eq('logistica.turno_id', shift.id).order('num_orden', { ascending: true }).order('id', { ascending: true })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
     query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id)),
-    query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
-    query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
+    queryBoxScopedEntities('titulares', 'id, nombre, orden_num, is_off', 'titulares_x_caja', 'titular_id', boxId, request => request.order('orden_num', { ascending: true }).order('id', { ascending: true })),
+    queryBoxScopedEntities('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', 'billeteras_x_caja', 'billetera_id', boxId, request => request.order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('plataformas', 'id, nombre, caja_id, color_id', request => request.order('id', { ascending: true })),
     query('subplataformas', 'id, nombre, plataforma_id, color_id', request => request.order('id', { ascending: true })),
     query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
@@ -398,8 +412,47 @@ export function updateShiftRounding(shiftId, value) {
   return updateRow('turnos', shiftId, { redondeo: Number(value) || 0 })
 }
 
-export function updateAccountValue(accountShiftId, value) {
-  return updateRow('cuentas_x_turno', accountShiftId, { valor: Number(value) || 0 })
+export async function updateAccountValue(accountShiftId, value) {
+  requireSupabase()
+  const { data: accountLink, error: accountLinkError } = await supabase
+    .from('cuentas_x_turno')
+    .select('id, cuenta_id')
+    .eq('id', accountShiftId)
+    .single()
+  if (accountLinkError) throw accountLinkError
+
+  const { data: account, error: accountError } = await supabase
+    .from('cuentas')
+    .select('tipo_cuenta_id')
+    .eq('id', accountLink.cuenta_id)
+    .single()
+  if (accountError) throw accountError
+
+  const { data: accountType, error: accountTypeError } = await supabase
+    .from('tipos_cuenta')
+    .select('es_compartido')
+    .eq('id', account.tipo_cuenta_id)
+    .single()
+  if (accountTypeError) throw accountTypeError
+  if (!accountType.es_compartido) {
+    return updateRow('cuentas_x_turno', accountShiftId, { valor: Number(value) || 0 })
+  }
+
+  const { data: activeLinks, error: activeLinksError } = await supabase
+    .from('cuentas_x_turno')
+    .select('id, turnos!inner(abierto)')
+    .eq('cuenta_id', accountLink.cuenta_id)
+    .eq('turnos.abierto', true)
+  if (activeLinksError) throw activeLinksError
+
+  const activeIds = (activeLinks || []).map(link => link.id)
+  if (!activeIds.includes(accountShiftId)) activeIds.push(accountShiftId)
+  const { error: updateError } = await supabase
+    .from('cuentas_x_turno')
+    .update({ valor: Number(value) || 0 })
+    .in('id', activeIds)
+  if (updateError) throw updateError
+  return { ...accountLink, valor: Number(value) || 0 }
 }
 
 export function updateAccountFlags(accountShiftId, field, enabled) {
@@ -865,6 +918,40 @@ async function ensureHolderWalletCombination({ holderId, walletId, boxId = null,
   return account
 }
 
+async function ensureBoxMembership(table, entityColumn, entityId, boxId) {
+  const { error } = await supabase.from(table).upsert(
+    { [entityColumn]: entityId, caja_id: boxId },
+    { onConflict: `${entityColumn},caja_id`, ignoreDuplicates: true },
+  )
+  if (error) throw error
+}
+
+async function getBoxMembershipIds(table, entityColumn, boxId) {
+  const { data, error } = await supabase.from(table).select(entityColumn).eq('caja_id', boxId)
+  if (error) throw error
+  return [...new Set((data || []).map(link => link[entityColumn]))]
+}
+
+async function ensureHolderAccountsForBox(holderId, boxId, shiftId) {
+  const walletIds = await getBoxMembershipIds('billeteras_x_caja', 'billetera_id', boxId)
+  if (!walletIds.length) return
+  const { data: wallets, error } = await supabase.from('billeteras').select('id').in('id', walletIds).eq('is_off', false)
+  if (error) throw error
+  for (const wallet of wallets || []) {
+    await ensureHolderWalletCombination({ holderId, walletId: wallet.id, boxId, shiftId, active: false })
+  }
+}
+
+async function ensureWalletAccountsForBox(walletId, boxId, shiftId) {
+  const holderIds = await getBoxMembershipIds('titulares_x_caja', 'titular_id', boxId)
+  if (!holderIds.length) return
+  const { data: holders, error } = await supabase.from('titulares').select('id').in('id', holderIds).eq('is_off', false)
+  if (error) throw error
+  for (const holder of holders || []) {
+    await ensureHolderWalletCombination({ holderId: holder.id, walletId, boxId, shiftId, active: false })
+  }
+}
+
 export async function createHolder({ name, boxId = null, shiftId = null }) {
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
@@ -890,7 +977,8 @@ export async function createHolder({ name, boxId = null, shiftId = null }) {
       .maybeSingle()
     if (error) throw error
     if (boxId) {
-      await supabase.from('titulares_x_caja').upsert({ titular_id: data.id, caja_id: boxId }, { onConflict: 'titular_id,caja_id' }).select().maybeSingle()
+      await ensureBoxMembership('titulares_x_caja', 'titular_id', data.id, boxId)
+      await ensureHolderAccountsForBox(data.id, boxId, shiftId)
     }
     return data
   }
@@ -904,11 +992,8 @@ export async function createHolder({ name, boxId = null, shiftId = null }) {
   if (error) throw error
 
   if (boxId) {
-    await supabase.from('titulares_x_caja').upsert({ titular_id: data.id, caja_id: boxId }, { onConflict: 'titular_id,caja_id' }).select().maybeSingle()
-    const { data: walletRows = [] } = await supabase.from('billeteras').select('id').eq('is_off', false)
-    for (const wallet of walletRows) {
-      await ensureHolderWalletCombination({ holderId: data.id, walletId: wallet.id, boxId, shiftId, active: false })
-    }
+    await ensureBoxMembership('titulares_x_caja', 'titular_id', data.id, boxId)
+    await ensureHolderAccountsForBox(data.id, boxId, shiftId)
   }
 
   return data
@@ -1003,7 +1088,8 @@ export async function createWallet({ name, typeName = 'Cobros y retiros', boxId 
       .maybeSingle()
     if (error) throw error
     if (boxId) {
-      await supabase.from('billeteras_x_caja').upsert({ billetera_id: data.id, caja_id: boxId }, { onConflict: 'billetera_id,caja_id' }).select().maybeSingle()
+      await ensureBoxMembership('billeteras_x_caja', 'billetera_id', data.id, boxId)
+      await ensureWalletAccountsForBox(data.id, boxId, shiftId)
     }
     return data
   }
@@ -1017,11 +1103,8 @@ export async function createWallet({ name, typeName = 'Cobros y retiros', boxId 
   if (error) throw error
 
   if (boxId) {
-    await supabase.from('billeteras_x_caja').upsert({ billetera_id: data.id, caja_id: boxId }, { onConflict: 'billetera_id,caja_id' }).select().maybeSingle()
-    const { data: holderRows = [] } = await supabase.from('titulares').select('id').eq('is_off', false)
-    for (const holder of holderRows) {
-      await ensureHolderWalletCombination({ holderId: holder.id, walletId: data.id, boxId, shiftId, active: false })
-    }
+    await ensureBoxMembership('billeteras_x_caja', 'billetera_id', data.id, boxId)
+    await ensureWalletAccountsForBox(data.id, boxId, shiftId)
   }
 
   return data
@@ -1824,6 +1907,7 @@ export async function createAccount({ holderId, walletId, alias = null, cuil = n
 
   const { data, error } = await supabase.from('cuentas').upsert(payload, { onConflict: 'titular_id,billetera_id' }).select().maybeSingle()
   if (error) throw error
+  await ensureSharedAccountBoxLinks(data.id)
   return data
 }
 
@@ -1840,6 +1924,7 @@ export async function updateAccount(id, { alias = null, cuil = null, password = 
 
   const { data, error } = await supabase.from('cuentas').update(payload).eq('id', id).select().maybeSingle()
   if (error) throw error
+  if (payload.tipo_cuenta_id !== undefined) await ensureSharedAccountBoxLinks(data.id)
   return data
 }
 
@@ -1858,6 +1943,70 @@ export async function ensureAccountBoxLink({ accountId, boxId }) {
   }, { onConflict: 'cuenta_id,caja_id' }).select().single()
   if (error) throw error
   return data
+}
+
+async function ensureSharedAccountBoxLinks(accountId) {
+  const { data: account, error: accountError } = await supabase
+    .from('cuentas')
+    .select('id, titular_id, billetera_id, activa, tipo_cuenta_id')
+    .eq('id', accountId)
+    .single()
+  if (accountError) throw accountError
+
+  const { data: accountType, error: typeError } = await supabase
+    .from('tipos_cuenta')
+    .select('es_compartido')
+    .eq('id', account.tipo_cuenta_id)
+    .single()
+  if (typeError) throw typeError
+  if (!accountType.es_compartido) return
+
+  const { data: boxes, error: boxesError } = await supabase.from('cajas').select('id')
+  if (boxesError) throw boxesError
+  const boxIds = [...new Set((boxes || []).map(box => box.id))]
+  if (!boxIds.length) return
+
+  const membershipTables = [
+    ['titulares_x_caja', 'titular_id', account.titular_id],
+    ['billeteras_x_caja', 'billetera_id', account.billetera_id],
+    ['cuentas_x_caja', 'cuenta_id', account.id],
+  ]
+  for (const [table, column, entityId] of membershipTables) {
+    const { error } = await supabase.from(table).upsert(
+      boxIds.map(boxId => ({ [column]: entityId, caja_id: boxId })),
+      { onConflict: `${column},caja_id`, ignoreDuplicates: true },
+    )
+    if (error) throw error
+  }
+
+  if (!account.activa) return
+  const { data: wallet, error: walletError } = await supabase
+    .from('billeteras')
+    .select('is_off')
+    .eq('id', account.billetera_id)
+    .single()
+  if (walletError) throw walletError
+  if (wallet.is_off) return
+
+  const { data: openShifts, error: shiftsError } = await supabase
+    .from('turnos')
+    .select('id, caja_id')
+    .eq('abierto', true)
+    .in('caja_id', boxIds)
+  if (shiftsError) throw shiftsError
+  if (!openShifts?.length) return
+  const { error: shiftLinksError } = await supabase.from('cuentas_x_turno').upsert(
+    openShifts.map(shift => ({
+      turno_id: shift.id,
+      cuenta_id: account.id,
+      caja_id: shift.caja_id,
+      valor: 0,
+      cobros: false,
+      retiros: false,
+    })),
+    { onConflict: 'turno_id,cuenta_id,caja_id', ignoreDuplicates: true },
+  )
+  if (shiftLinksError) throw shiftLinksError
 }
 
 export async function setAccountAvailability({ shiftId, boxId, accountId, enabled = true, value = 0, canCollect = false, canWithdraw = false }) {
