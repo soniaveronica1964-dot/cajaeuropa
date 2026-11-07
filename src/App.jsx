@@ -1784,7 +1784,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
   const changeSharedAccountOwner = async (account, ownerBoxId) => {
     if (String(ownerBoxId) === String(account.sharedOwnerBoxId)) return
     try {
-      await updateAccountValueOwner(account.id, ownerBoxId, account.sharedOwnerBoxId)
+      await updateAccountValueOwner(account.id, ownerBoxId)
       onAccountValueDraft(account.id, undefined)
       onSaved()
       setToast(`Valor compartido asignado a ${boxes.find(box => String(box.id) === String(ownerBoxId))?.nombre || 'la caja seleccionada'}`)

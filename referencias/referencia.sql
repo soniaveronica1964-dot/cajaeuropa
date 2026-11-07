@@ -280,6 +280,8 @@ CREATE TABLE cuentas_x_turno (
     cuenta_id BIGINT NOT NULL,
     caja_id BIGINT,
     valor NUMERIC(14,2) NOT NULL DEFAULT 0,
+    valor_actualizado_en TIMESTAMPTZ,
+    caja_id_actualizado_en TIMESTAMPTZ,
     cobros BOOLEAN NOT NULL DEFAULT FALSE,
     retiros BOOLEAN NOT NULL DEFAULT FALSE,
 
