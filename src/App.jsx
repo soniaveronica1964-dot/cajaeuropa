@@ -541,7 +541,6 @@ function App() {
 
       <div className="workspace">
         <aside className="sidebar">
-          <p className="sidebar-label">Operación</p>
           {navItems.map(([id, label, Icon]) => <button key={id} className={`side-link ${view === id ? 'active' : ''}`} onClick={() => setView(id)}><Icon size={16} /><span>{label}</span></button>)}
           <div className="sidebar-bottom"><div className="operator"><span>MR</span><div><strong>Marina Ríos</strong><small>Operadora</small></div><ChevronDown size={14} /></div></div>
         </aside>
