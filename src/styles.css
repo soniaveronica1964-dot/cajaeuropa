@@ -1486,6 +1486,15 @@ input[type="time"] { color-scheme: dark; }
   background: var(--accent-soft);
 }
 
+.matrix-shared-owner-menu .matrix-shared-owner-unassigned {
+  color: var(--muted);
+}
+
+.matrix-shared-owner-menu .matrix-shared-owner-unassigned > span {
+  background: #879598;
+  box-shadow: none;
+}
+
 .matrix-shared-owner-menu[data-theme='light'] {
   --panel-elevated: #ffffff;
   --text: #1d2a26;
@@ -1595,6 +1604,19 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-row .matrix-value.shared-owner-value {
   border-color: var(--shared-owner-color);
+}
+
+.matrix-row .matrix-value.has-value {
+  color: #ffffff;
+}
+
+.matrix-row .matrix-value.has-value:not(.shared-owner-value) {
+  border-color: rgba(255, 255, 255, 0.72);
+}
+
+.matrix-row .matrix-value.has-value > span,
+.matrix-row .matrix-value.has-value input {
+  color: #ffffff;
 }
 
 .matrix-row .matrix-value span {

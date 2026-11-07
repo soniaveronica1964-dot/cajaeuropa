@@ -756,15 +756,23 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
     const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account.cuentas?.tipo_cuenta_id)) || null
     const sharedBalance = accountType?.es_compartido ? data.sharedAccountBalances?.[account.cuenta_id] : null
     const displayAmount = Number(sharedBalance?.value ?? account.valor ?? 0)
-    const sharedOwnerBoxId = sharedBalance?.ownerBoxId ?? account.caja_id ?? data.shift.caja_id
-    const isSharedForeignValue = Boolean(accountType?.es_compartido) && String(sharedOwnerBoxId) !== String(data.shift.caja_id)
-    const amount = accountValueDrafts[String(account.id)] ?? (isSharedForeignValue ? 0 : displayAmount)
+    const sharedOwnerBoxId = sharedBalance
+      ? sharedBalance.ownerBoxId
+      : account.caja_id ?? data.shift.caja_id
+    const isSharedForeignValue = Boolean(accountType?.es_compartido)
+      && sharedOwnerBoxId != null
+      && String(sharedOwnerBoxId) !== String(data.shift.caja_id)
+    const isSharedUnassigned = Boolean(accountType?.es_compartido) && sharedOwnerBoxId == null
+    const amount = isSharedForeignValue || isSharedUnassigned
+      ? 0
+      : accountValueDrafts[String(account.id)] ?? displayAmount
     return {
       ...account,
       accountType,
       displayAmount,
       sharedOwnerBoxId,
       isSharedForeignValue,
+      isSharedUnassigned,
       holder: account.cuentas?.titulares?.nombre || 'Sin titular',
       wallet: account.cuentas?.billeteras?.nombre || 'Sin billetera',
       savedAmount: displayAmount,
@@ -1825,7 +1833,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
             key={`${keyPrefix}-${holder}-${wallet}`}
           >
             <label
-              className={`matrix-value ${valueTone} ${account.accountType?.es_compartido ? 'shared-owner-value' : ''}`}
+              className={`matrix-value ${valueTone} ${account.accountType?.es_compartido ? 'shared-owner-value' : ''} ${account.displayAmount > 0 ? 'has-value' : ''}`}
               style={account.accountType?.es_compartido ? { '--shared-owner-color': ownerColor } : undefined}
               onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget)}
               onMouseLeave={scheduleHideAccountCredentials}
@@ -1837,8 +1845,12 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
                 key={`${account.id}-${account.displayAmount}-${account.sharedOwnerBoxId}`}
                 defaultValue={account.displayAmount ? numberWithCents.format(account.displayAmount) : ''}
                 placeholder="-"
-                readOnly={account.isSharedForeignValue}
-                title={account.isSharedForeignValue ? `Valor asignado a ${ownerBox?.nombre || 'otra caja'}; no afecta esta caja` : undefined}
+                readOnly={account.isSharedForeignValue || account.isSharedUnassigned}
+                title={account.isSharedForeignValue
+                  ? `Valor asignado a ${ownerBox?.nombre || 'otra caja'}; no afecta esta caja`
+                  : account.isSharedUnassigned
+                    ? 'Valor compartido sin caja asignada; elegí una caja para imputarlo'
+                    : undefined}
                 onFocus={(event) => event.target.select()}
                 onChange={(event) => {
                 const value = parseLocalizedAmount(event.target.value)
@@ -1862,7 +1874,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
               aria-label={`Cambiar caja del valor compartido de ${wallet}, ${holder}`}
               aria-haspopup="menu"
               aria-expanded={sharedOwnerMenu?.accountId === account.id}
-              title={`Valor imputado a ${ownerBox?.nombre || 'la caja seleccionada'}`}
+              title={account.sharedOwnerBoxId == null ? 'Valor compartido sin caja asignada' : `Valor imputado a ${ownerBox?.nombre || 'la caja seleccionada'}`}
               style={{ '--shared-owner-color': ownerColor }}
               onClick={event => toggleSharedOwnerMenu(account, event.currentTarget)}
             >
@@ -1936,6 +1948,20 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
     )}
     {sharedOwnerMenu && createPortal(
       <div className="matrix-shared-owner-menu" role="menu" data-theme={isLightTheme ? 'light' : 'dark'} style={sharedOwnerMenu.position}>
+        <button
+          type="button"
+          role="menuitemradio"
+          aria-checked={accounts.find(account => account.id === sharedOwnerMenu.accountId)?.sharedOwnerBoxId == null}
+          className="matrix-shared-owner-unassigned"
+          onClick={() => {
+            const account = accounts.find(item => item.id === sharedOwnerMenu.accountId)
+            setSharedOwnerMenu(null)
+            if (account) changeSharedAccountOwner(account, null)
+          }}
+        >
+          <span style={{ '--shared-owner-color': '#879598' }} />
+          -
+        </button>
         {activeOwnerBoxes.map(box => (
           <button
             type="button"

@@ -278,7 +278,7 @@ CREATE TABLE cuentas_x_turno (
     turno_id BIGINT NOT NULL REFERENCES turnos(id)
         ON DELETE CASCADE,
     cuenta_id BIGINT NOT NULL,
-    caja_id BIGINT NOT NULL,
+    caja_id BIGINT,
     valor NUMERIC(14,2) NOT NULL DEFAULT 0,
     cobros BOOLEAN NOT NULL DEFAULT FALSE,
     retiros BOOLEAN NOT NULL DEFAULT FALSE,
