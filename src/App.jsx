@@ -1792,26 +1792,28 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
 
   return <>
     <section className="panel account-panel">
+    <div className="matrix-scroll">
+    <div className="matrix-content" style={columns}>
     {accounts.length ? <>
-      <div className="matrix-wrap" style={columns}>
         <div className="matrix-row matrix-head">
           <strong className="matrix-box-heading"><WalletCards size={13} />Caja</strong>
           {wallets.map(wallet => <span key={wallet}>{wallet}</span>)}
           <span>Total</span>
         </div>
         {renderRows(regularAccounts, 'regular')}
-      </div>
       {accountTypeSections.filter(section => section.accounts.length).map(section => {
         const expanded = Boolean(expandedAccountTypes[section.key])
         return <section className="account-type-section" key={section.key}>
           <button type="button" className="account-type-section-toggle" aria-expanded={expanded} onClick={() => setExpandedAccountTypes(current => ({ ...current, [section.key]: !current[section.key] }))}>
             <span>{section.label}</span>{expanded ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
           </button>
-          {expanded && <div className="matrix-wrap" style={columns}>{renderRows(section.accounts, section.key)}</div>}
+          {expanded && renderRows(section.accounts, section.key)}
         </section>
       })}
-      <div className="matrix-wrap" style={columns}>{renderTotal()}</div>
-    </> : <div className="matrix-wrap"><EmptyInline text="No hay cuentas vinculadas al turno abierto." /></div>}
+      {renderTotal()}
+    </> : <EmptyInline text="No hay cuentas vinculadas al turno abierto." />}
+    </div>
+    </div>
     </section>
     {hoveredAccount && credentialTooltipPosition && createPortal(
       <div
