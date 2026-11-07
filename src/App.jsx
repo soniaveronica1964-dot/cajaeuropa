@@ -62,6 +62,7 @@ import {
   createWalletType,
   createInitialSetup,
   closeAndStartNextShift,
+  resetShiftHistory,
   createPlatform,
   createPanel,
   createUserCategory,
@@ -466,7 +467,7 @@ function App() {
   }
   const openCloseBoxDialog = () => {
     if (!shift) {
-      setToast('No hay un turno abierto para cerrar')
+      setToast('No hay un turno abierto para reiniciar')
       return
     }
     if (!shift.abierto) {
@@ -540,7 +541,7 @@ function App() {
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={switchBox} />
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
           <button className="camera-button" title="Cámara"><Camera size={16} /></button>
-          <button className="lock-button" title="Cerrar caja y abrir siguiente turno" aria-label="Cerrar caja y abrir siguiente turno" onClick={openCloseBoxDialog} disabled={!shift || !shift.abierto}><LockKeyhole size={16} /></button>
+          <button className="lock-button" title="Reiniciar historial y abrir un turno nuevo" aria-label="Reiniciar historial y abrir un turno nuevo" onClick={openCloseBoxDialog} disabled={!shift || !shift.abierto}><LockKeyhole size={16} /></button>
         </div>
       </header>
 
@@ -3504,16 +3505,17 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
 
     setClosing(true)
     try {
-      await closeAndStartNextShift({
+      await resetShiftHistory({
+        boxId: currentShift.caja_id,
         shiftId: currentShift.id,
         dayId: nextShiftChoice.dayId,
         finalAmount,
         startedAt: new Date().toISOString(),
       })
-      setToast(`Caja cerrada y turno ${nextShiftChoice.name} abierto`)
+      setToast(`Historial reiniciado; turno ${nextShiftChoice.name} abierto`)
       onClosed(currentShift.caja_id)
     } catch (error) {
-      setToast(error.message || 'No se pudo cerrar la caja y abrir el siguiente turno')
+      setToast(error.message || 'No se pudo reiniciar el historial y abrir el turno nuevo')
     } finally {
       setClosing(false)
     }
@@ -3525,7 +3527,7 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
     <form className="modal shift-close-modal" role="dialog" aria-modal="true" aria-labelledby="shift-close-title" onSubmit={submit}>
       <header className="shift-close-header">
         <span className="shift-close-icon"><LockKeyhole size={20} /></span>
-        <div><h2 id="shift-close-title">¿Cerrar esta caja?</h2><p>Se conservará el turno actual en el historial y se abrirá el siguiente.</p></div>
+        <div><h2 id="shift-close-title">¿Reiniciar historial de turnos?</h2><p>Se borrarán los turnos previos y se abrirá un turno nuevo con la misma lógica de herencia.</p></div>
         <button type="button" className="modal-close" title="Cancelar" aria-label="Cancelar" onClick={onClose} disabled={closing}><X size={17} /></button>
       </header>
       {scheduleError
@@ -3541,7 +3543,7 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
       <p className="shift-close-inherit">El nuevo turno heredará este monto como caja inicial, los valores y estados de cobros/retiros de las cuentas, las fichas finales como fichas iniciales y la nota heredable como nota general.</p>
       <footer className="shift-close-actions">
         <button type="button" className="secondary-button" onClick={onClose} disabled={closing}>Cancelar</button>
-        <button type="submit" className="shift-close-confirm" disabled={closing || Boolean(scheduleError)}>{closing ? 'Cerrando caja...' : 'Confirmar cierre'} <ArrowRight size={15} /></button>
+        <button type="submit" className="shift-close-confirm" disabled={closing || Boolean(scheduleError)}>{closing ? 'Reiniciando...' : 'Confirmar reinicio'} <ArrowRight size={15} /></button>
       </footer>
     </form>
   </div>
@@ -4657,10 +4659,10 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
         </section>
         </div>
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(232, 207, 102, 0.45)' }}>
-          <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Cierre de caja</span></div>
-          <p className="muted-copy">Cierra el turno actual y abre el siguiente día de turno configurado, conservando el historial y heredando los saldos.</p>
-          <button type="button" className="config-add" onClick={onCloseBox} disabled={!data.shift}>
-            <LockKeyhole size={15} /> Cerrar caja
+          <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Reinicio de turnos</span></div>
+          <p className="muted-copy">Borra los turnos anteriores, crea un turno nuevo e hereda el cierre actual con la misma lógica de continuación del sistema.</p>
+          <button type="button" className="secondary-button app-format-button" onClick={onCloseBox} disabled={!data.shift}>
+            <LockKeyhole size={15} /> Reiniciar turnos
           </button>
           <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
           <button type="button" className="secondary-button app-format-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
