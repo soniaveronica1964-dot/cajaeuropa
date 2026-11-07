@@ -1421,12 +1421,50 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .matrix-account-cell {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 4px;
   justify-self: stretch;
   width: 100%;
   min-width: 0;
+}
+
+.account-credentials-tooltip {
+  position: fixed;
+  z-index: 200;
+  display: grid;
+  gap: 7px;
+  width: min(320px, calc(100vw - 16px));
+  padding: 11px 13px;
+  border: 1px solid rgba(146, 158, 159, 0.42);
+  border-radius: 6px;
+  background: #202a2c;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38);
+  color: var(--text);
+  user-select: text;
+  pointer-events: auto;
+}
+
+.account-credentials-tooltip-row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  font: 10px 'DM Mono', monospace;
+  line-height: 1.4;
+}
+
+.account-credentials-tooltip-row strong {
+  color: var(--accent);
+  font-size: 9px;
+  text-align: right;
+}
+
+.account-credentials-tooltip-row span {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  user-select: text;
 }
 
 .matrix-row > .matrix-account-cell {

@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ArrowLeft,
   ArrowLeftRight,
@@ -1654,6 +1655,9 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
 function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccountValueDraft }) {
   const [flagOverrides, setFlagOverrides] = useState({})
   const [expandedAccountTypes, setExpandedAccountTypes] = useState({ deposit: true, shared: false, saving: false })
+  const [hoveredAccount, setHoveredAccount] = useState(null)
+  const [credentialTooltipPosition, setCredentialTooltipPosition] = useState(null)
+  const credentialTooltipTimer = useRef(null)
   const accountTypeSections = [
     { key: 'deposit', label: 'Billeteras depósitos', matches: account => account.accountType?.es_deposito },
     { key: 'shared', label: 'Billeteras compartidas', matches: account => account.accountType?.es_compartido },
@@ -1662,6 +1666,36 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
   const specialAccountIds = new Set(accountTypeSections.flatMap(section => section.accounts.map(account => account.cuenta_id)))
   const regularAccounts = accounts.filter(account => !specialAccountIds.has(account.cuenta_id))
   const columns = { '--wallet-count': wallets.length }
+
+  const showAccountCredentials = (account, anchor) => {
+    if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
+    const rect = anchor.getBoundingClientRect()
+    const tooltipWidth = Math.min(320, window.innerWidth - 16)
+    const tooltipHeight = 112
+    const left = Math.min(Math.max(8, rect.left), window.innerWidth - tooltipWidth - 8)
+    const below = rect.bottom + 8
+    const top = below + tooltipHeight <= window.innerHeight - 8
+      ? below
+      : Math.max(8, rect.top - tooltipHeight - 8)
+    setHoveredAccount(account)
+    setCredentialTooltipPosition({ left, top })
+  }
+  const scheduleHideAccountCredentials = () => {
+    if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
+    credentialTooltipTimer.current = setTimeout(() => {
+      setHoveredAccount(null)
+      setCredentialTooltipPosition(null)
+      credentialTooltipTimer.current = null
+    }, 250)
+  }
+  const keepAccountCredentialsVisible = () => {
+    if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
+    credentialTooltipTimer.current = null
+  }
+
+  useEffect(() => () => {
+    if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
+  }, [])
 
   const saveAccount = async (account, event) => {
     const input = event.currentTarget
@@ -1707,7 +1741,14 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
           if (!account) return <span className="matrix-account-empty" key={`${keyPrefix}-${holder}-${wallet}`} aria-hidden="true" />
           const flags = flagOverrides[account.id] || account
           const valueTone = flags.cobros && flags.retiros ? 'both-enabled' : flags.cobros ? 'collecting' : flags.retiros ? 'withdrawing' : ''
-          return <div className="matrix-account-cell" key={`${keyPrefix}-${holder}-${wallet}`}>
+          return <div
+            className="matrix-account-cell"
+            key={`${keyPrefix}-${holder}-${wallet}`}
+            onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget)}
+            onMouseLeave={scheduleHideAccountCredentials}
+            onFocus={(event) => showAccountCredentials(account, event.currentTarget)}
+            onBlur={scheduleHideAccountCredentials}
+          >
             <label className={`matrix-value ${valueTone}`}>
               <span>$</span>
               <input defaultValue={account.savedAmount ? numberWithCents.format(account.savedAmount) : ''} placeholder="-" onFocus={(event) => event.target.select()} onChange={(event) => {
@@ -1735,7 +1776,8 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
     <strong>{moneyWithCents.format(accounts.reduce((sum, account) => sum + account.amount, 0))}</strong>
   </div>
 
-  return <section className="panel account-panel">
+  return <>
+    <section className="panel account-panel">
     {accounts.length ? <>
       <div className="matrix-wrap" style={columns}>
         <div className="matrix-row matrix-head">
@@ -1756,7 +1798,29 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
       })}
       <div className="matrix-wrap" style={columns}>{renderTotal()}</div>
     </> : <div className="matrix-wrap"><EmptyInline text="No hay cuentas vinculadas al turno abierto." /></div>}
-  </section>
+    </section>
+    {hoveredAccount && credentialTooltipPosition && createPortal(
+      <div
+        className="account-credentials-tooltip"
+        role="tooltip"
+        style={credentialTooltipPosition}
+        onMouseEnter={keepAccountCredentialsVisible}
+        onMouseLeave={scheduleHideAccountCredentials}
+      >
+        {[
+          ['ALIAS', hoveredAccount.cuentas?.alias],
+          ['CUIL', hoveredAccount.cuentas?.cuil],
+          ['CONTRASEÑA', hoveredAccount.cuentas?.patron],
+        ].map(([label, value]) => (
+          <div className="account-credentials-tooltip-row" key={label}>
+            <strong>{label}</strong>
+            <span>{value || '—'}</span>
+          </div>
+        ))}
+      </div>,
+      document.body,
+    )}
+  </>
 }
 function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
   const [saving, setSaving] = useState(false)
