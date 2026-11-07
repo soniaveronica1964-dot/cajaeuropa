@@ -258,7 +258,7 @@ CREATE TABLE cuentas (
     notas TEXT,
     tipo_cuenta_id BIGINT NOT NULL REFERENCES tipos_cuenta(id)
         ON DELETE RESTRICT,
-    activa BOOLEAN NOT NULL DEFAULT TRUE,
+    activa BOOLEAN NOT NULL DEFAULT FALSE,
 
     UNIQUE (titular_id, billetera_id)
 );

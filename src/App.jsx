@@ -3649,12 +3649,12 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
       availability[holderName] = {}
       walletsFromData.forEach((wallet) => {
         const walletName = wallet.nombre || 'Sin billetera'
-        const isAvailable = (localData.accounts || []).some((account) => {
-          const accountHolder = account?.cuentas?.titulares?.nombre || localData.holders?.find((item) => item.id === account?.titular_id)?.nombre
-          const accountWallet = account?.cuentas?.billeteras?.nombre || localData.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
-          return accountHolder === holderName && accountWallet === walletName
-        })
-        availability[holderName][walletName] = isAvailable
+          const existingAccount = (localData.accounts || []).find((account) => {
+            const accountHolder = account?.cuentas?.titulares?.nombre || localData.holders?.find((item) => item.id === account?.titular_id)?.nombre
+            const accountWallet = account?.cuentas?.billeteras?.nombre || localData.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+            return accountHolder === holderName && accountWallet === walletName
+          })
+          availability[holderName][walletName] = Boolean(existingAccount?.cuentas?.activa)
       })
     })
 
@@ -3761,7 +3761,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
       return accountHolder === holderName && accountWallet === walletName
     })
 
-    const currentChecked = Boolean(existingAccount?.cuentas?.activa ?? existingAccount?.cuentas?.check ?? existingAccount?.cuentas?.activo ?? draft.accounts.availability?.[holderName]?.[walletName] ?? true)
+    const currentChecked = Boolean(existingAccount?.cuentas?.activa ?? existingAccount?.cuentas?.check ?? existingAccount?.cuentas?.activo ?? draft.accounts.availability?.[holderName]?.[walletName] ?? false)
     const nextValue = !currentChecked
 
     setDraft((current) => ({
@@ -3945,7 +3945,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
                 const accountHolder = account?.cuentas?.titulares?.nombre || refreshed.holders?.find((item) => item.id === account?.titular_id)?.nombre
                 const accountWallet = account?.cuentas?.billeteras?.nombre || refreshed.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
                 return accountHolder === selected.holder && accountWallet === selected.wallet
-              })?.cuentas?.activa ?? true),
+              })?.cuentas?.activa ?? false),
             },
           },
         },
@@ -3975,7 +3975,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
           const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
           return accountHolder === holderName && accountWallet === walletName
         })
-        const enabled = Boolean(draft.accounts.availability?.[holderName]?.[walletName] ?? match?.cuentas?.activa ?? match?.cuentas?.check ?? match?.cuentas?.activo ?? true)
+        const enabled = Boolean(draft.accounts.availability?.[holderName]?.[walletName] ?? match?.cuentas?.activa ?? match?.cuentas?.check ?? match?.cuentas?.activo ?? false)
         return <div className="account-config-cell" key={`holder-${holderIndex}-wallet-${walletIndex}`}>
           <label className="toggle-cell" aria-label={`Activar ${holderName} · ${walletName}`}>
             <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />

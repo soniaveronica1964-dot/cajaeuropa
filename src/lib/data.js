@@ -64,7 +64,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     const [holders, wallets, walletTypes, accountTypes, expenseTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, platforms, subplatforms, bonusConditions, bonusTypes] = await Promise.all([
       query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
       query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
-      query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
+      query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false).order('id', { ascending: true })),
       query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
       query('tipos_gasto', 'id, nombre, invertir_signo', request => request.order('id', { ascending: true })),
       query('tipos_turno', 'id, caja_id, nombre, color_id'),
@@ -103,7 +103,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
     query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
-    query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
+    query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false).order('id', { ascending: true })),
     query('tipos_turno', 'id, caja_id, nombre, color_id'),
     query('dias_turno', 'id, nombre, dia_semana, hora_inicio, hora_fin, cruza_medianoche, tipo_turno_id'),
     query('colores', 'id, nombre, hex'),
@@ -135,7 +135,7 @@ export async function loadConfigurationData() {
     query('cajas', 'id, nombre, imagen, imagen_mini, color_id, es_publicidad'),
     query('titulares', 'id, nombre, orden_num, is_off', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', request => request.eq('is_off', false).order('orden_num', { ascending: true }).order('id', { ascending: true })),
-    query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false)),
+    query('tipos_billetera', 'id, nombre, cobros, retiros, is_off', request => request.eq('is_off', false).order('id', { ascending: true })),
     query('tipos_cuenta', 'id, nombre, es_compartido, es_deposito, es_publicidad, cobros, retiros, ahorro, is_off', request => request.eq('is_off', false)),
     query('tipos_gasto', 'id, nombre, invertir_signo', request => request.order('id', { ascending: true })),
     query('plataformas', 'id, nombre, caja_id, color_id'),
@@ -852,7 +852,7 @@ export async function reorderEntityOrder(table, orderedIds = []) {
   return orderedRows.map((row) => row.id)
 }
 
-async function ensureHolderWalletCombination({ holderId, walletId, boxId = null, shiftId = null, active = true }) {
+async function ensureHolderWalletCombination({ holderId, walletId, boxId = null, shiftId = null, active = false }) {
   requireSupabase()
   if (!holderId || !walletId) return null
   const account = await createAccount({ holderId, walletId, active })
@@ -907,7 +907,7 @@ export async function createHolder({ name, boxId = null, shiftId = null }) {
     await supabase.from('titulares_x_caja').upsert({ titular_id: data.id, caja_id: boxId }, { onConflict: 'titular_id,caja_id' }).select().maybeSingle()
     const { data: walletRows = [] } = await supabase.from('billeteras').select('id').eq('is_off', false)
     for (const wallet of walletRows) {
-      await ensureHolderWalletCombination({ holderId: data.id, walletId: wallet.id, boxId, shiftId, active: true })
+      await ensureHolderWalletCombination({ holderId: data.id, walletId: wallet.id, boxId, shiftId, active: false })
     }
   }
 
@@ -1020,7 +1020,7 @@ export async function createWallet({ name, typeName = 'Cobros y retiros', boxId 
     await supabase.from('billeteras_x_caja').upsert({ billetera_id: data.id, caja_id: boxId }, { onConflict: 'billetera_id,caja_id' }).select().maybeSingle()
     const { data: holderRows = [] } = await supabase.from('titulares').select('id').eq('is_off', false)
     for (const holder of holderRows) {
-      await ensureHolderWalletCombination({ holderId: holder.id, walletId: data.id, boxId, shiftId, active: true })
+      await ensureHolderWalletCombination({ holderId: holder.id, walletId: data.id, boxId, shiftId, active: false })
     }
   }
 
@@ -1856,7 +1856,7 @@ export async function getDefaultAccountTypeId() {
   return data.id
 }
 
-export async function createAccount({ holderId, walletId, alias = null, cuil = null, password = null, notes = null, typeId = null, active = true }) {
+export async function createAccount({ holderId, walletId, alias = null, cuil = null, password = null, notes = null, typeId = null, active = false }) {
   requireSupabase()
   const resolvedTypeId = typeId ?? await getDefaultAccountTypeId()
   const payload = {
@@ -2217,7 +2217,7 @@ export async function createInitialSetup({ boxName, shiftName = null, startTime 
   for (const holder of holders) {
     for (const wallet of wallets) {
       const account = await findOrCreate('cuentas', { titular_id: holder.id, billetera_id: wallet.id }, {
-        titular_id: holder.id, billetera_id: wallet.id, alias: null, tipo_cuenta_id: accountType.id, activa: true,
+        titular_id: holder.id, billetera_id: wallet.id, alias: null, tipo_cuenta_id: accountType.id, activa: false,
       })
       await ensureLink('cuentas_x_caja', { cuenta_id: account.id, caja_id: box.id })
     }
@@ -2238,7 +2238,7 @@ export async function createInitialSetup({ boxName, shiftName = null, startTime 
   for (const holder of holders) {
     for (const wallet of wallets) {
       const account = await findOrCreate('cuentas', { titular_id: holder.id, billetera_id: wallet.id }, {
-        titular_id: holder.id, billetera_id: wallet.id, alias: null, tipo_cuenta_id: accountType.id, activa: true,
+        titular_id: holder.id, billetera_id: wallet.id, alias: null, tipo_cuenta_id: accountType.id, activa: false,
       })
       await ensureLink('cuentas_x_turno', { turno_id: shift.id, cuenta_id: account.id, caja_id: box.id }, {
         turno_id: shift.id, cuenta_id: account.id, caja_id: box.id, valor: 0, cobros: false, retiros: false,
