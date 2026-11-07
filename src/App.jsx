@@ -185,6 +185,60 @@ function findCurrentShiftDay(days, now) {
   return matchingDays[0]
 }
 
+function findNextShiftDay(days, currentDay) {
+  const parseMinutes = (time) => {
+    const [hour, minute] = String(time || '').split(':').map(Number)
+    if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null
+    return hour * 60 + minute
+  }
+  const currentWeekday = Number(currentDay?.dia_semana)
+  const currentStart = parseMinutes(currentDay?.hora_inicio)
+  if (!Number.isInteger(currentWeekday) || currentWeekday < 1 || currentWeekday > 7 || currentStart === null) {
+    throw new Error('No se pudo identificar el horario del turno actual.')
+  }
+
+  const orderedDays = days
+    .map((day) => {
+      const weekday = Number(day.dia_semana)
+      const start = parseMinutes(day.hora_inicio)
+      if (!Number.isInteger(weekday) || weekday < 1 || weekday > 7 || start === null) return null
+      return { day, weekdayOffset: (weekday - currentWeekday + 7) % 7, start }
+    })
+    .filter(Boolean)
+    .filter(({ day, weekdayOffset, start }) => (
+      String(day.id) !== String(currentDay.id)
+      && (weekdayOffset > 0 || start > currentStart)
+    ))
+    .sort((left, right) => left.weekdayOffset - right.weekdayOffset || left.start - right.start || Number(left.day.id) - Number(right.day.id))
+
+  if (orderedDays.length) return orderedDays[0].day
+
+  const currentDayEntry = days.find((day) => String(day.id) === String(currentDay.id))
+  if (currentDayEntry) return currentDayEntry
+  throw new Error('No hay turnos configurados para esta caja.')
+}
+
+function getShiftCashTotal(data) {
+  const boxId = data.shift?.caja_id
+  return (data.accounts || []).reduce((total, account) => {
+    const accountType = (data.accountTypes || []).find((type) => (
+      String(type.id) === String(account.cuentas?.tipo_cuenta_id)
+    ))
+    if (accountType?.ahorro) return total
+
+    if (accountType?.es_compartido) {
+      const sharedBalance = data.sharedAccountBalances?.[account.cuenta_id]
+      const ownerBoxId = sharedBalance
+        ? sharedBalance.ownerBoxId
+        : account.caja_id ?? boxId
+      if (ownerBoxId == null || String(ownerBoxId) !== String(boxId)) return total
+      return total + Number(sharedBalance?.value ?? account.valor ?? 0)
+    }
+
+    return total + Number(account.valor || 0)
+  }, 0)
+}
+
 function readLastSavedAt() {
   try {
     return globalThis.localStorage.getItem(LAST_SAVED_STORAGE_KEY) || ''
@@ -2286,9 +2340,25 @@ function UsersCard({ users, onCreate }) {
 
   return <section className="panel mini-card">
     <PanelTitle icon={Users} title="Usuarios" action={<button type="button" className="icon-button" title="Nuevo usuario" aria-label="Nuevo usuario" onClick={onCreate}><Plus size={15} /></button>} />
-    <div className="search-line"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
-    {matchingUsers.slice(0, 5).map(user => <div className="user-row" key={user.id}><span><UserRound size={15} /></span><b>{user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`}</b><ChevronRight size={14} /></div>)}
-    {!matchingUsers.length && <EmptyInline text={users.length ? 'No se encontraron usuarios.' : 'No hay usuarios registrados.'} />}
+    <div className="search-line users-card-search"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
+    <div className="users-card-list">
+      {matchingUsers.slice(0, 5).map(user => {
+        const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`
+        const holderNames = (user.titulares_usuario || []).map(holder => holder.nombre).filter(Boolean)
+        const phoneNumbers = (user.telefonos_usuario || []).map(phone => phone.numero).filter(Boolean)
+        const details = [holderNames.slice(0, 2).join(', '), phoneNumbers.slice(0, 2).join(', ')].filter(Boolean)
+        return <article className={`users-card-row ${user.bloqueado ? 'blocked' : ''}`} key={user.id}>
+          <span className="users-card-avatar"><UserRound size={14} /></span>
+          <span className="users-card-info">
+            <strong title={name}>{name}</strong>
+            <small title={details.join(' · ') || (user.bloqueado ? 'Usuario bloqueado' : '')}>{details.join(' · ') || (user.bloqueado ? 'Usuario bloqueado' : 'Sin datos adicionales')}</small>
+          </span>
+          {user.bloqueado && <span className="users-card-blocked">Bloqueado</span>}
+          <ChevronRight className="users-card-chevron" size={14} aria-hidden="true" />
+        </article>
+      })}
+      {!matchingUsers.length && <p className="users-card-empty">{users.length ? 'No se encontraron usuarios.' : 'No hay usuarios registrados.'}</p>}
+    </div>
   </section>
 }
 function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, rows, onSaved, setToast }) {
@@ -3764,27 +3834,27 @@ function accountTypeFlagsAfterToggle(type, field, enabled) {
 
 function CloseAndStartShiftModal({ data, boxId, onClose, onClosed, setToast }) {
   const [closing, setClosing] = useState(false)
-  const [finalAmount, setFinalAmount] = useState(numberWithCents.format(Number(data.shift?.caja_inicial || 0)))
   const currentShift = data.shift
   const targetBoxId = boxId ?? currentShift?.caja_id
   const shiftTypes = (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(targetBoxId))
   const shiftDays = (data.shiftDays || []).filter((day) => shiftTypes.some((type) => String(type.id) === String(day.tipo_turno_id)))
   const currentDay = shiftDays.find((day) => String(day.id) === String(currentShift?.dias_turno?.id)) || currentShift?.dias_turno
+  const closingAmount = getShiftCashTotal(data)
   const currentShiftTypeName = shiftTypes.find((type) => String(type.id) === String(currentDay?.tipo_turno_id))?.nombre
     || currentDay?.tipos_turno?.nombre
     || currentDay?.nombre
-  const now = new Date()
   let nextShiftChoice = null
   let scheduleError = ''
   try {
     if (!currentShift?.abierto) throw new Error('No hay un turno abierto para cerrar.')
     if (targetBoxId == null) throw new Error('Seleccioná una caja para cerrar el turno.')
-    const matchingDay = findCurrentShiftDay(shiftDays, now)
-    const matchingShiftType = shiftTypes.find((type) => String(type.id) === String(matchingDay.tipo_turno_id))
+    if (!currentDay) throw new Error('No se pudo identificar el turno actual.')
+    const nextDay = findNextShiftDay(shiftDays, currentDay)
+    const matchingShiftType = shiftTypes.find((type) => String(type.id) === String(nextDay.tipo_turno_id))
     nextShiftChoice = {
-      dayId: matchingDay.id,
-      name: matchingShiftType?.nombre || matchingDay.nombre || 'Turno actual',
-      date: now.toLocaleDateString('es-AR'),
+      dayId: nextDay.id,
+      name: matchingShiftType?.nombre || nextDay.nombre || 'Turno siguiente',
+      date: ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom'][Number(nextDay.dia_semana) - 1] || '',
     }
   } catch (error) {
     scheduleError = error.message || 'No se pudo determinar el siguiente turno.'
@@ -3792,11 +3862,6 @@ function CloseAndStartShiftModal({ data, boxId, onClose, onClosed, setToast }) {
 
   const submit = async (event) => {
     event.preventDefault()
-    const parsedFinalAmount = parseLocalizedAmount(finalAmount)
-    if (parsedFinalAmount === null || parsedFinalAmount < 0) {
-      setToast('Ingresá un monto final válido y no negativo.')
-      return
-    }
     if (scheduleError || !nextShiftChoice || !currentShift?.id) {
       setToast(scheduleError || 'No se pudo determinar el siguiente turno.')
       return
@@ -3807,7 +3872,7 @@ function CloseAndStartShiftModal({ data, boxId, onClose, onClosed, setToast }) {
       await closeAndStartNextShift({
         shiftId: currentShift.id,
         dayId: nextShiftChoice.dayId,
-        finalAmount: parsedFinalAmount,
+        finalAmount: closingAmount,
         startedAt: new Date().toISOString(),
       })
       setToast(`Caja cerrada; turno ${nextShiftChoice.name} abierto`)
@@ -3835,16 +3900,10 @@ function CloseAndStartShiftModal({ data, boxId, onClose, onClosed, setToast }) {
           <ArrowRight size={15} aria-hidden="true" />
           <span>Siguiente turno</span><strong>{nextShiftChoice.name} · {nextShiftChoice.date}</strong>
         </div>}
-      <label className="shift-close-cash">
-        Caja final
-        <input
-          type="text"
-          inputMode="decimal"
-          value={finalAmount}
-          onChange={(event) => setFinalAmount(event.target.value)}
-          disabled={closing}
-        />
-      </label>
+      <div className="shift-close-cash">
+        <span>Caja final e inicial del siguiente turno</span>
+        <strong>{moneyWithCents.format(closingAmount)}</strong>
+      </div>
       <footer className="shift-close-actions">
         <button type="button" className="secondary-button" onClick={onClose} disabled={closing}>Cancelar</button>
         <button type="submit" className="shift-close-confirm" disabled={closing || Boolean(scheduleError)}>{closing ? 'Cerrando...' : 'Cerrar caja'} <ArrowRight size={15} /></button>

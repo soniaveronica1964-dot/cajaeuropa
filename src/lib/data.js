@@ -1677,7 +1677,7 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
 
   const [accountsResult, chipsResult, notesResult, logisticsResult, eligibleAccountIds] = await Promise.all([
     supabase.from('cuentas_x_turno')
-      .select('id, cuenta_id, caja_id, valor, cobros, retiros')
+      .select('id, cuenta_id, caja_id, valor, cobros, retiros, valor_actualizado_en, caja_id_actualizado_en')
       .eq('turno_id', shiftId),
     supabase.from('fichas')
       .select('plataforma_id, fichas_final')
@@ -1747,19 +1747,22 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
     const accountsToInherit = (nextAccounts || []).map((account) => {
       const previous = previousAccountById.get(String(account.cuenta_id))
       return {
-        turno_id: newShift.id,
-        cuenta_id: account.cuenta_id,
-        caja_id: account.caja_id,
+        id: account.id,
+        caja_id: previous ? previous.caja_id : account.caja_id,
         valor: Number(previous?.valor || 0),
         cobros: Boolean(previous?.cobros),
         retiros: Boolean(previous?.retiros),
+        valor_actualizado_en: previous?.valor_actualizado_en ?? null,
+        caja_id_actualizado_en: previous?.caja_id_actualizado_en ?? null,
       }
     })
     if (accountsToInherit.length) {
-      const { error } = await supabase.from('cuentas_x_turno').upsert(accountsToInherit, {
-        onConflict: 'turno_id,cuenta_id,caja_id',
-      })
-      if (error) throw error
+      const accountUpdates = await Promise.all(accountsToInherit.map((account) => {
+        const { id, ...values } = account
+        return supabase.from('cuentas_x_turno').update(values).eq('id', id)
+      }))
+      const failedAccountUpdate = accountUpdates.find((result) => result.error)
+      if (failedAccountUpdate) throw failedAccountUpdate.error
     }
 
     const previousChipByPlatform = new Map(previousChips.map((chip) => [String(chip.plataforma_id), chip]))
