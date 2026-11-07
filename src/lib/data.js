@@ -486,10 +486,18 @@ export async function updateAccountValue(accountShiftId, value) {
     .eq('turnos.abierto', true)
   if (activeLinksError) throw activeLinksError
 
-  const ownerLink = activeLinks.find(link => (
-    String(link.caja_id) === String(link.turnos?.caja_id)
-    && String(link.turnos?.caja_id) === String(accountLink.caja_id)
-  )) || activeLinks.find(link => String(link.id) === String(accountShiftId))
+  const ownerLinks = activeLinks.filter(link => (
+    link.caja_id != null && String(link.caja_id) === String(link.turnos?.caja_id)
+  ))
+  const unassignedLinks = activeLinks.filter(link => link.caja_id == null)
+  const ownerLink = ownerLinks.find(link => Number(link.valor) !== 0)
+    || ownerLinks.find(link => String(link.caja_id) === String(accountLink.caja_id))
+    || ownerLinks.find(link => String(link.id) === String(accountShiftId))
+    || ownerLinks[0]
+    || unassignedLinks.find(link => Number(link.valor) !== 0)
+    || unassignedLinks.find(link => String(link.id) === String(accountShiftId))
+    || unassignedLinks[0]
+  if (!ownerLink) throw new Error('No se encontró un registro activo para esta cuenta compartida')
   const activeIds = (activeLinks || []).map(link => link.id)
   const { error: clearError } = await supabase
     .from('cuentas_x_turno')

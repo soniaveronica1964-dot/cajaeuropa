@@ -1610,7 +1610,7 @@ input[type="time"] { color-scheme: dark; }
   color: #ffffff;
 }
 
-.matrix-row .matrix-value:has(input:not(:placeholder-shown)):not(.shared-owner-value) {
+.matrix-row .matrix-value.white-value-border:has(input:not(:placeholder-shown)) {
   border-color: rgba(255, 255, 255, 0.72);
 }
 

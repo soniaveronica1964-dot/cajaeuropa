@@ -1823,6 +1823,11 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
           const collecting = canCollect && flags.cobros
           const withdrawing = canWithdraw && flags.retiros
           const valueTone = collecting && withdrawing ? 'both-enabled' : collecting ? 'collecting' : withdrawing ? 'withdrawing' : ''
+          const isCommonAccount = !account.accountType?.es_deposito
+            && !account.accountType?.es_compartido
+            && !account.accountType?.es_publicidad
+            && !account.accountType?.ahorro
+          const showWhiteValueBorder = isCommonAccount && !collecting && !withdrawing
           const ownerBox = boxes.find(box => String(box.id) === String(account.sharedOwnerBoxId))
           const displayOwnerBoxId = activeOwnerBoxes.some(box => String(box.id) === String(account.sharedOwnerBoxId))
             ? account.sharedOwnerBoxId
@@ -1833,7 +1838,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
             key={`${keyPrefix}-${holder}-${wallet}`}
           >
             <label
-              className={`matrix-value ${valueTone} ${account.accountType?.es_compartido ? 'shared-owner-value' : ''}`}
+              className={`matrix-value ${valueTone} ${account.accountType?.es_compartido ? 'shared-owner-value' : ''} ${showWhiteValueBorder ? 'white-value-border' : ''}`}
               style={account.accountType?.es_compartido ? { '--shared-owner-color': ownerColor } : undefined}
               onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget)}
               onMouseLeave={scheduleHideAccountCredentials}
@@ -1845,11 +1850,10 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
                 key={`${account.id}-${account.displayAmount}-${account.sharedOwnerBoxId}`}
                 defaultValue={account.displayAmount ? numberWithCents.format(account.displayAmount) : ''}
                 placeholder="-"
-                readOnly={account.isSharedForeignValue || account.isSharedUnassigned}
                 title={account.isSharedForeignValue
-                  ? `Valor asignado a ${ownerBox?.nombre || 'otra caja'}; no afecta esta caja`
+                  ? `Editable desde esta caja; el saldo se imputa a ${ownerBox?.nombre || 'otra caja'}`
                   : account.isSharedUnassigned
-                    ? 'Valor compartido sin caja asignada; elegí una caja para imputarlo'
+                    ? 'Editable desde cualquier caja; el saldo no se imputa hasta asignarle una'
                     : undefined}
                 onFocus={(event) => event.target.select()}
                 onChange={(event) => {
