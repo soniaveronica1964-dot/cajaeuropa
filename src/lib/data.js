@@ -169,7 +169,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     if (selectedLink) {
       sharedAccountBalances[accountId] = {
         value: Number(selectedLink.valor || 0),
-        ownerBoxId: ownerLink?.caja_id ?? null,
+        ownerBoxId: (explicitlyAssignedLink || legacyOwnerLink)?.caja_id ?? null,
       }
     }
   }
