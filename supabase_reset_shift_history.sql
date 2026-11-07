@@ -1,6 +1,7 @@
 -- Ejecutar desde Supabase SQL Editor antes de usar "Reiniciar turnos".
 -- Borra el historial operativo de una sola caja y crea un turno limpio
 -- según el día configurado, sin heredar datos de turnos anteriores.
+-- p_current_shift_id puede ser NULL cuando no hay un turno abierto.
 
 CREATE OR REPLACE FUNCTION public.reset_shift_history(
     p_box_id BIGINT,
@@ -17,7 +18,7 @@ DECLARE
     new_shift_id BIGINT;
     new_advertising_id BIGINT;
 BEGIN
-    IF p_box_id IS NULL OR p_current_shift_id IS NULL OR p_day_id IS NULL OR p_started_at IS NULL THEN
+    IF p_box_id IS NULL OR p_day_id IS NULL OR p_started_at IS NULL THEN
         RAISE EXCEPTION 'Faltan datos para reiniciar los turnos';
     END IF;
 
@@ -29,7 +30,7 @@ BEGIN
         RAISE EXCEPTION 'La caja seleccionada no existe';
     END IF;
 
-    IF NOT EXISTS (
+    IF p_current_shift_id IS NOT NULL AND NOT EXISTS (
         SELECT 1
         FROM public.turnos
         WHERE id = p_current_shift_id

@@ -460,12 +460,8 @@ function App() {
     reloadData()
   }
   const openCloseBoxDialog = () => {
-    if (!shift) {
-      setToast('No hay un turno abierto para reiniciar')
-      return
-    }
-    if (!shift.abierto) {
-      setToast('Este turno está cerrado y solo se puede consultar')
+    if (selectedBoxId == null) {
+      setToast('Seleccioná una caja para crear el turno')
       return
     }
     setCloseBoxDialogOpen(true)
@@ -535,7 +531,7 @@ function App() {
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={switchBox} />
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
           <button className="camera-button" title="Cámara"><Camera size={16} /></button>
-          <button className="lock-button" title="Reiniciar historial y abrir un turno nuevo" aria-label="Reiniciar historial y abrir un turno nuevo" onClick={openCloseBoxDialog} disabled={!shift || !shift.abierto}><LockKeyhole size={16} /></button>
+          <button className="lock-button" title="Reiniciar historial y abrir un turno nuevo" aria-label="Reiniciar historial y abrir un turno nuevo" onClick={openCloseBoxDialog} disabled={selectedBoxId == null}><LockKeyhole size={16} /></button>
         </div>
       </header>
 
@@ -548,19 +544,19 @@ function App() {
         <main className="main-content">
           <fieldset
             className="main-content-fieldset"
-            disabled={isReadOnlyShift}
+            disabled={isReadOnlyShift && view !== 'settings'}
             onClickCapture={(event) => {
-              if (!isReadOnlyShift) return
+              if (!isReadOnlyShift || view === 'settings') return
               event.preventDefault()
               event.stopPropagation()
             }}
             onKeyDownCapture={(event) => {
-              if (!isReadOnlyShift) return
+              if (!isReadOnlyShift || view === 'settings') return
               event.preventDefault()
               event.stopPropagation()
             }}
             onSubmitCapture={(event) => {
-              if (!isReadOnlyShift) return
+              if (!isReadOnlyShift || view === 'settings') return
               event.preventDefault()
               event.stopPropagation()
             }}
@@ -584,8 +580,9 @@ function App() {
           </fieldset>
         </main>
       </div>
-      {closeBoxDialogOpen && appData?.shift?.abierto && <ShiftCloseModal
+      {closeBoxDialogOpen && appData && <ShiftCloseModal
         data={appData}
+        boxId={selectedBoxId}
         onClose={() => setCloseBoxDialogOpen(false)}
         onClosed={finishCloseBox}
         setToast={setToast}
@@ -3546,10 +3543,11 @@ function accountTypeFlagsAfterToggle(type, field, enabled) {
   return flags
 }
 
-function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
+function ShiftCloseModal({ data, boxId, onClose, onClosed, setToast }) {
   const [closing, setClosing] = useState(false)
   const currentShift = data.shift
-  const shiftTypes = (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(currentShift?.caja_id))
+  const targetBoxId = boxId ?? currentShift?.caja_id
+  const shiftTypes = (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(targetBoxId))
   const shiftDays = (data.shiftDays || []).filter((day) => shiftTypes.some((type) => String(type.id) === String(day.tipo_turno_id)))
   const currentDay = shiftDays.find((day) => String(day.id) === String(currentShift?.dias_turno?.id)) || currentShift?.dias_turno
   const currentShiftTypeName = shiftTypes.find((type) => String(type.id) === String(currentDay?.tipo_turno_id))?.nombre
@@ -3559,7 +3557,7 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
   let currentTimeShiftChoice = null
   let scheduleError = ''
   try {
-    if (!currentShift) throw new Error('No hay un turno abierto para cerrar')
+    if (targetBoxId == null) throw new Error('Seleccioná una caja para crear el turno')
     const matchingDay = findCurrentShiftDay(shiftDays, now)
     const matchingShiftType = shiftTypes.find((type) => String(type.id) === String(matchingDay.tipo_turno_id))
     currentTimeShiftChoice = {
@@ -3573,7 +3571,7 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
 
   const submit = async (event) => {
     event.preventDefault()
-    if (scheduleError || !currentTimeShiftChoice || !currentShift) {
+    if (scheduleError || !currentTimeShiftChoice || targetBoxId == null) {
       setToast(scheduleError || 'No se pudo determinar el turno del horario actual')
       return
     }
@@ -3581,13 +3579,13 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
     setClosing(true)
     try {
       await resetShiftHistory({
-        boxId: currentShift.caja_id,
-        shiftId: currentShift.id,
+        boxId: targetBoxId,
+        shiftId: currentShift?.abierto ? currentShift.id : null,
         dayId: currentTimeShiftChoice.dayId,
         startedAt: new Date().toISOString(),
       })
       setToast(`Historial reiniciado; turno ${currentTimeShiftChoice.name} abierto`)
-      onClosed(currentShift.caja_id)
+      onClosed(targetBoxId)
     } catch (error) {
       setToast(error.message || 'No se pudo reiniciar el historial y abrir el turno nuevo')
     } finally {
@@ -3607,7 +3605,7 @@ function ShiftCloseModal({ data, onClose, onClosed, setToast }) {
       {scheduleError
         ? <p className="shift-close-error">{scheduleError}</p>
         : <div className="shift-close-summary">
-          <span>Turno actual</span><strong>{currentShiftTypeName || 'Turno actual'}</strong>
+          <span>{currentShift?.abierto ? 'Turno actual' : 'Estado'}</span><strong>{currentShift?.abierto ? currentShiftTypeName || 'Turno actual' : 'Sin turno activo'}</strong>
           <ArrowRight size={15} aria-hidden="true" />
           <span>Turno nuevo</span><strong>{currentTimeShiftChoice.name} · {currentTimeShiftChoice.date}</strong>
         </div>}
@@ -4732,7 +4730,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
         <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(232, 207, 102, 0.45)' }}>
           <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Reinicio de turnos</span></div>
           <p className="muted-copy">Borra todos los turnos de esta caja y sus datos operativos; luego crea un turno limpio según el horario actual, sin heredar saldos ni registros.</p>
-          <button type="button" className="secondary-button app-format-button" onClick={onCloseBox} disabled={!data.shift}>
+          <button type="button" className="secondary-button app-format-button" onClick={onCloseBox} disabled={!currentBoxId}>
             <LockKeyhole size={15} /> Reiniciar turnos
           </button>
           <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>

@@ -1740,7 +1740,6 @@ export async function closeShift(id, finalAmount) {
 export async function resetShiftHistory({ boxId, shiftId, dayId, startedAt = new Date().toISOString() }) {
   requireSupabase()
   if (!boxId) throw new Error('No se pudo identificar la caja')
-  if (!shiftId) throw new Error('No se pudo identificar el turno actual')
   if (!dayId) throw new Error('No se pudo identificar el turno configurado para el horario actual')
 
   const { data, error } = await supabase.rpc('reset_shift_history', {
