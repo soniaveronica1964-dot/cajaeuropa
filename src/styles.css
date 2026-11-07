@@ -1435,8 +1435,8 @@ input[type="time"] { color-scheme: dark; }
   z-index: 200;
   display: grid;
   gap: 7px;
-  width: min(320px, calc(100vw - 16px));
-  padding: 11px 13px;
+  width: min(288px, calc(100vw - 16px));
+  padding: 11px;
   border: 1px solid var(--accent-border);
   border-radius: 6px;
   background: color-mix(in srgb, var(--accent) 10%, #202a2c);
@@ -1449,7 +1449,7 @@ input[type="time"] { color-scheme: dark; }
 
 .account-credentials-tooltip-row {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: 56px minmax(0, 1fr);
   align-items: start;
   gap: 8px;
   font: 10px 'DM Mono', monospace;

@@ -1674,7 +1674,7 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
     credentialTooltipShowTimer.current = setTimeout(() => {
       const rect = anchor.getBoundingClientRect()
       const pageZoom = Number.parseFloat(window.getComputedStyle(document.documentElement).zoom) || 1
-      const tooltipWidth = Math.min(320, (window.innerWidth - 16) / pageZoom)
+      const tooltipWidth = Math.min(288, (window.innerWidth - 16) / pageZoom)
       const left = Math.min(Math.max(8, rect.left / pageZoom), window.innerWidth - tooltipWidth - 8)
       const top = rect.bottom / pageZoom + 8
       setHoveredAccount(account)
