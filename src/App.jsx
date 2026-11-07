@@ -1741,12 +1741,14 @@ function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, 
           return <div
             className="matrix-account-cell"
             key={`${keyPrefix}-${holder}-${wallet}`}
-            onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget.querySelector('.matrix-value') || event.currentTarget)}
-            onMouseLeave={scheduleHideAccountCredentials}
-            onFocus={(event) => showAccountCredentials(account, event.currentTarget)}
-            onBlur={scheduleHideAccountCredentials}
           >
-            <label className={`matrix-value ${valueTone}`}>
+            <label
+              className={`matrix-value ${valueTone}`}
+              onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget)}
+              onMouseLeave={scheduleHideAccountCredentials}
+              onFocus={(event) => showAccountCredentials(account, event.currentTarget)}
+              onBlur={scheduleHideAccountCredentials}
+            >
               <span>$</span>
               <input defaultValue={account.savedAmount ? numberWithCents.format(account.savedAmount) : ''} placeholder="-" onFocus={(event) => event.target.select()} onChange={(event) => {
                 const value = parseLocalizedAmount(event.target.value)
