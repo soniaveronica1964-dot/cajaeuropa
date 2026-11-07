@@ -4872,42 +4872,53 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
 
       {tab === 'app' && <>
         <div className="app-settings-columns">
-        <section className="config-card">
-          <div className="config-list-head"><h3>Configuración de la aplicación</h3><span>Único registro activo</span></div>
-          <div className="account-settings-fields app-config-fields">
-            <label><span>Nombre</span><input defaultValue={(data.appConfig?.[0]?.nombre) || 'Caja Europa'} onBlur={async (event) => {
-              const next = event.target.value.trim()
-              if (!next || next === (data.appConfig?.[0]?.nombre || 'Caja Europa')) return
-              await persistUpdate(() => saveAppConfig({ name: next }), 'Configuración de la app guardada en Supabase')
-            }} /></label>
-            <div className="app-image-upload">
-              <span>Imagen</span>
-              <div className="app-image-controls">
-                {appImagePreview && <img src={appImagePreview} alt="Vista previa de la imagen de la aplicación" />}
-                <div>
-                  <input ref={appImageInputRef} type="file" accept="image/*" hidden onChange={async (event) => {
-                    const file = event.target.files?.[0]
-                    if (!file) return
-                    try {
-                      const imagePayload = await createAppImagePayload(file)
-                      await persistUpdate(() => replaceAppImage(imagePayload.original, imagePayload.imageMini), 'Imagen de la aplicación actualizada')
-                    } catch (error) {
-                      setToast(error.message || 'No se pudo procesar la imagen')
-                    } finally {
-                      event.target.value = ''
-                    }
-                  }} />
-                  <button type="button" className="secondary-button app-image-action" onClick={() => appImageInputRef.current?.click()}><Upload size={14} /> {appImageReference ? 'Reemplazar archivo' : 'Subir archivo'}</button>
-                  <button type="button" className="delete-button app-image-delete" disabled={!appImageReference} onClick={() => persistUpdate(() => deleteAppImage(), 'Imagen de la aplicación eliminada')}><Trash2 size={14} /> Eliminar imagen</button>
+        <div className="app-settings-primary-column">
+          <section className="config-card">
+            <div className="config-list-head"><h3>Configuración de la aplicación</h3><span>Único registro activo</span></div>
+            <div className="account-settings-fields app-config-fields">
+              <label><span>Nombre</span><input defaultValue={(data.appConfig?.[0]?.nombre) || 'Caja Europa'} onBlur={async (event) => {
+                const next = event.target.value.trim()
+                if (!next || next === (data.appConfig?.[0]?.nombre || 'Caja Europa')) return
+                await persistUpdate(() => saveAppConfig({ name: next }), 'Configuración de la app guardada en Supabase')
+              }} /></label>
+              <div className="app-image-upload">
+                <span>Imagen</span>
+                <div className="app-image-controls">
+                  {appImagePreview && <img src={appImagePreview} alt="Vista previa de la imagen de la aplicación" />}
+                  <div>
+                    <input ref={appImageInputRef} type="file" accept="image/*" hidden onChange={async (event) => {
+                      const file = event.target.files?.[0]
+                      if (!file) return
+                      try {
+                        const imagePayload = await createAppImagePayload(file)
+                        await persistUpdate(() => replaceAppImage(imagePayload.original, imagePayload.imageMini), 'Imagen de la aplicación actualizada')
+                      } catch (error) {
+                        setToast(error.message || 'No se pudo procesar la imagen')
+                      } finally {
+                        event.target.value = ''
+                      }
+                    }} />
+                    <button type="button" className="secondary-button app-image-action" onClick={() => appImageInputRef.current?.click()}><Upload size={14} /> {appImageReference ? 'Reemplazar archivo' : 'Subir archivo'}</button>
+                    <button type="button" className="delete-button app-image-delete" disabled={!appImageReference} onClick={() => persistUpdate(() => deleteAppImage(), 'Imagen de la aplicación eliminada')}><Trash2 size={14} /> Eliminar imagen</button>
+                  </div>
                 </div>
               </div>
+              <div className="app-config-toggles">
+                <label className="toggle-cell" aria-label={data.appConfig?.[0]?.tema ? 'Tema claro' : 'Tema oscuro'}><span>{data.appConfig?.[0]?.tema ? 'Tema claro' : 'Tema oscuro'}</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ theme: !Boolean(data.appConfig?.[0]?.tema) }), 'Tema actualizado')} /><span aria-hidden="true" /></label>
+                <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false) }), 'Configuración visual guardada')} /><span aria-hidden="true" /></label>
+              </div>
             </div>
-            <div className="app-config-toggles">
-              <label className="toggle-cell" aria-label={data.appConfig?.[0]?.tema ? 'Tema claro' : 'Tema oscuro'}><span>{data.appConfig?.[0]?.tema ? 'Tema claro' : 'Tema oscuro'}</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.tema)} onChange={async () => persistUpdate(() => saveAppConfig({ theme: !Boolean(data.appConfig?.[0]?.tema) }), 'Tema actualizado')} /><span aria-hidden="true" /></label>
-              <label className="toggle-cell" aria-label="Ver notas"><span>Ver notas</span><input type="checkbox" checked={Boolean(data.appConfig?.[0]?.ver_notas !== false)} onChange={async () => persistUpdate(() => saveAppConfig({ showNotes: !Boolean(data.appConfig?.[0]?.ver_notas !== false) }), 'Configuración visual guardada')} /><span aria-hidden="true" /></label>
-            </div>
-          </div>
-        </section>
+          </section>
+          <section className="config-card app-development-card">
+            <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Reinicio de turnos</span></div>
+            <p className="muted-copy">Borra todos los turnos de esta caja y sus datos operativos; luego crea un turno limpio según el horario actual, sin heredar saldos ni registros.</p>
+            <button type="button" className="secondary-button app-format-button" onClick={onCloseBox} disabled={!currentBoxId}>
+              Reiniciar turnos
+            </button>
+            <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
+            <button type="button" className="secondary-button app-format-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
+          </section>
+        </div>
         <section className="config-card">
           <div className="config-list-head"><h3>Colores</h3><span>{(data.colors || []).length} registros</span></div>
           {(data.colors || []).map((color) => <div className="config-list-row app-color-row" key={color.id}>
@@ -4926,15 +4937,6 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
           <button type="button" className="config-add" onClick={() => persistUpdate(() => createColor({ name: 'Nuevo color', hex: '#72D7CA' }), 'Color creado')}><Plus size={15} /> Agregar color</button>
         </section>
         </div>
-        <section className="config-card" style={{ marginTop: '18px', borderColor: 'rgba(232, 207, 102, 0.45)' }}>
-          <div className="config-list-head"><h3>Zona de desarrollo</h3><span>Reinicio de turnos</span></div>
-          <p className="muted-copy">Borra todos los turnos de esta caja y sus datos operativos; luego crea un turno limpio según el horario actual, sin heredar saldos ni registros.</p>
-          <button type="button" className="secondary-button app-format-button" onClick={onCloseBox} disabled={!currentBoxId}>
-            <LockKeyhole size={15} /> Reiniciar turnos
-          </button>
-          <p className="muted-copy">El formateo elimina todos los datos de la aplicación y reinicia las identidades desde 1.</p>
-          <button type="button" className="secondary-button app-format-button" onClick={handleFormatDatabase} disabled={formatting}>{formatting ? 'Formateando...' : 'Formatear base de datos'}</button>
-        </section>
       </>}
 
       {tab === 'goals' && <section className="config-card">

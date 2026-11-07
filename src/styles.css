@@ -2965,6 +2965,15 @@ input[type="time"] { color-scheme: dark; }
   gap: 18px;
   margin-bottom: 18px;
 }
+.app-settings-primary-column {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-width: 0;
+}
+.app-development-card {
+  border-color: color-mix(in srgb, var(--red) 55%, var(--line));
+}
 .app-config-fields > label {
   width: min(100%, 380px);
 }
