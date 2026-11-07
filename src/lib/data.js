@@ -150,9 +150,10 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     const candidates = sharedValueLinks.filter(link => String(link.cuenta_id) === String(accountId))
     const ownerLinks = candidates.filter(link => String(link.caja_id) === String(link.turnos?.caja_id))
     const unassignedLinks = candidates.filter(link => link.caja_id == null)
-    const selectedLink = ownerLinks.find(link => String(link.caja_id) === String(boxId))
-      || ownerLinks[0]
+    const selectedLink = ownerLinks.find(link => Number(link.valor) !== 0)
       || unassignedLinks.find(link => Number(link.valor) !== 0)
+      || ownerLinks.find(link => String(link.caja_id) === String(boxId))
+      || ownerLinks[0]
       || unassignedLinks.find(link => String(link.turnos?.caja_id) === String(boxId))
       || unassignedLinks[0]
       || accountLinks.find(link => String(link.cuenta_id) === String(accountId))
@@ -556,7 +557,10 @@ export async function updateAccountValueOwner(accountShiftId, ownerBoxId, previo
     if (membershipError) throw membershipError
     if (!boxMembership) await ensureAccountBoxLink({ accountId: currentLink.cuenta_id, boxId: ownerBoxId })
 
-    targetLink = (activeLinks || []).find(link => String(link.turnos?.caja_id) === String(ownerBoxId))
+    targetLink = (activeLinks || []).find(link => (
+      String(link.turnos?.caja_id) === String(ownerBoxId)
+      && String(link.caja_id) === String(ownerBoxId)
+    ))
     if (!targetLink) {
       const { data: targetShift, error: shiftError } = await supabase
         .from('turnos')
@@ -566,27 +570,40 @@ export async function updateAccountValueOwner(accountShiftId, ownerBoxId, previo
         .maybeSingle()
       if (shiftError) throw shiftError
       if (!targetShift) throw new Error('La caja elegida no tiene un turno activo')
-      const { data: createdLink, error: createError } = await supabase
-        .from('cuentas_x_turno')
-        .upsert({
-          turno_id: targetShift.id,
-          cuenta_id: currentLink.cuenta_id,
-          caja_id: ownerBoxId,
-          valor: 0,
-          cobros: false,
-          retiros: false,
-        }, { onConflict: 'turno_id,cuenta_id,caja_id', ignoreDuplicates: true })
-        .select('id, turno_id, cuenta_id, caja_id, valor')
-        .single()
-      if (createError) throw createError
-      targetLink = { ...createdLink, turnos: { id: targetShift.id, caja_id: targetShift.caja_id, abierto: true } }
+      const unassignedTargetLink = (activeLinks || []).find(link => (
+        String(link.turnos?.id) === String(targetShift.id)
+        && link.caja_id == null
+      ))
+      if (unassignedTargetLink) {
+        const { error: assignError } = await supabase
+          .from('cuentas_x_turno')
+          .update({ caja_id: ownerBoxId })
+          .eq('id', unassignedTargetLink.id)
+        if (assignError) throw assignError
+        targetLink = { ...unassignedTargetLink, caja_id: ownerBoxId }
+      } else {
+        const { data: createdLink, error: createError } = await supabase
+          .from('cuentas_x_turno')
+          .upsert({
+            turno_id: targetShift.id,
+            cuenta_id: currentLink.cuenta_id,
+            caja_id: ownerBoxId,
+            valor: 0,
+            cobros: false,
+            retiros: false,
+          }, { onConflict: 'turno_id,cuenta_id,caja_id', ignoreDuplicates: true })
+          .select('id, turno_id, cuenta_id, caja_id, valor')
+          .single()
+        if (createError) throw createError
+        targetLink = { ...createdLink, turnos: { id: targetShift.id, caja_id: targetShift.caja_id, abierto: true } }
+      }
     }
   }
 
   for (const link of activeLinks || []) {
     const { error } = await supabase
       .from('cuentas_x_turno')
-      .update({ caja_id: ownerBoxId, valor: 0 })
+      .update({ valor: 0 })
       .eq('id', link.id)
     if (error) throw error
   }

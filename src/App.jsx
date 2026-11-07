@@ -1833,7 +1833,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
             key={`${keyPrefix}-${holder}-${wallet}`}
           >
             <label
-              className={`matrix-value ${valueTone} ${account.accountType?.es_compartido ? 'shared-owner-value' : ''} ${account.displayAmount > 0 ? 'has-value' : ''}`}
+              className={`matrix-value ${valueTone} ${account.accountType?.es_compartido ? 'shared-owner-value' : ''}`}
               style={account.accountType?.es_compartido ? { '--shared-owner-color': ownerColor } : undefined}
               onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget)}
               onMouseLeave={scheduleHideAccountCredentials}

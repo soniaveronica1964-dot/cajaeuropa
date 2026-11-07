@@ -1575,7 +1575,7 @@ input[type="time"] { color-scheme: dark; }
   background: rgba(17, 23, 24, 0.7);
   color: var(--muted);
   text-align: center;
-  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease;
+  transition: background-color 140ms ease, box-shadow 140ms ease;
 }
 
 .matrix-row .matrix-value:focus-within {
@@ -1606,16 +1606,16 @@ input[type="time"] { color-scheme: dark; }
   border-color: var(--shared-owner-color);
 }
 
-.matrix-row .matrix-value.has-value {
+.matrix-row .matrix-value:has(input:not(:placeholder-shown)) {
   color: #ffffff;
 }
 
-.matrix-row .matrix-value.has-value:not(.shared-owner-value) {
+.matrix-row .matrix-value:has(input:not(:placeholder-shown)):not(.shared-owner-value) {
   border-color: rgba(255, 255, 255, 0.72);
 }
 
-.matrix-row .matrix-value.has-value > span,
-.matrix-row .matrix-value.has-value input {
+.matrix-row .matrix-value:has(input:not(:placeholder-shown)) > span,
+.matrix-row .matrix-value:has(input:not(:placeholder-shown)) input {
   color: #ffffff;
 }
 
