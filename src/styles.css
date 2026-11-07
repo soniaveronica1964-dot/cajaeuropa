@@ -1619,18 +1619,22 @@ input[type="time"] { color-scheme: dark; }
   color: #ffffff;
 }
 
+.matrix-row .matrix-value.collecting:has(input:not(:placeholder-shown)) > span,
 .matrix-row .matrix-value.collecting:has(input:not(:placeholder-shown)) input {
   color: var(--green);
 }
 
+.matrix-row .matrix-value.withdrawing:has(input:not(:placeholder-shown)) > span,
 .matrix-row .matrix-value.withdrawing:has(input:not(:placeholder-shown)) input {
   color: var(--orange);
 }
 
+.matrix-row .matrix-value.both-enabled:has(input:not(:placeholder-shown)) > span,
 .matrix-row .matrix-value.both-enabled:has(input:not(:placeholder-shown)) input {
   color: var(--red);
 }
 
+.matrix-row .matrix-value.shared-owner-value:has(input:not(:placeholder-shown)) > span,
 .matrix-row .matrix-value.shared-owner-value:has(input:not(:placeholder-shown)) input {
   color: var(--shared-owner-color);
 }

@@ -169,12 +169,29 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     if (selectedLink) {
       sharedAccountBalances[accountId] = {
         value: Number(selectedLink.valor || 0),
+        valueLinkId: selectedLink.id,
         ownerBoxId: (explicitlyAssignedLink || legacyOwnerLink)?.caja_id ?? null,
       }
     }
   }
 
-  const accountsForShift = linkedAccounts.map(link => {
+  const sharedAccountLinkIds = new Set()
+  for (const accountId of sharedAccountIds) {
+    const accountLinksForShift = linkedAccounts.filter(link => String(link.cuenta_id) === String(accountId))
+    const sharedBalance = sharedAccountBalances[accountId]
+    const selectedLink = accountLinksForShift.find(link => (
+      sharedBalance?.ownerBoxId != null && String(link.caja_id) === String(sharedBalance.ownerBoxId)
+    )) || accountLinksForShift.find(link => String(link.id) === String(sharedBalance?.valueLinkId))
+      || accountLinksForShift.find(link => link.caja_id == null)
+      || accountLinksForShift.find(link => Number(link.valor) !== 0)
+      || accountLinksForShift[0]
+    if (selectedLink) sharedAccountLinkIds.add(String(selectedLink.id))
+  }
+
+  const accountsForShift = linkedAccounts.filter(link => {
+    const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
+    return !accountType?.es_compartido || sharedAccountLinkIds.has(String(link.id))
+  }).map(link => {
     const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
     if (!accountType?.es_compartido) return link
     const sharedBalance = sharedAccountBalances[link.cuenta_id]
