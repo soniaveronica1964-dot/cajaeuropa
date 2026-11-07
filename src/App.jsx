@@ -206,6 +206,13 @@ function sumMovementAmounts(rows = []) {
   return rows.reduce((sum, row) => sum + Number(row.monto || 0), 0)
 }
 
+function isSavingsAccount(account, accountTypes = []) {
+  const accountType = account.accountType || accountTypes.find(type => (
+    String(type.id) === String(account.cuentas?.tipo_cuenta_id)
+  ))
+  return Boolean(accountType?.ahorro)
+}
+
 function calculateChipDifference(chips = []) {
   return chips.reduce((sum, chip) => sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0), 0)
 }
@@ -390,7 +397,9 @@ function App() {
   const selectedBox = appData?.boxes?.find(boxItem => String(boxItem.id) === String(selectedBoxId))
   const activeBox = shift?.cajas?.nombre ?? selectedBox?.nombre ?? 'Sin caja'
   const accentColor = selectedBox?.colores?.hex || selectedBoxAccent
-  const cashTotal = (appData?.accounts || []).reduce((sum, account) => sum + Number(account.valor || 0), 0)
+  const cashTotal = (appData?.accounts || [])
+    .filter(account => !isSavingsAccount(account, appData?.accountTypes))
+    .reduce((sum, account) => sum + Number(account.valor || 0), 0)
   const countedChipDifference = calculateChipDifference(appData?.chips || [])
   const savedCashDiscrepancy = calculateCashDiscrepancy({
     shiftId: shift?.id,
@@ -779,7 +788,8 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       amount,
     }
   })
-  const total = accounts.reduce((sum, account) => sum + account.amount, 0)
+  const cashAccounts = accounts.filter(account => !account.accountType?.ahorro)
+  const total = cashAccounts.reduce((sum, account) => sum + account.amount, 0)
   const chips = data.chips.map(chip => ({
     ...chip,
     fichas_final: Object.prototype.hasOwnProperty.call(chipFinalDrafts, String(chip.id)) ? chipFinalDrafts[String(chip.id)] : chip.fichas_final,
@@ -1810,7 +1820,9 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
     .filter(holder => matrixAccounts.some(account => account.holder === holder))
     .map(holder => {
       const holderAccounts = matrixAccounts.filter(account => account.holder === holder)
-      const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0)
+      const holderTotal = holderAccounts
+        .filter(account => !account.accountType?.ahorro)
+        .reduce((sum, account) => sum + account.amount, 0)
       const rowKey = `${keyPrefix}-${holder}`
       return <div className="matrix-row" key={rowKey}>
         <strong>{holder}</strong>
@@ -1892,8 +1904,8 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
 
   const renderTotal = () => <div className="matrix-total">
     <span>Total billetera</span>
-    {wallets.map(wallet => <b key={wallet}>{moneyWithCents.format(accounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}
-    <strong>{moneyWithCents.format(accounts.reduce((sum, account) => sum + account.amount, 0))}</strong>
+    {wallets.map(wallet => <b key={wallet}>{moneyWithCents.format(cashAccounts.filter(account => account.wallet === wallet).reduce((sum, account) => sum + account.amount, 0))}</b>)}
+    <strong>{moneyWithCents.format(cashAccounts.reduce((sum, account) => sum + account.amount, 0))}</strong>
   </div>
 
   return <>
