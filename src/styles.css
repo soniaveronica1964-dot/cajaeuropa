@@ -1437,11 +1437,12 @@ input[type="time"] { color-scheme: dark; }
   gap: 7px;
   width: min(320px, calc(100vw - 16px));
   padding: 11px 13px;
-  border: 1px solid rgba(146, 158, 159, 0.42);
+  border: 1px solid var(--accent-border);
   border-radius: 6px;
-  background: #202a2c;
+  background: color-mix(in srgb, var(--accent) 10%, #202a2c);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.38);
   color: var(--text);
+  overflow-y: auto;
   user-select: text;
   pointer-events: auto;
 }
@@ -1467,8 +1468,18 @@ input[type="time"] { color-scheme: dark; }
   user-select: text;
 }
 
+.account-credentials-tooltip[data-theme='light'] {
+  background: color-mix(in srgb, var(--accent) 10%, #ffffff);
+  box-shadow: 0 8px 22px rgba(28, 52, 43, 0.16);
+}
+
 .matrix-row > .matrix-account-cell {
   padding-right: 10px;
+}
+
+.matrix-row.has-credential-tooltip {
+  min-height: 168px;
+  align-items: start;
 }
 
 .matrix-row .matrix-value {

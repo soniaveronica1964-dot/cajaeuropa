@@ -807,7 +807,7 @@ function Dashboard({ data, openGoal, setOpenGoal, setToast, onSaved, onBonusCrea
     <div className="dashboard-grid">
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
-        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
+        <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} /></div>
         <div className="operations-grid">
           <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
@@ -1652,10 +1652,11 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
     ))}</div> : <EmptyInline text="No hay fichas configuradas para este turno." />}
   </section>
 }
-function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccountValueDraft }) {
+function AccountMatrix({ accounts, holders, wallets, accentColor, isLightTheme, setToast, onSaved, onAccountValueDraft }) {
   const [flagOverrides, setFlagOverrides] = useState({})
   const [expandedAccountTypes, setExpandedAccountTypes] = useState({ deposit: true, shared: false, saving: false })
   const [hoveredAccount, setHoveredAccount] = useState(null)
+  const [hoveredRowKey, setHoveredRowKey] = useState(null)
   const [credentialTooltipPosition, setCredentialTooltipPosition] = useState(null)
   const credentialTooltipTimer = useRef(null)
   const accountTypeSections = [
@@ -1667,23 +1668,21 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
   const regularAccounts = accounts.filter(account => !specialAccountIds.has(account.cuenta_id))
   const columns = { '--wallet-count': wallets.length }
 
-  const showAccountCredentials = (account, anchor) => {
+  const showAccountCredentials = (account, anchor, rowKey) => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
     const rect = anchor.getBoundingClientRect()
     const tooltipWidth = Math.min(320, window.innerWidth - 16)
-    const tooltipHeight = 112
     const left = Math.min(Math.max(8, rect.left), window.innerWidth - tooltipWidth - 8)
-    const below = rect.bottom + 8
-    const top = below + tooltipHeight <= window.innerHeight - 8
-      ? below
-      : Math.max(8, rect.top - tooltipHeight - 8)
+    const top = rect.bottom + 8
     setHoveredAccount(account)
-    setCredentialTooltipPosition({ left, top })
+    setHoveredRowKey(rowKey)
+    setCredentialTooltipPosition({ left, top, maxHeight: Math.min(104, Math.max(36, window.innerHeight - top - 8)) })
   }
   const scheduleHideAccountCredentials = () => {
     if (credentialTooltipTimer.current) clearTimeout(credentialTooltipTimer.current)
     credentialTooltipTimer.current = setTimeout(() => {
       setHoveredAccount(null)
+      setHoveredRowKey(null)
       setCredentialTooltipPosition(null)
       credentialTooltipTimer.current = null
     }, 250)
@@ -1734,7 +1733,8 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
     .map(holder => {
       const holderAccounts = matrixAccounts.filter(account => account.holder === holder)
       const holderTotal = holderAccounts.reduce((sum, account) => sum + account.amount, 0)
-      return <div className="matrix-row" key={`${keyPrefix}-${holder}`}>
+      const rowKey = `${keyPrefix}-${holder}`
+      return <div className={`matrix-row ${hoveredRowKey === rowKey ? 'has-credential-tooltip' : ''}`} key={rowKey}>
         <strong>{holder}</strong>
         {wallets.map(wallet => {
           const account = holderAccounts.find(item => item.wallet === wallet)
@@ -1744,9 +1744,9 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
           return <div
             className="matrix-account-cell"
             key={`${keyPrefix}-${holder}-${wallet}`}
-            onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget)}
+            onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget, rowKey)}
             onMouseLeave={scheduleHideAccountCredentials}
-            onFocus={(event) => showAccountCredentials(account, event.currentTarget)}
+            onFocus={(event) => showAccountCredentials(account, event.currentTarget, rowKey)}
             onBlur={scheduleHideAccountCredentials}
           >
             <label className={`matrix-value ${valueTone}`}>
@@ -1803,7 +1803,15 @@ function AccountMatrix({ accounts, holders, wallets, setToast, onSaved, onAccoun
       <div
         className="account-credentials-tooltip"
         role="tooltip"
-        style={credentialTooltipPosition}
+        data-theme={isLightTheme ? 'light' : 'dark'}
+        style={{
+          ...credentialTooltipPosition,
+          '--accent': accentColor,
+          '--accent-border': isLightTheme
+            ? 'color-mix(in srgb, var(--accent) 42%, #ffffff)'
+            : 'color-mix(in srgb, var(--accent) 38%, transparent)',
+          '--text': isLightTheme ? '#1d2a26' : '#edf3f5',
+        }}
         onMouseEnter={keepAccountCredentialsVisible}
         onMouseLeave={scheduleHideAccountCredentials}
       >
