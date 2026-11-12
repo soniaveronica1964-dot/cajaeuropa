@@ -2073,7 +2073,7 @@ input[type="time"] { color-scheme: dark; }
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
-  column-gap: 5.25px;
+  column-gap: 12px;
   row-gap: 12px;
 }
 .operation-card {
