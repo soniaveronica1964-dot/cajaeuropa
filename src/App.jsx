@@ -714,7 +714,7 @@ function App() {
             <div><span className="eyebrow">{view === 'bonuses' ? 'Catálogo de estados' : isReadOnlyShift ? 'Solo lectura · Turno cerrado' : shift ? `Turno iniciado · ${new Date(shift.fecha_hora_inicio).toLocaleString('es-AR')}` : 'Sin turno abierto'}</span><h1>{activeLabel === 'Caja' ? `${shiftName} / ${shiftTime}` : activeLabel}</h1><p>{view === 'bonuses' ? 'Administrá imágenes, tipos, porcentajes y condiciones' : shift ? `${new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · ${activeBox}` : 'Seleccioná una caja con un turno abierto'}</p></div>
             {view === 'dashboard' && shift && <div className="page-box-label">Caja {activeBox}</div>}
             {view === 'dashboard' && shift && <div className="shift-heading-status">
-              {hasPendingNotes && <strong className="pending-notes">NOTAS PENDIENTES</strong>}
+              {hasPendingNotes && <strong className="pending-notes"><span>NOTAS</span><span>PENDIENTES</span></strong>}
               <div className="shift-discrepancy" aria-label={`Sobrante o faltante: ${cashDiscrepancyLabel}`}><span>Sobrante / Faltante</span><strong className={cashDiscrepancyTone}>{cashDiscrepancyLabel}</strong></div>
             </div>}
           </section>

@@ -618,9 +618,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   min-width: 0;
 }
 .pending-notes {
+  display: grid;
   color: var(--red);
-  font-size: 13px;
+  font-size: 26px;
   font-weight: 800;
+  line-height: .95;
   text-align: right;
 }
 .shift-discrepancy {
