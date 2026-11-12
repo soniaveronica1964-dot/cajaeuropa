@@ -1124,16 +1124,13 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
   const net = bonusNetTotal(displayRows)
 
   const cycleMode = () => setMode(current => modeOrder[(modeOrder.indexOf(current) + 1) % modeOrder.length])
-  const create = async (event) => {
-    const key = event.key
-    if (!['Enter', '+', '-'].includes(key)) return
-    event.preventDefault()
+  const create = async (type = mode, { silentEmpty = false } = {}) => {
     const amount = parseLocalizedAmount(value)
     if (!(amount > 0)) {
+      if (silentEmpty && !value.trim()) return
       setToast('Ingresá un monto válido')
       return
     }
-    const type = key === '+' ? 'recovered' : key === '-' ? 'publicity' : mode
     const pendingId = `pending-${++pendingIdCounter.current}`
     const pendingBonus = {
       id: pendingId,
@@ -1156,6 +1153,13 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
       setValue(current => current || value)
       setToast(error.message || 'No se pudo guardar el bono')
     }
+  }
+
+  const handleBonusKeyDown = event => {
+    if (!['Enter', '+', '-'].includes(event.key)) return
+    event.preventDefault()
+    const type = event.key === '+' ? 'recovered' : event.key === '-' ? 'publicity' : mode
+    create(type)
   }
 
   const saveRecentAmount = async (event, bonus) => {
@@ -1198,7 +1202,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
     <div className="bonus-quick-controls">
       <label className={`bonus-quick-amount bonus-type-${mode}`}>
         <span>$</span>
-        <input aria-label="Monto del bono" inputMode="decimal" value={value} placeholder={`Bonos netos: ${moneyWithCents.format(net)}`} onChange={(event) => setValue(event.target.value)} onKeyDown={create} />
+        <input aria-label="Monto del bono" inputMode="decimal" value={value} placeholder={`Bonos netos: ${moneyWithCents.format(net)}`} onChange={(event) => setValue(event.target.value)} onKeyDown={handleBonusKeyDown} onBlur={() => create(mode, { silentEmpty: true })} />
       </label>
       <button type="button" className={`bonus-mode-button bonus-type-${mode}`} title={`Tipo: ${bonusTypeLabels[mode]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[mode]}`} onClick={cycleMode}><ArrowLeftRight size={14} /></button>
       <button type="button" className="icon-button bonus-placeholder-button" title="Agregar bono manual próximamente" aria-label="Agregar bono manual próximamente"><Plus size={14} /></button>
