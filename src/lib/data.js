@@ -1694,7 +1694,7 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
     throw new Error('El siguiente turno configurado no pertenece a esta caja')
   }
 
-  const [accountsResult, chipsResult, notesResult, logisticsResult, eligibleAccountIds] = await Promise.all([
+  const [accountsResult, chipsResult, notesResult, logisticsResult] = await Promise.all([
     supabase.from('cuentas_x_turno')
       .select('id, cuenta_id, caja_id, valor, cobros, retiros, valor_actualizado_en, caja_id_actualizado_en')
       .eq('turno_id', shiftId),
@@ -1709,7 +1709,6 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
       .select('id')
       .eq('turno_id', shiftId)
       .maybeSingle(),
-    getEligibleShiftAccountIds(previousShift.caja_id),
   ])
   for (const result of [accountsResult, chipsResult, notesResult, logisticsResult]) {
     if (result.error) throw result.error
@@ -1719,19 +1718,12 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
   const previousChips = chipsResult.data || []
   const { data: previousLines, error: linesError } = logisticsResult.data
     ? await supabase.from('lineas_logistica')
-      .select('id, cuenta_x_turno_id')
+      .select('id, cuenta_x_turno_id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, is_off')
       .eq('logistica_id', logisticsResult.data.id)
     : { data: [], error: null }
   if (linesError) throw linesError
 
   const accountIdsByLinkId = new Map(previousAccounts.map((account) => [String(account.id), String(account.cuenta_id)]))
-  const unavailableLogisticsAccount = (previousLines || []).find((line) => {
-    const accountId = accountIdsByLinkId.get(String(line.cuenta_x_turno_id))
-    return !accountId || !eligibleAccountIds.has(accountId)
-  })
-  if (unavailableLogisticsAccount) {
-    throw new Error('No se puede heredar la logística porque una de sus cuentas ya no está habilitada para esta caja o su billetera está desactivada')
-  }
 
   const { data: closedShift, error: closeError } = await supabase.from('turnos').update({
     abierto: false,
@@ -1812,43 +1804,30 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
         String(account.cuenta_id),
         account.id,
       ]))
-      for (const line of previousLines || []) {
+      const inheritableLines = (previousLines || []).flatMap((line) => {
         const accountId = accountIdsByLinkId.get(String(line.cuenta_x_turno_id))
         const nextAccountLinkId = accountId && nextAccountById.get(accountId)
-        if (!nextAccountLinkId) {
-          throw new Error('No se pudo asociar una línea de logística con su cuenta del turno nuevo')
-        }
-        const { error } = await supabase.from('lineas_logistica')
-          .update({ cuenta_x_turno_id: nextAccountLinkId })
-          .eq('id', line.id)
+        if (!nextAccountLinkId) return []
+        const { id, ...lineData } = line
+        return [{ ...lineData, cuenta_x_turno_id: nextAccountLinkId }]
+      })
+      const { data: nextLogistics, error: nextLogisticsError } = await supabase
+        .from('logistica')
+        .insert({ turno_id: newShift.id })
+        .select('id')
+        .single()
+      if (nextLogisticsError) throw nextLogisticsError
+      if (inheritableLines.length) {
+        const { error } = await supabase.from('lineas_logistica').insert(
+          inheritableLines.map((line) => ({ ...line, logistica_id: nextLogistics.id })),
+        )
         if (error) throw error
       }
-      const { error } = await supabase.from('logistica')
-        .update({ turno_id: newShift.id })
-        .eq('id', logisticsResult.data.id)
-      if (error) throw error
     }
 
     return newShift
   } catch (error) {
     if (newShift) {
-      for (const line of previousLines || []) {
-        const oldAccountLinkId = line.cuenta_x_turno_id
-        const { error: lineRollbackError } = await supabase.from('lineas_logistica')
-          .update({ cuenta_x_turno_id: oldAccountLinkId })
-          .eq('id', line.id)
-        if (lineRollbackError) {
-          throw new Error(`${error.message}. No se pudo restaurar una línea de logística: ${lineRollbackError.message}`)
-        }
-      }
-      if (logisticsResult.data) {
-        const { error: logisticsRollbackError } = await supabase.from('logistica')
-          .update({ turno_id: shiftId })
-          .eq('id', logisticsResult.data.id)
-        if (logisticsRollbackError) {
-          throw new Error(`${error.message}. No se pudo restaurar la logística: ${logisticsRollbackError.message}`)
-        }
-      }
       const { error: deleteNewShiftError } = await supabase.from('turnos').delete().eq('id', newShift.id)
       if (deleteNewShiftError) {
         throw new Error(`${error.message}. No se pudo revertir el turno nuevo: ${deleteNewShiftError.message}`)
