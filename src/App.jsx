@@ -1109,7 +1109,6 @@ function bonusNetTotal(rows) {
 function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
   const [mode, setMode] = useState('granted')
   const [value, setValue] = useState('')
-  const [saving, setSaving] = useState(false)
   const [optimisticRows, setOptimisticRows] = useState([])
   const pendingIdCounter = useRef(0)
   const [savingRecentId, setSavingRecentId] = useState(null)
@@ -1143,7 +1142,6 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
     }
     setOptimisticRows(current => [pendingBonus, ...current])
     setValue('')
-    setSaving(true)
     try {
       const createdBonus = await createBonusLine(shiftId, { value: amount, type, bonusId: rows[0]?.bono_id })
       setOptimisticRows(current => current.map(bonus => bonus.id === pendingId ? createdBonus : bonus))
@@ -1154,8 +1152,6 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
       setOptimisticRows(current => current.filter(bonus => bonus.id !== pendingId))
       setValue(current => current || value)
       setToast(error.message || 'No se pudo guardar el bono')
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -1199,7 +1195,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
     <div className="bonus-quick-controls">
       <label className={`bonus-quick-amount bonus-type-${mode}`}>
         <span>$</span>
-        <input aria-label="Monto del bono" inputMode="decimal" value={value} placeholder={`Bonos netos: ${moneyWithCents.format(net)}`} onChange={(event) => setValue(event.target.value)} onKeyDown={create} disabled={saving} />
+        <input aria-label="Monto del bono" inputMode="decimal" value={value} placeholder={`Bonos netos: ${moneyWithCents.format(net)}`} onChange={(event) => setValue(event.target.value)} onKeyDown={create} />
       </label>
       <button type="button" className={`bonus-mode-button bonus-type-${mode}`} title={`Tipo: ${bonusTypeLabels[mode]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[mode]}`} onClick={cycleMode}><ArrowLeftRight size={14} /></button>
       <button type="button" className="icon-button bonus-placeholder-button" title="Agregar bono manual próximamente" aria-label="Agregar bono manual próximamente"><Plus size={14} /></button>
@@ -1768,7 +1764,7 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
     {chips.length ? <div className="chip-final-list">{chips.map(chip => (
       <div className="chip-final-field" key={chip.id}>
         <span>Ficha Final ({chip.plataformas?.nombre || 'Plataforma'})</span>
-        <div className="chip-final-value">
+        <div className="chip-final-value" style={{ '--chip-color': chip.colorHex || 'var(--accent-border)' }}>
           <b>$</b>
           <input
             aria-label={`Ficha final ${chip.plataformas?.nombre || 'Plataforma'}`}
@@ -3099,7 +3095,7 @@ function ChipControlCard({ chips, onSaved, onChipFinalSaved, setToast }) {
         return <div className="chip-control-row" key={chip.id}>
           <strong>{chip.plataformas?.nombre || 'Plataforma'}</strong>
           <span>{money.format(chip.fichas_inicial)}</span>
-          <input className="chip-final-input" aria-label={`Ficha final ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="$ 0,00" value={drafts[chip.id] ?? formatValue(chip.fichas_final)} onChange={event => setDrafts(current => ({ ...current, [chip.id]: event.target.value }))} onBlur={() => saveFinal(chip)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} disabled={savingId === chip.id || savingLoad} />
+          <input className="chip-final-input" style={{ '--chip-color': chip.colorHex || 'var(--accent-border)' }} aria-label={`Ficha final ${chip.plataformas?.nombre || 'plataforma'}`} inputMode="decimal" placeholder="$ 0,00" value={drafts[chip.id] ?? formatValue(chip.fichas_final)} onChange={event => setDrafts(current => ({ ...current, [chip.id]: event.target.value }))} onBlur={() => saveFinal(chip)} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} disabled={savingId === chip.id || savingLoad} />
           <span className={balance > 0 ? 'positive' : balance < 0 ? 'negative' : ''}>{money.format(balance)}</span>
           {showLoads && <small className="chip-load-total">Cargas registradas {money.format(loads)}</small>}
         </div>

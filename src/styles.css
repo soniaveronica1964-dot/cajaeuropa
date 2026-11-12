@@ -1049,7 +1049,7 @@ input[type="time"] { color-scheme: dark; }
   gap: 8px;
   min-height: 30px;
   padding: 5px 9px;
-  border: 1px solid var(--accent-border);
+  border: 1px solid var(--chip-color, var(--accent-border));
   border-radius: 5px;
   background: rgba(12, 17, 20, 0.45);
 }
@@ -2232,8 +2232,8 @@ input[type="time"] { color-scheme: dark; }
 .chip-control-total strong.positive { color: var(--green); }
 .chip-control-row > span.negative,
 .chip-control-total strong.negative { color: var(--red); }
-.chip-control-row .chip-final-input { width: 100%; min-width: 0; height: 32px; padding: 0 7px; border: 1px solid var(--accent-border); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; text-align: right; }
-.chip-control-row .chip-final-input:focus { border-color: var(--accent); }
+.chip-control-row .chip-final-input { width: 100%; min-width: 0; height: 32px; padding: 0 7px; border: 1px solid var(--chip-color, var(--accent-border)); border-radius: 5px; outline: 0; background: rgba(12, 17, 20, .62); color: var(--text); font: 9px 'DM Mono', monospace; text-align: right; }
+.chip-control-row .chip-final-input:focus { border-color: var(--chip-color, var(--accent)); }
 .chip-control-row .chip-load-total { grid-column: 1 / -1; color: var(--muted); font: 8px 'DM Mono', monospace; text-align: right; }
 .chip-control-total { margin-top: 10px; padding-top: 9px; border-top: 1px solid rgba(121, 146, 146, .2); }
 .chip-load-backdrop { z-index: 100; }

@@ -109,7 +109,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     query('tipos_gasto', 'id, nombre, invertir_signo', request => request.order('id', { ascending: true })),
     query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, is_off, cuenta_x_turno_id, logistica!inner(turno_id)', request => request.eq('logistica.turno_id', shift.id).order('num_orden', { ascending: true }).order('id', { ascending: true })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
-    query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id)),
+    query('fichas', 'id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.eq('turno_id', shift.id).order('id', { ascending: true })),
     queryBoxScopedEntities('titulares', 'id, nombre, orden_num, is_off', 'titulares_x_caja', 'titular_id', boxId, request => request.order('orden_num', { ascending: true }).order('id', { ascending: true })),
     queryBoxScopedEntities('billeteras', 'id, nombre, orden_num, is_off, tipo_billetera_id, tipos_billetera(nombre, cobros, retiros)', 'billeteras_x_caja', 'billetera_id', boxId, request => request.order('orden_num', { ascending: true }).order('id', { ascending: true })),
     query('plataformas', 'id, nombre, caja_id, color_id', request => request.order('id', { ascending: true })),
@@ -207,8 +207,16 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     const accountLink = accountsForShift.find(link => link.id === line.cuenta_x_turno_id)
     return { ...line, cuentas_x_turno: { ...(accountLink || {}), cuentas: accountById.get(accountLink?.cuenta_id) || null } }
   })
+  const platformColorById = new Map(platforms.map(platform => [
+    String(platform.id),
+    colors.find(color => String(color.id) === String(platform.color_id))?.hex || null,
+  ]))
+  const chipsWithPlatformColors = chips.map(chip => ({
+    ...chip,
+    colorHex: platformColorById.get(String(chip.plataforma_id)) || null,
+  }))
 
-  return { shift, boxes, accounts: accountsForShift, sharedAccountBalances, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
+  return { shift, boxes, accounts: accountsForShift, sharedAccountBalances, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, goals, chips: chipsWithPlatformColors, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
 
 export async function loadConfigurationData() {
