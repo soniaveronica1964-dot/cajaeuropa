@@ -610,6 +610,10 @@ function App() {
   const appImagePreview = getStoragePublicUrl(appImageReference)
 
   useEffect(() => {
+    document.title = appName
+  }, [appName])
+
+  useEffect(() => {
     let favicon = document.querySelector('link[rel="icon"]')
     if (!favicon) {
       favicon = document.createElement('link')
@@ -654,7 +658,7 @@ function App() {
       <header className="topbar">
         <div className="topbar-leading">
           <div className="brand" onClick={() => setView('dashboard')} role="button" tabIndex="0">
-            <div className="brand-mark">{appImagePreview ? <img className="brand-image" src={appImagePreview} alt="" /> : <Banknote size={21} />}</div>
+            <div className={`brand-mark ${appImagePreview ? 'has-image' : ''}`}>{appImagePreview ? <img className="brand-image" src={appImagePreview} alt="" /> : <Banknote size={21} />}</div>
             <div><strong>Caja<span>{appName}</span></strong><small>Control operativo</small></div>
           </div>
           <div className="shift-nav">
