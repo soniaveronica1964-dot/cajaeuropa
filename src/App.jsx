@@ -1124,13 +1124,16 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
   const net = bonusNetTotal(displayRows)
 
   const cycleMode = () => setMode(current => modeOrder[(modeOrder.indexOf(current) + 1) % modeOrder.length])
-  const create = async (type = mode, { silentEmpty = false } = {}) => {
+  const create = async (event) => {
+    const key = event.key
+    if (!['Enter', '+', '-'].includes(key)) return
+    event.preventDefault()
     const amount = parseLocalizedAmount(value)
     if (!(amount > 0)) {
-      if (silentEmpty && !value.trim()) return
       setToast('Ingresá un monto válido')
       return
     }
+    const type = key === '+' ? 'recovered' : key === '-' ? 'publicity' : mode
     const pendingId = `pending-${++pendingIdCounter.current}`
     const pendingBonus = {
       id: pendingId,
@@ -1155,16 +1158,13 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
     }
   }
 
-  const handleBonusKeyDown = event => {
-    if (!['Enter', '+', '-'].includes(event.key)) return
-    event.preventDefault()
-    const type = event.key === '+' ? 'recovered' : event.key === '-' ? 'publicity' : mode
-    create(type)
-  }
-
   const saveRecentAmount = async (event, bonus) => {
-    if (event.key !== 'Enter') return
-    event.preventDefault()
+    if (event.type === 'keydown' && event.key !== 'Enter') return
+    if (event.type === 'keydown') {
+      event.preventDefault()
+      event.currentTarget.blur()
+      return
+    }
     const input = event.currentTarget
     const amount = parseLocalizedAmount(input.value)
     if (amount == null || amount < 0) {
@@ -1202,7 +1202,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
     <div className="bonus-quick-controls">
       <label className={`bonus-quick-amount bonus-type-${mode}`}>
         <span>$</span>
-        <input aria-label="Monto del bono" inputMode="decimal" value={value} placeholder={`Bonos netos: ${moneyWithCents.format(net)}`} onChange={(event) => setValue(event.target.value)} onKeyDown={handleBonusKeyDown} onBlur={() => create(mode, { silentEmpty: true })} />
+        <input aria-label="Monto del bono" inputMode="decimal" value={value} placeholder={`Bonos netos: ${moneyWithCents.format(net)}`} onChange={(event) => setValue(event.target.value)} onKeyDown={create} />
       </label>
       <button type="button" className={`bonus-mode-button bonus-type-${mode}`} title={`Tipo: ${bonusTypeLabels[mode]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[mode]}`} onClick={cycleMode}><ArrowLeftRight size={14} /></button>
       <button type="button" className="icon-button bonus-placeholder-button" title="Agregar bono manual próximamente" aria-label="Agregar bono manual próximamente"><Plus size={14} /></button>
@@ -1221,6 +1221,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
             inputMode="decimal"
             disabled={bonus.pending || savingRecentId === bonus.id}
             onFocus={event => { event.currentTarget.value = numberWithCents.format(bonus.valor); event.currentTarget.select() }}
+            onBlur={event => saveRecentAmount(event, bonus)}
             onKeyDown={event => saveRecentAmount(event, bonus)}
           />
         </div>
