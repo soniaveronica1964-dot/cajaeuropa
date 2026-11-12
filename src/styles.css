@@ -2058,8 +2058,8 @@ input[type="time"] { color-scheme: dark; }
 .operations-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: start;
-  gap: 10px;
+  align-items: stretch;
+  gap: 8px;
 }
 .operation-card {
   display: flex;
@@ -2070,7 +2070,7 @@ input[type="time"] { color-scheme: dark; }
 .movement-card-expenses,
 .movement-card-tips,
 .operation-ta-charges,
-.operation-found-money { min-height: 300px; }
+.operation-found-money { min-height: 280px; }
 .operation-card .panel-title {
   gap: 8px;
   margin-bottom: 9px;
@@ -2143,9 +2143,9 @@ input[type="time"] { color-scheme: dark; }
 .operation-total { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 8px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
 .operation-card > .operation-total { margin-top: auto; }
 .operation-total strong { color: var(--text); font: 10px 'DM Mono', monospace; }
-.operation-bonus-card { grid-row: span 2; min-height: 610px; }
+.operation-bonus-card { grid-row: span 2; min-height: 568px; }
 .operation-bonus-card > .operation-total { flex: 0 0 auto; width: 100%; min-height: 25px; margin-top: auto; padding: 9px 0 1px; border-top: 1px solid var(--line); }
-.operation-bonus-card .operation-recent-list { flex: 1 0 auto; gap: 1px; }
+.operation-bonus-card .operation-recent-list { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; gap: 1px; }
 .operation-bonus-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: center; gap: 8px; text-transform: none; }
 .operation-bonus-totals > div { display: grid; justify-items: start; gap: 3px; min-width: 0; color: var(--muted); font-size: 9px; }
 .operation-bonus-totals > div:last-child > span { color: #f2cf55; font-weight: 700; }
@@ -2289,7 +2289,7 @@ input[type="time"] { color-scheme: dark; }
   }
 
   .operations-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .operation-bonus-card { grid-row: auto; min-height: 300px; }
+  .operation-bonus-card { grid-row: auto; min-height: 360px; max-height: 70dvh; }
 }
 
 @media (max-width: 700px) {

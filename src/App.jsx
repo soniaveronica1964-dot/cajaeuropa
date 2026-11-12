@@ -2759,7 +2759,7 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
     </form>
     <div className="operation-recent-list">
       <small>Últimos bonos</small>
-      {rows.slice(0, 20).map(row => <div className={`operation-recent-row bonus-type-${bonusTypeOf(row)}`} key={row.id}>
+      {[...rows].sort((left, right) => new Date(right.fecha_hora_creacion) - new Date(left.fecha_hora_creacion)).map(row => <div className={`operation-recent-row bonus-type-${bonusTypeOf(row)}`} key={row.id}>
         <span>{bonusTypeLabels[bonusTypeOf(row)]}</span>
         <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
         <b className="operation-bonus-amount"><input
