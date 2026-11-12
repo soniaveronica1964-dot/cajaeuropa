@@ -88,12 +88,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   --accent-border: color-mix(in srgb, var(--accent) 38%, transparent);
   --box-line: var(--accent-border);
   min-height: 100vh;
-  background: linear-gradient(
-    180deg,
-    color-mix(in srgb, var(--accent) 19%, #20221f) 0%,
-    color-mix(in srgb, var(--accent) 10%, #111514) 42%,
-    #050606 100%
-  );
+  background:
+    radial-gradient(
+      ellipse 78% 58% at 50% 8%,
+      color-mix(in srgb, var(--accent) 10%, #22231f) 0%,
+      rgba(8, 10, 9, 0) 100%
+    ),
+    linear-gradient(180deg, #090b0a 0%, #050606 100%);
 }
 
 .loading-screen {
@@ -127,7 +128,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   justify-content: space-between;
   gap: 18px;
   border-bottom: 1px solid var(--line);
-  background: color-mix(in srgb, var(--accent) 12%, rgba(9, 15, 17, 0.96));
+  background: color-mix(in srgb, var(--accent) 5%, rgba(9, 15, 17, 0.96));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
   backdrop-filter: blur(12px);
   position: sticky;
