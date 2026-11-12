@@ -575,7 +575,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  margin-bottom: 10.5px;
 }
 .page-heading-dashboard {
   display: grid;
@@ -636,7 +636,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   background: color-mix(in srgb, var(--accent) 18%, #000000);
   border-color: var(--line);
   padding: 10px 14px;
-  margin-bottom: 16px;
+  margin-bottom: 10.5px;
   overflow: hidden;
 }
 .goal-strip-head {
@@ -707,7 +707,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   gap: 0;
   border-radius: 8px;
   overflow: hidden;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
   background: color-mix(in srgb, var(--accent) 18%, #000000);
 }
 .summary-status, .metric, .rounding {
@@ -842,7 +842,7 @@ input[type="time"] { color-scheme: dark; }
 .dashboard-main {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   width: 100%;
 }
 
@@ -850,7 +850,7 @@ input[type="time"] { color-scheme: dark; }
   display: grid;
   grid-template-columns: 1.55fr 0.96fr 0.96fr;
   grid-auto-rows: 1fr;
-  gap: 18px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -886,7 +886,7 @@ input[type="time"] { color-scheme: dark; }
 .three-panels {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18px;
+  gap: 12px;
   align-items: stretch;
 }
 
@@ -960,7 +960,7 @@ input[type="time"] { color-scheme: dark; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 5.25px;
   min-height: 26px;
   padding: 5px 0;
   border-top: 1px solid rgba(121, 146, 146, 0.18);
