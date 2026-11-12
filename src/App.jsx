@@ -605,7 +605,7 @@ function App() {
   }
   const appConfig = appData?.appConfig?.[0]
   const appName = appConfig?.nombre || 'Caja Europa'
-  const pageTitle = appData ? `Caja ${appName} | Control Operativo` : 'Caja'
+  const pageTitle = appData ? `Caja ${appName} | Control Operativo` : 'Caja | Control Operativo'
   const isLightTheme = Boolean(appConfig?.tema)
   const appImageReference = appConfig?.imagen_mini || appConfig?.imagen
   const appImagePreview = getStoragePublicUrl(appImageReference)
@@ -2183,6 +2183,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
 }
 function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
   const [saving, setSaving] = useState(false)
+  const [walletToConfirm, setWalletToConfirm] = useState(null)
   const routeRows = [...rows]
     .filter(row => {
       if (row.is_off) return false
@@ -2215,9 +2216,13 @@ function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
   ].filter(item => item?.row)
 
   const walletLabel = row => `${row.cuentas_x_turno?.cuentas?.titulares?.nombre || 'Sin titular'} · ${row.cuentas_x_turno?.cuentas?.billeteras?.nombre || 'Sin billetera'}`
-  const selectWallet = async targetRow => {
+  const selectWallet = targetRow => {
     if (saving || !targetRow || targetRow.id === currentRow?.id) return
-    if (!window.confirm(`¿Querés cambiar la billetera En uso${currentRow ? ` de "${walletLabel(currentRow)}"` : ''} a "${walletLabel(targetRow)}"?`)) return
+    setWalletToConfirm(targetRow)
+  }
+  const confirmWalletSelection = async () => {
+    const targetRow = walletToConfirm
+    if (saving || !targetRow) return
     setSaving(true)
     try {
       const previouslySelected = routeRows.filter(row => row.cuentas_x_turno?.cobros && row.id !== targetRow.id)
@@ -2231,6 +2236,7 @@ function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
         }),
       ])
       setToast('Billetera En uso actualizada')
+      setWalletToConfirm(null)
     } catch (error) {
       setToast(error.message || 'No se pudo cambiar la billetera En uso')
     } finally {
@@ -2267,6 +2273,24 @@ function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
         {recommended && <small>Recomendada</small>}
       </button>)}</div>
       : <EmptyInline text="No hay una billetera En uso en la ruta normal." />}
+    {walletToConfirm && <div className="modal-backdrop logistics-confirm-backdrop" onMouseDown={event => {
+      if (event.target === event.currentTarget && !saving) setWalletToConfirm(null)
+    }}>
+      <section className="modal logistics-confirm-dialog" role="dialog" aria-modal="true" aria-labelledby="logistics-confirm-title">
+        <div className="modal-icon"><WalletCards size={19} /></div>
+        <h2 id="logistics-confirm-title">Cambiar billetera en uso</h2>
+        <p>¿Querés cambiar la billetera actual por la seleccionada?</p>
+        <div className="logistics-confirm-route">
+          <span>{currentRow ? walletLabel(currentRow) : 'Sin billetera actual'}</span>
+          <ArrowRight size={14} aria-hidden="true" />
+          <strong>{walletLabel(walletToConfirm)}</strong>
+        </div>
+        <div className="logistics-confirm-actions">
+          <button type="button" className="secondary-button" onClick={() => setWalletToConfirm(null)} disabled={saving}>Cancelar</button>
+          <button type="button" className="primary-button" onClick={confirmWalletSelection} disabled={saving}>{saving ? 'Guardando...' : 'Confirmar'} <Check size={14} /></button>
+        </div>
+      </section>
+    </div>}
   </section>
 }
 function StatusCard({ setToast }) {

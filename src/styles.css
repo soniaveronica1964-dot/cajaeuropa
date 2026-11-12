@@ -1242,6 +1242,16 @@ input[type="time"] { color-scheme: dark; }
 .logistics-route-item.recommended:not(.current) { grid-template-rows: auto auto; }
 .logistics-route-item.recommended > small { grid-column: 2; color: var(--accent); font-size: 8px; }
 .logistics-route-item:disabled { cursor: default; }
+.logistics-confirm-backdrop { z-index: 110; }
+.logistics-confirm-dialog { width: min(440px, calc(100% - 26px)); }
+.logistics-confirm-dialog .modal-icon { margin-bottom: 2px; }
+.logistics-confirm-dialog h2 { margin-top: 8px; }
+.logistics-confirm-route { display: grid; grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr); align-items: center; gap: 8px; margin: 0 0 18px; padding: 10px; border: 1px solid var(--accent-border); border-radius: 7px; background: var(--accent-soft); color: var(--muted-2); font-size: 10px; }
+.logistics-confirm-route > span,
+.logistics-confirm-route > strong { min-width: 0; overflow-wrap: anywhere; }
+.logistics-confirm-route > svg { color: var(--accent); }
+.logistics-confirm-route > strong { color: var(--accent); }
+.logistics-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 .search-line {
   display: flex;
