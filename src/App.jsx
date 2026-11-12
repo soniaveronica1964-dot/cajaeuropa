@@ -1116,7 +1116,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const displayRows = [...rows, ...optimisticRows.filter(optimistic => !rows.some(row => String(row.id) === String(optimistic.id)))]
     .sort((left, right) => new Date(right.fecha_hora_creacion) - new Date(left.fecha_hora_creacion))
-  const recentRows = displayRows.slice(0, 5)
+  const recentRows = displayRows.filter(bonus => !hiddenRecentIds.has(bonus.id)).slice(0, 5)
   const modeOrder = ['granted', 'recovered', 'publicity']
   const net = bonusNetTotal(displayRows)
 
@@ -1203,7 +1203,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
     </div>
     <div className="bonus-recent-list">
       <small className="bonus-recent-heading">Últimos 5 bonos</small>
-      {recentRows.filter(bonus => !hiddenRecentIds.has(bonus.id)).map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
+      {recentRows.map(bonus => <div className={`bonus-recent-row bonus-type-${bonusTypeOf(bonus)}`} key={bonus.id}>
         <span>{bonusTypeLabels[bonusTypeOf(bonus)]}{bonus.pending && <small className="bonus-pending-status"> · Guardando…</small>}</span>
         <div className="bonus-recent-value">
           <time>{new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
