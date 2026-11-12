@@ -372,6 +372,7 @@ function App() {
   const [cashDiscrepancyPreview, setCashDiscrepancyPreview] = useState(null)
   const [saveStatus, setSaveStatus] = useState('saved')
   const [lastSavedAt, setLastSavedAt] = useState(readLastSavedAt)
+  const [faviconRevision, setFaviconRevision] = useState(0)
   const editStatusTimer = useRef(null)
   const editStatusFrame = useRef(null)
 
@@ -559,6 +560,7 @@ function App() {
     if (freshData) {
       setAppData(freshData)
       setSelectedBoxAccent(freshData.boxes?.find((box) => String(box.id) === String(selectedBoxId))?.colores?.hex || '#72d7ca')
+      setFaviconRevision(revision => revision + 1)
       return
     }
     reloadData()
@@ -604,7 +606,30 @@ function App() {
   const appConfig = appData?.appConfig?.[0]
   const appName = appConfig?.nombre || 'Caja Europa'
   const isLightTheme = Boolean(appConfig?.tema)
-  const appImagePreview = getStoragePublicUrl(appConfig?.imagen_mini || appConfig?.imagen)
+  const appImageReference = appConfig?.imagen_mini || appConfig?.imagen
+  const appImagePreview = getStoragePublicUrl(appImageReference)
+
+  useEffect(() => {
+    let favicon = document.querySelector('link[rel="icon"]')
+    if (!favicon) {
+      favicon = document.createElement('link')
+      favicon.rel = 'icon'
+      document.head.append(favicon)
+    }
+
+    if (appImagePreview) {
+      const faviconUrl = new URL(appImagePreview, window.location.href)
+      if (appImageReference && !/^(data:|https?:\/\/)/i.test(appImageReference)) {
+        faviconUrl.searchParams.set('v', String(faviconRevision))
+      }
+      favicon.href = faviconUrl.href
+      favicon.removeAttribute('type')
+      return
+    }
+
+    favicon.href = '/favicon.svg'
+    favicon.type = 'image/svg+xml'
+  }, [appImagePreview, appImageReference, faviconRevision])
 
   if (boxLoading || (!appData && !loadError)) {
     return (
