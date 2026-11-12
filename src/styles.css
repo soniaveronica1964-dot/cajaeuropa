@@ -800,6 +800,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   outline: none;
   color: inherit;
   font-size: 12px;
+  text-align: center;
 }
 
 .rounding input::placeholder { color: var(--muted); }

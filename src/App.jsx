@@ -1865,7 +1865,7 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
         {(() => {
           const parsedFinal = parseValue(draftValues[chip.id] ?? formatValue(chip.fichas_final))
           const finalValue = parsedFinal == null ? 0 : parsedFinal
-          const difference = Number.isFinite(finalValue) ? finalValue - Number(chip.fichas_inicial || 0) : null
+          const difference = Number.isFinite(finalValue) ? Number(chip.fichas_inicial || 0) - finalValue : null
           const differenceTone = difference == null || difference === 0 ? 'neutral' : difference > 0 ? 'positive' : 'negative'
           return <small className={differenceTone}>{difference == null ? '—' : `$ ${difference.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</small>
         })()}
