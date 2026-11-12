@@ -633,7 +633,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .goal-strip, .summary-bar, .panel { border: 1px solid var(--line); }
 .goal-strip {
   border-radius: 8px;
-  background: color-mix(in srgb, var(--accent) 24%, #000000);
+  background: color-mix(in srgb, var(--accent) 24%, #111719);
   border-color: var(--line);
   padding: 10px 14px;
   margin-bottom: 10.5px;
@@ -708,7 +708,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: 8px;
   overflow: hidden;
   margin-bottom: 12px;
-  background: color-mix(in srgb, var(--accent) 24%, #000000);
+  background: color-mix(in srgb, var(--accent) 24%, #111719);
 }
 .summary-status, .metric, .rounding {
   padding: 10px 14px;
@@ -745,7 +745,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   justify-content: center;
   gap: 4px;
   border-left: 1px solid var(--line);
-  background: color-mix(in srgb, var(--accent) 24%, #000000);
+  background: color-mix(in srgb, var(--accent) 24%, #111719);
 }
 .metric small {
   font: 9px 'DM Mono';
@@ -765,7 +765,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   flex-direction: column;
   justify-content: center;
   border-left: 1px solid var(--line);
-  background: color-mix(in srgb, var(--accent) 24%, #000000);
+  background: color-mix(in srgb, var(--accent) 24%, #111719);
 }
 .rounding small {
   font: 9px 'DM Mono';
