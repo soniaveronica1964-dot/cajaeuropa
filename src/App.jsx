@@ -1733,13 +1733,14 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
     return Number.isFinite(parsed) ? parsed : Number.NaN
   }
   const [draftValues, setDraftValues] = useState(() => Object.fromEntries(chips.map(chip => [chip.id, formatValue(chip.fichas_final)])))
+  const [copyingChipId, setCopyingChipId] = useState(null)
 
   useEffect(() => {
     setDraftValues(Object.fromEntries(chips.map(chip => [chip.id, formatValue(chip.fichas_final)])))
   }, [chips])
 
-  const saveFinal = async (chip) => {
-    const rawValue = draftValues[chip.id] ?? formatValue(chip.fichas_final)
+  const saveFinal = async (chip, valueToSave = draftValues[chip.id] ?? formatValue(chip.fichas_final)) => {
+    const rawValue = valueToSave
     const nextValue = parseValue(rawValue)
     if (rawValue.trim() && (!Number.isFinite(nextValue) || nextValue < 0)) {
       setToast('Ingresá un valor final válido, igual o mayor a cero')
@@ -1749,6 +1750,7 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
     }
     const savedValue = chip.fichas_final == null ? null : Number(chip.fichas_final)
     if (nextValue === savedValue) return
+    setCopyingChipId(chip.id)
     try {
       await updateChipFinal(chip.id, nextValue)
       onChipFinalSaved(chip.id, nextValue)
@@ -1757,6 +1759,32 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
       setToast(error.message || 'No se pudo guardar la ficha final')
       setDraftValues(current => ({ ...current, [chip.id]: formatValue(chip.fichas_final) }))
       onChipFinalPreview(chip.id, chip.fichas_final == null ? null : Number(chip.fichas_final))
+    } finally {
+      setCopyingChipId(null)
+    }
+  }
+
+  const pasteFinal = async chip => {
+    if (!navigator.clipboard?.readText) {
+      setToast('El navegador no permite leer el portapapeles')
+      return
+    }
+    setCopyingChipId(chip.id)
+    try {
+      const clipboardValue = await navigator.clipboard.readText()
+      const parsedValue = parseValue(clipboardValue)
+      if (!clipboardValue.trim() || !Number.isFinite(parsedValue) || parsedValue < 0) {
+        setToast('El portapapeles no contiene un monto válido')
+        return
+      }
+      const formattedValue = formatValue(parsedValue)
+      setDraftValues(current => ({ ...current, [chip.id]: formattedValue }))
+      onChipFinalPreview(chip.id, parsedValue)
+      await saveFinal(chip, formattedValue)
+    } catch (error) {
+      setToast(error.message || 'No se pudo leer el portapapeles')
+    } finally {
+      setCopyingChipId(null)
     }
   }
 
@@ -1765,7 +1793,10 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
     {chips.length ? <div className="chip-final-list">{chips.map(chip => (
       <div className="chip-final-field" key={chip.id}>
         <span>Ficha Final ({chip.plataformas?.nombre || 'Plataforma'})</span>
-        <div className="chip-final-value" style={{ '--chip-color': chip.colorHex || 'var(--accent-border)' }}>
+        <div className="chip-final-value" style={{ '--chip-color': chip.colorHex || 'var(--accent-border)' }} onClick={event => {
+          if (event.target.closest('button')) return
+          event.currentTarget.querySelector('input')?.focus()
+        }}>
           <b>$</b>
           <input
             aria-label={`Ficha final ${chip.plataformas?.nombre || 'Plataforma'}`}
@@ -1781,6 +1812,7 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
             onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
             placeholder="0,00"
           />
+          <button type="button" className="chip-final-paste" title="Pegar monto del portapapeles" aria-label={`Pegar monto del portapapeles en ${chip.plataformas?.nombre || 'plataforma'}`} onMouseDown={event => event.preventDefault()} onClick={() => pasteFinal(chip)} disabled={copyingChipId === chip.id}><Copy size={13} /></button>
         </div>
         {(() => {
           const parsedFinal = parseValue(draftValues[chip.id] ?? formatValue(chip.fichas_final))
