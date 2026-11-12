@@ -149,6 +149,7 @@ import { DATABASE_SAVE_EVENT } from './lib/supabase'
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 const moneyWithCents = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const numberWithCents = new Intl.NumberFormat('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const numberWithoutCents = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 })
 const numberCompact = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 const LAST_SAVED_STORAGE_KEY = 'caja:last-saved-at'
 
@@ -1879,12 +1880,12 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
     const input = event.currentTarget
     const value = parseLocalizedAmount(input.value)
     if (value == null || value < 0) {
-      input.value = account.savedAmount ? numberWithCents.format(account.savedAmount) : ''
+      input.value = account.savedAmount ? numberWithoutCents.format(account.savedAmount) : ''
       onAccountValueDraft(account.id, undefined)
       setToast('Ingresá un valor válido, igual o mayor a cero')
       return
     }
-    input.value = value ? numberWithCents.format(value) : ''
+    input.value = value ? numberWithoutCents.format(value) : ''
     if (value === account.savedAmount) {
       onAccountValueDraft(account.id, undefined)
       return
@@ -1894,7 +1895,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
       onSaved()
     } catch {
       onAccountValueDraft(account.id, undefined)
-      input.value = account.savedAmount ? numberWithCents.format(account.savedAmount) : ''
+      input.value = account.savedAmount ? numberWithoutCents.format(account.savedAmount) : ''
       setToast('No se pudo guardar el valor de la cuenta')
     }
   }
@@ -1976,7 +1977,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
               <span>$</span>
               <input
                 key={`${account.id}-${account.displayAmount}-${account.sharedOwnerBoxId}`}
-                defaultValue={account.displayAmount ? numberWithCents.format(account.displayAmount) : ''}
+                defaultValue={account.displayAmount ? numberWithoutCents.format(account.displayAmount) : ''}
                 placeholder="-"
                 title={account.isSharedForeignValue
                   ? `Editable desde esta caja; el saldo se imputa a ${ownerBox?.nombre || 'otra caja'}`
