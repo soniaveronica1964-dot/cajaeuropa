@@ -2027,7 +2027,10 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
                   : account.isSharedUnassigned
                     ? 'Editable desde cualquier caja; el saldo no se imputa hasta asignarle una'
                     : undefined}
-                onFocus={(event) => event.target.select()}
+                onFocus={(event) => {
+                  event.currentTarget.value = event.currentTarget.value.replace(/\./g, '')
+                  event.currentTarget.select()
+                }}
                 onChange={(event) => {
                 const value = parseLocalizedAmount(event.target.value)
                 if (value !== null && value >= 0) onAccountValueDraft(account.id, value)

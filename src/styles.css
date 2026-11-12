@@ -1737,7 +1737,7 @@ input[type="time"] { color-scheme: dark; }
   background: transparent;
   text-align: right;
   color: inherit;
-  font: 11px 'DM Mono';
+  font: 700 11px 'DM Mono';
 }
 
 .matrix-row .matrix-value input:focus-visible {
