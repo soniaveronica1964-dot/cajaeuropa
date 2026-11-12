@@ -235,6 +235,15 @@
   color: var(--box-accent);
 }
 
+.report-v5-head h2 > span,
+.report-v5-log-group h3 > span {
+  color: inherit;
+  font: inherit;
+  line-height: 1;
+  transform: translateY(-8px);
+  white-space: nowrap;
+}
+
 .report-v5-head > span {
   color: #8290a5;
   font: 9px "DM Mono", monospace;

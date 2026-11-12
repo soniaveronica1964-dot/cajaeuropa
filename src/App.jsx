@@ -640,9 +640,12 @@ function App() {
         onclone: clonedDocument => {
           const report = clonedDocument.querySelector('[data-snapshot-export="true"]')
           if (!report) throw new Error('No se encontró el reporte para capturar')
+          clonedDocument.documentElement.style.zoom = '1'
           report.style.position = 'absolute'
           report.style.left = '0'
           report.style.top = '0'
+          report.style.margin = '0'
+          report.style.transform = 'none'
           report.style.zIndex = 'auto'
           report.style.visibility = 'visible'
         },

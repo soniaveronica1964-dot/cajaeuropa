@@ -265,7 +265,7 @@ function SnapshotReport({
         <section className="report-v5-left">
           <section className="report-v5-accounts">
             <div className="report-v5-head">
-              <h2><WalletCards size={18} /> Matriz de cuentas</h2>
+              <h2><WalletCards size={18} /><span>Matriz de cuentas</span></h2>
               <span>{rows.length} titulares · {visibleWallets.length} billeteras</span>
             </div>
             {rows.length === 0
@@ -290,11 +290,11 @@ function SnapshotReport({
           </section>
 
           <section className="report-v5-log">
-            <div className="report-v5-head"><h2><ArrowLeftRight size={18} /> Bitácora operativa</h2><span>Hora · detalle · monto</span></div>
+            <div className="report-v5-head"><h2><ArrowLeftRight size={18} /><span>Bitácora operativa</span></h2><span>Hora · detalle · monto</span></div>
             <div className="report-v5-log-grid">
               {operations.filter(group => group.rows.length).map(({ title, Icon, rows: groupRows, total }) => (
                 <div className="report-v5-log-group" key={title}>
-                  <h3><Icon size={14} />{title}{total !== undefined && <small>{groupRows.length} · {reportMoney.format(total)}</small>}</h3>
+                  <h3><Icon size={14} /><span>{title}</span>{total !== undefined && <small>{groupRows.length} · {reportMoney.format(total)}</small>}</h3>
                   {groupRows.map((row, index) => {
                     const isNote = title === 'Notas del turno'
                     return <div className="report-v5-line" key={row.id ?? `${title}-${index}`}>
@@ -311,7 +311,7 @@ function SnapshotReport({
         <section className="report-v5-right">
           <div className="report-v5-right-summary">
             <section className="report-v5-summary-card">
-              <div className="report-v5-head"><h2><Ticket size={18} /> Fichas finales</h2></div>
+              <div className="report-v5-head"><h2><Ticket size={18} /><span>Fichas finales</span></h2></div>
               <div className="report-v5-chip-summary">
                 {activeChips.map(chip => {
                   const balance = amountOf(chip.fichas_inicial) - amountOf(chip.fichas_final)
@@ -325,7 +325,7 @@ function SnapshotReport({
               </div>
             </section>
             <section className="report-v5-summary-card">
-              <div className="report-v5-head"><h2><Gift size={18} /> Resumen de bonos</h2></div>
+              <div className="report-v5-head"><h2><Gift size={18} /><span>Resumen de bonos</span></h2></div>
               <div className="report-v5-bonus-summary">
                 <strong>{reportMoney.format(bonusesNet)}</strong>
                 <span>Bonos netos</span>
@@ -340,7 +340,7 @@ function SnapshotReport({
 
           <section className="report-v5-bonuses">
             <div className="report-v5-head">
-              <h2><Gift size={18} /> Línea de tiempo de bonos</h2>
+              <h2><Gift size={18} /><span>Línea de tiempo de bonos</span></h2>
               <span className="report-v5-bonus-totals">Otorgados {reportMoney.format(granted)} · Recuperados {reportMoney.format(recovered)} · Neto {reportMoney.format(bonusesNet)}</span>
             </div>
             <div className="report-v5-bonus-grid">
