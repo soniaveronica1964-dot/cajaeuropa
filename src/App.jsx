@@ -145,6 +145,7 @@ import {
   updateWallet,
 } from './lib/data'
 import { DATABASE_SAVE_EVENT } from './lib/supabase'
+import SnapshotReport from './SnapshotReport'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 const moneyWithCents = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -370,9 +371,11 @@ function App() {
   const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
   const [loadError, setLoadError] = useState('')
   const [cashDiscrepancyPreview, setCashDiscrepancyPreview] = useState(null)
+  const [capturingSnapshot, setCapturingSnapshot] = useState(false)
   const [saveStatus, setSaveStatus] = useState('saved')
   const [lastSavedAt, setLastSavedAt] = useState(readLastSavedAt)
   const [faviconRevision, setFaviconRevision] = useState(0)
+  const snapshotRef = useRef(null)
   const editStatusTimer = useRef(null)
   const editStatusFrame = useRef(null)
 
@@ -613,6 +616,61 @@ function App() {
     appData?.shiftNotes?.nota_general?.trim()
     || appData?.shiftNotes?.nota_heredable?.trim()
   )
+  const downloadSnapshot = async () => {
+    if (capturingSnapshot) return
+    if (!snapshotRef.current) {
+      setToast(view === 'dashboard' ? 'No hay un turno disponible para capturar' : 'Volvé a la vista Caja para generar la captura')
+      return
+    }
+
+    setCapturingSnapshot(true)
+    try {
+      if (document.fonts?.ready) await document.fonts.ready
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      const { default: html2canvas } = await import('html2canvas')
+      const canvas = await html2canvas(snapshotRef.current, {
+        backgroundColor: '#090c14',
+        logging: false,
+        scale: 2,
+        width: 1920,
+        height: 1080,
+        useCORS: true,
+        windowWidth: 1920,
+        windowHeight: 1080,
+        onclone: clonedDocument => {
+          const report = clonedDocument.querySelector('[data-snapshot-export="true"]')
+          if (!report) throw new Error('No se encontró el reporte para capturar')
+          report.style.position = 'absolute'
+          report.style.left = '0'
+          report.style.top = '0'
+          report.style.zIndex = 'auto'
+          report.style.visibility = 'visible'
+        },
+      })
+      const snapshotDate = new Intl.DateTimeFormat('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      }).format(new Date(shift.fecha_hora_inicio)).replaceAll('/', '-')
+      const reportShiftName = shiftName.replace(/^turno\s+/i, '')
+      const safeFileName = `${activeBox} ${snapshotDate} Turno ${reportShiftName}`
+        .replace(/[<>:"/\\|?*]+/g, '-')
+        .trim()
+      const link = document.createElement('a')
+      link.download = `${safeFileName}.png`
+      link.href = canvas.toDataURL('image/png')
+      link.style.display = 'none'
+      document.body.append(link)
+      link.click()
+      link.remove()
+      setToast('Captura de caja descargada')
+    } catch (error) {
+      console.error('No se pudo generar la captura de caja:', error)
+      setToast('No se pudo generar la captura de caja')
+    } finally {
+      setCapturingSnapshot(false)
+    }
+  }
 
   useEffect(() => {
     document.title = pageTitle
@@ -679,7 +737,7 @@ function App() {
         <div className="top-actions">
           <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={switchBox} />
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
-          <button className="camera-button" title="Cámara"><Camera size={16} /></button>
+          <button className="camera-button" title={capturingSnapshot ? 'Generando captura…' : 'Descargar captura del cierre'} aria-label="Descargar captura del cierre" onClick={downloadSnapshot} disabled={capturingSnapshot}><Camera size={16} /></button>
           <button className="lock-button" title="Cerrar caja y abrir el siguiente turno" aria-label="Cerrar caja y abrir el siguiente turno" onClick={openCloseShiftDialog} disabled={selectedBoxId == null || !shift?.abierto}><LockKeyhole size={16} /></button>
         </div>
       </header>
@@ -723,7 +781,7 @@ function App() {
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} accentColor={accentColor} isLightTheme={isLightTheme} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} accentColor={accentColor} isLightTheme={isLightTheme} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} snapshotRef={snapshotRef} />}
           {!loadError && appData && view === 'stats' && <LiveStatistics />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} onEdit={setUserEditing} onSaved={reloadData} setToast={setToast} />}
@@ -834,7 +892,7 @@ function mapGoals(rows) {
   })
 }
 
-function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, setToast, onSaved, onBonusCreated, onCreateUser, onChipFinalSaved, onRoundingChange, onDiscrepancyChange }) {
+function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, setToast, onSaved, onBonusCreated, onCreateUser, onChipFinalSaved, onRoundingChange, onDiscrepancyChange, snapshotRef }) {
   const [rounding, setRounding] = useState(null)
   const [accountValueDrafts, setAccountValueDrafts] = useState({})
   const [chipFinalDrafts, setChipFinalDrafts] = useState({})
@@ -1004,6 +1062,21 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
         </div>
       </div>
     </div>
+    <SnapshotReport
+      data={data}
+      accounts={accounts}
+      holders={accountHolders}
+      wallets={accountWallets}
+      chips={chips}
+      cashFinal={total}
+      cashInitial={cashInitial}
+      cashDifference={cashDifference}
+      cashDiscrepancy={cashDiscrepancy}
+      realDifference={realDifference}
+      rounding={roundingAmount}
+      accentColor={accentColor}
+      snapshotRef={snapshotRef}
+    />
   </>
 }
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
