@@ -848,7 +848,7 @@ input[type="time"] { color-scheme: dark; }
 
 .top-panels {
   display: grid;
-  grid-template-columns: 1.55fr 0.96fr 0.96fr;
+  grid-template-columns: 1.86fr 0.864fr 0.864fr;
   grid-auto-rows: 1fr;
   gap: 12px;
   align-items: stretch;
