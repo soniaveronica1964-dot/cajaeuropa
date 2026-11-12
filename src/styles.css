@@ -1667,9 +1667,9 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .matrix-row .matrix-value.collecting {
-  border-color: rgba(150, 213, 165, 0.45);
-  background: rgba(18, 39, 31, 0.7);
-  color: var(--green);
+  border-color: #83d5a2;
+  background: #1f2c2a;
+  color: #83d5a2;
 }
 
 .matrix-row .matrix-value.withdrawing {
@@ -1703,7 +1703,7 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-row .matrix-value.collecting:has(input:not(:placeholder-shown)) > span,
 .matrix-row .matrix-value.collecting:has(input:not(:placeholder-shown)) input {
-  color: var(--green);
+  color: #83d5a2;
 }
 
 .matrix-row .matrix-value.withdrawing:has(input:not(:placeholder-shown)) > span,
@@ -1782,8 +1782,8 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .matrix-flag input:checked {
-  border-color: var(--green);
-  background: var(--green);
+  border-color: #83d5a2;
+  background: #83d5a2;
 }
 
 .matrix-account-flags .matrix-flag-withdrawals input:checked {
