@@ -1264,7 +1264,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
       </div>)}
       {!recentRows.length && <span className="bonus-recent-empty">Sin bonos registrados</span>}
     </div>
-    {historyOpen && <BonusHistoryModal bonuses={displayRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />}
+    {historyOpen && <BonusHistoryModal bonuses={displayRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} editableAmounts />}
   </section>
 }
 
@@ -1667,46 +1667,7 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
     }
   }
 
-  if (editableAmounts) {
-    return <div className="bonus-history-editable-list">
-      {bonuses.map(bonus => {
-        const type = bonusTypeOf(bonus)
-        const time = new Date(bonus.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
-        return <article className={`bonus-history-editable-row bonus-type-${type}`} key={bonus.id}>
-          <span>{bonusTypeLabels[type]}</span>
-          <time>{time}</time>
-          <label className="bonus-history-editable-amount">
-            <span>$</span>
-            <input
-              aria-label={`Editar monto ${bonusTypeLabels[type]}`}
-              inputMode="decimal"
-              title="Editar monto; presioná Enter o salí del campo para guardar"
-              value={amountDrafts[bonus.id] ?? numberWithCents.format(bonus.valor)}
-              onChange={event => setAmountDrafts(current => ({ ...current, [bonus.id]: event.target.value }))}
-              onFocus={event => event.currentTarget.select()}
-              onBlur={event => saveAmount(bonus, event.currentTarget.value)}
-              onKeyDown={event => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  event.currentTarget.blur()
-                }
-                if (event.key === 'Escape') {
-                  const originalAmount = numberWithCents.format(bonus.valor)
-                  event.currentTarget.value = originalAmount
-                  setAmountDrafts(current => ({ ...current, [bonus.id]: originalAmount }))
-                  event.currentTarget.blur()
-                }
-              }}
-              disabled={savingId === bonus.id}
-            />
-          </label>
-        </article>
-      })}
-      {!bonuses.length && <p className="bonus-history-empty">Sin bonos</p>}
-    </div>
-  }
-
-  return <div className={`bonus-history-grid ${editableAmounts ? 'bonus-history-grid-editable' : ''}`}>
+  return <div className="bonus-history-grid">
     {groups.map(group => <section className="bonus-history-group" key={group.label}>
       <h3>{group.label}</h3>
       {group.items.length ? group.items.map(bonus => {
@@ -1725,7 +1686,15 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
                 onChange={event => setAmountDrafts(current => ({ ...current, [bonus.id]: event.target.value }))}
                 onFocus={event => event.currentTarget.select()}
                 onBlur={event => saveAmount(bonus, event.currentTarget.value)}
-                onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }}
+                onKeyDown={event => {
+                  if (event.key === 'Enter') event.currentTarget.blur()
+                  if (event.key === 'Escape') {
+                    const originalAmount = numberWithCents.format(bonus.valor)
+                    event.currentTarget.value = originalAmount
+                    setAmountDrafts(current => ({ ...current, [bonus.id]: originalAmount }))
+                    event.currentTarget.blur()
+                  }
+                }}
                 disabled={savingId === bonus.id}
               />
               : <b>{moneyWithCents.format(bonus.valor)}</b>}
@@ -2850,7 +2819,7 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, onCreated, setToast
       <div><span>Publicidad</span><strong>{moneyWithCents.format(bonusTotals.publicity)}</strong></div>
       <div><span>Neto</span><strong>{moneyWithCents.format(bonusNetTotal(displayRows))}</strong></div>
     </footer>
-    {historyOpen && <BonusHistoryModal bonuses={displayRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />}
+    {historyOpen && <BonusHistoryModal bonuses={displayRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} editableAmounts />}
   </section>
 }
 
