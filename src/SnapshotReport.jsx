@@ -3,15 +3,26 @@ import {
   ArrowDownToLine,
   ArrowLeftRight,
   Banknote,
-  Camera,
   CircleDollarSign,
+  Coins,
   FileText,
   Gift,
+  Megaphone,
   ReceiptText,
+  RotateCcw,
   Ticket,
   WalletCards,
 } from 'lucide-react'
 import './snapshot-report.css'
+
+const reportBrandIcons = {
+  banknote: Banknote,
+  wallet: WalletCards,
+  coins: Coins,
+  gift: Gift,
+  ticket: Ticket,
+  receipt: ReceiptText,
+}
 
 const reportMoney = new Intl.NumberFormat('es-AR', {
   style: 'currency',
@@ -173,6 +184,9 @@ function SnapshotReport({
 }) {
   const shift = data.shift
   const shiftName = (shift.dias_turno?.nombre || 'Noche').replace(/^turno\s+/i, '')
+  const appConfig = data.appConfig?.[0]
+  const appName = appConfig?.nombre || 'Europa'
+  const BrandIcon = reportBrandIcons[appConfig?.icono] || Banknote
   const startMinutes = (() => {
     const [hour, minute] = String(shift.dias_turno?.hora_inicio || '00:00').split(':').map(Number)
     return (hour || 0) * 60 + (minute || 0)
@@ -234,8 +248,8 @@ function SnapshotReport({
     <div ref={snapshotRef} className="snapshot-export report-card report-v5" data-snapshot-export="true" aria-hidden="true" style={{ '--box-accent': accentColor }}>
       <header className="report-v5-header">
         <div className="report-v5-brand">
-          <span><Camera size={24} /></span>
-          <div><strong>CAJA<span>flow</span></strong><small>Ficha de cierre operativo</small></div>
+          <span><BrandIcon size={24} /></span>
+          <div><strong>CAJA<span>{appName}</span></strong><small>Ficha de cierre operativo</small></div>
         </div>
         <div className="report-v5-period">
           <b>Turno {shiftName}</b>
@@ -327,12 +341,11 @@ function SnapshotReport({
             <section className="report-v5-summary-card">
               <div className="report-v5-head"><h2><Gift size={18} /><span>Resumen de bonos</span></h2></div>
               <div className="report-v5-bonus-summary">
-                <strong>{reportMoney.format(bonusesNet)}</strong>
-                <span>Bonos netos</span>
+                <div className="report-v5-bonus-net"><span>Bonos Netos:</span><b>{reportMoney.format(bonusesNet)}</b></div>
                 <div>
-                  <span>Otorgados <b>{reportMoney.format(granted)}</b></span>
-                  <span>Recuperados <b>{reportMoney.format(recovered)}</b></span>
-                  <span>Publicidad <b>{reportMoney.format(publicity)}</b></span>
+                  <div className="report-v5-bonus-row granted"><Gift size={10} /><span>Otorgados</span><b>{reportMoney.format(granted)}</b></div>
+                  <div className="report-v5-bonus-row recovered"><RotateCcw size={10} /><span>Recuperados</span><b>{reportMoney.format(recovered)}</b></div>
+                  <div className="report-v5-bonus-row publicity"><Megaphone size={10} /><span>Otorgados (Publicidad)</span><b>{reportMoney.format(publicity)}</b></div>
                 </div>
               </div>
             </section>

@@ -383,7 +383,7 @@
   padding: 8px 12px;
 }
 
-.report-v5-bonus-summary > strong {
+.report-v5-bonus-net {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
@@ -393,15 +393,11 @@
   white-space: nowrap;
 }
 
-.report-v5-bonus-summary > strong::before {
-  content: "Bonos Netos: ";
+.report-v5-bonus-net b {
+  color: #eef2f7;
 }
 
-.report-v5-bonus-summary > span {
-  display: none;
-}
-
-.report-v5-bonus-summary > div {
+.report-v5-bonus-summary > div:not(.report-v5-bonus-net) {
   display: grid;
   gap: 2px;
   margin-top: 6px;
@@ -409,36 +405,39 @@
   font: 9px "DM Mono", monospace;
 }
 
-.report-v5-bonus-summary > div span {
+.report-v5-bonus-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  gap: 5px;
+  gap: 4px;
 }
 
-.report-v5-bonus-summary > div span:nth-child(1) {
+.report-v5-bonus-row svg {
+  display: block;
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+}
+
+.report-v5-bonus-row.granted {
   color: #f5ad69;
 }
 
-.report-v5-bonus-summary > div span:nth-child(2) {
+.report-v5-bonus-row.recovered {
   color: #83d5a2;
 }
 
-.report-v5-bonus-summary > div span:nth-child(3) {
+.report-v5-bonus-row.publicity {
   color: #7dd3fc;
-  font-size: 0;
-}
-
-.report-v5-bonus-summary > div span:nth-child(3)::before {
-  font-size: 9px;
-  content: "Otorgados (Publicidad)";
-}
-
-.report-v5-bonus-summary > div span:nth-child(3) b {
-  font-size: 9px;
 }
 
 .report-v5-bonus-summary b {
   color: inherit;
+}
+
+.report-v5-bonus-row b {
+  margin-left: auto;
+  font-weight: 700;
 }
 
 .report-v5-bonuses {
