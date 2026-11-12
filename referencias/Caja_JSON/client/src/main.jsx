@@ -3918,7 +3918,7 @@ function App() {
       await new Promise((resolve) => requestAnimationFrame(resolve));
       if (!snapshotRef.current) throw new Error("No se encontró el reporte para capturar.");
       const canvas = await html2canvas(snapshotRef.current, {
-        backgroundColor: "#11121d",
+        backgroundColor: "#1a1a1a",
         logging: false,
         scale: 2,
         width: 1920,
