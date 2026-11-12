@@ -2247,12 +2247,11 @@ function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
     </button>}
     <div className="logistics-route-heading">
       <strong><WalletCards size={13} />Próximas Billeteras</strong>
-      <small>RUTA NORMAL</small>
-    </div>
-    <div className="logistics-route-actions">
-      <button type="button" disabled={saving || currentIndex <= 0} onClick={() => selectWallet(routeRows[currentIndex - 1])}><ArrowLeft size={12} />Anterior</button>
-      <button type="button" disabled={saving || currentIndex < 0 || currentIndex >= routeRows.length - 1} onClick={() => selectWallet(routeRows[currentIndex + 1])}>Próxima<ArrowRight size={12} /></button>
-      <button type="button" className="recommended-action" disabled={saving || !recommendedRow} onClick={() => selectWallet(recommendedRow)}><Sparkles size={12} />Recomendada</button>
+      <div className="logistics-route-actions">
+        <button type="button" disabled={saving || currentIndex <= 0} onClick={() => selectWallet(routeRows[currentIndex - 1])}><ArrowLeft size={12} />Anterior</button>
+        <button type="button" disabled={saving || currentIndex < 0 || currentIndex >= routeRows.length - 1} onClick={() => selectWallet(routeRows[currentIndex + 1])}>Próxima<ArrowRight size={12} /></button>
+        <button type="button" className="recommended-action" disabled={saving || !recommendedRow} onClick={() => selectWallet(recommendedRow)}><Sparkles size={12} />Recomendada</button>
+      </div>
     </div>
     {nearbyRows.length
       ? <div className="logistics-route-list">{nearbyRows.map(({ row, label, key, current, recommended }) => <button

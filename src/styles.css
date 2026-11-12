@@ -1192,8 +1192,7 @@ input[type="time"] { color-scheme: dark; }
   margin-bottom: 7px;
 }
 .logistics-route-heading > strong { color: var(--text); font-size: 11px; }
-.logistics-route-heading > small { color: var(--muted); font: 8px 'DM Mono', monospace; }
-.logistics-route-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+.logistics-route-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 5px; }
 .logistics-route-actions button {
   display: inline-flex;
   align-items: center;
