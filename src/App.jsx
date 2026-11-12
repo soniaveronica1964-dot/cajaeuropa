@@ -227,7 +227,7 @@ function getShiftCashTotal(data) {
     ))
     if (accountType?.ahorro) return total
 
-    if (accountType?.es_compartido) {
+    if (accountType?.es_compartido || accountType?.es_deposito) {
       const sharedBalance = data.sharedAccountBalances?.[account.cuenta_id]
       const ownerBoxId = sharedBalance
         ? sharedBalance.ownerBoxId
@@ -809,7 +809,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       Object.entries(current).forEach(([accountId, value]) => {
         const account = data.accounts.find(item => String(item.id) === accountId)
         const accountType = data.accountTypes?.find(type => String(type.id) === String(account?.cuentas?.tipo_cuenta_id))
-        const savedValue = accountType?.es_compartido
+        const savedValue = (accountType?.es_compartido || accountType?.es_deposito)
           ? Number(data.sharedAccountBalances?.[account.cuenta_id]?.value ?? account.valor ?? 0)
           : Number(account?.valor || 0)
         if (account && savedValue === value) {
@@ -875,15 +875,16 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   const goals = mapGoals(data.goals)
   const accounts = data.accounts.map(account => {
     const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account.cuentas?.tipo_cuenta_id)) || null
-    const sharedBalance = accountType?.es_compartido ? data.sharedAccountBalances?.[account.cuenta_id] : null
+    const isCrossBoxAccount = Boolean(accountType?.es_compartido || accountType?.es_deposito)
+    const sharedBalance = isCrossBoxAccount ? data.sharedAccountBalances?.[account.cuenta_id] : null
     const displayAmount = Number(sharedBalance?.value ?? account.valor ?? 0)
     const sharedOwnerBoxId = sharedBalance
       ? sharedBalance.ownerBoxId
       : account.caja_id ?? data.shift.caja_id
-    const isSharedForeignValue = Boolean(accountType?.es_compartido)
+    const isSharedForeignValue = isCrossBoxAccount
       && sharedOwnerBoxId != null
       && String(sharedOwnerBoxId) !== String(data.shift.caja_id)
-    const isSharedUnassigned = Boolean(accountType?.es_compartido) && sharedOwnerBoxId == null
+    const isSharedUnassigned = isCrossBoxAccount && sharedOwnerBoxId == null
     const amount = isSharedForeignValue || isSharedUnassigned
       ? 0
       : accountValueDrafts[String(account.id)] ?? displayAmount
@@ -1947,7 +1948,9 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
       await updateAccountValueOwner(account.id, ownerBoxId)
       onAccountValueDraft(account.id, undefined)
       onSaved()
-      setToast(`Valor compartido asignado a ${boxes.find(box => String(box.id) === String(ownerBoxId))?.nombre || 'la caja seleccionada'}`)
+      setToast(ownerBoxId == null
+        ? 'Saldo sin caja asignada'
+        : `Saldo asignado a ${boxes.find(box => String(box.id) === String(ownerBoxId))?.nombre || 'la caja seleccionada'}`)
     } catch (error) {
       setToast(error.message || 'No se pudo cambiar la caja del valor compartido')
     }
@@ -1991,17 +1994,19 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
             && !account.accountType?.ahorro
           const showWhiteValueBorder = isCommonAccount && !collecting && !withdrawing
           const ownerBox = boxes.find(box => String(box.id) === String(account.sharedOwnerBoxId))
+          const isCrossBoxAccount = Boolean(account.accountType?.es_compartido || account.accountType?.es_deposito)
           const displayOwnerBoxId = activeOwnerBoxes.some(box => String(box.id) === String(account.sharedOwnerBoxId))
             ? account.sharedOwnerBoxId
             : currentBoxId
           const ownerColor = ownerBox?.colores?.hex || '#879598'
+          const accountLabel = account.accountType?.es_deposito ? 'depósito' : 'compartido'
           return <div
             className="matrix-account-cell"
             key={`${keyPrefix}-${holder}-${wallet}`}
           >
             <label
-              className={`matrix-value ${valueTone} ${account.accountType?.es_compartido ? 'shared-owner-value' : ''} ${showWhiteValueBorder ? 'white-value-border' : ''}`}
-              style={account.accountType?.es_compartido ? { '--shared-owner-color': ownerColor } : undefined}
+              className={`matrix-value ${valueTone} ${isCrossBoxAccount ? 'shared-owner-value' : ''} ${showWhiteValueBorder ? 'white-value-border' : ''}`}
+              style={isCrossBoxAccount ? { '--shared-owner-color': ownerColor } : undefined}
               onMouseEnter={(event) => showAccountCredentials(account, event.currentTarget)}
               onMouseLeave={scheduleHideAccountCredentials}
               onFocus={(event) => showAccountCredentials(account, event.currentTarget)}
@@ -2034,13 +2039,13 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
                 <input type="checkbox" aria-label={`Retiros ${wallet}, ${holder}`} checked={Boolean(flags.retiros)} onChange={(event) => saveFlag(account, 'retiros', event.target.checked)} />
               </label>}
             </div>}
-            {account.accountType?.es_compartido && activeOwnerBoxes.length > 1 && <button
+            {isCrossBoxAccount && activeOwnerBoxes.length > 1 && <button
               type="button"
               className="matrix-shared-owner-control"
-              aria-label={`Cambiar caja del valor compartido de ${wallet}, ${holder}`}
+              aria-label={`Cambiar caja del saldo ${accountLabel} de ${wallet}, ${holder}`}
               aria-haspopup="menu"
               aria-expanded={sharedOwnerMenu?.accountId === account.id}
-              title={account.sharedOwnerBoxId == null ? 'Valor compartido sin caja asignada' : `Valor imputado a ${ownerBox?.nombre || 'la caja seleccionada'}`}
+              title={account.sharedOwnerBoxId == null ? `Saldo ${accountLabel} sin caja asignada` : `Saldo imputado a ${ownerBox?.nombre || 'la caja seleccionada'}`}
               style={{ '--shared-owner-color': ownerColor }}
               onClick={event => toggleSharedOwnerMenu(account, event.currentTarget)}
             >

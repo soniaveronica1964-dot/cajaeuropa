@@ -95,6 +95,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   }
 
   if (shift.abierto) {
+    await ensureActiveDepositAccountsAcrossBoxes()
     await ensureShiftAccounts(shift.id, shift.caja_id)
     await ensureAdvertisingLines(shift.id)
     await ensureShiftChips(shift.id, shift.caja_id)
@@ -136,7 +137,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   const accountById = new Map(accounts.map(account => [account.id, account]))
   const linkedAccounts = accountLinks.map(link => ({ ...link, cuentas: accountById.get(link.cuenta_id) || null }))
   const sharedAccountIds = accounts
-    .filter(account => accountTypes.some(type => String(type.id) === String(account.tipo_cuenta_id) && type.es_compartido))
+    .filter(account => accountTypes.some(type => String(type.id) === String(account.tipo_cuenta_id) && (type.es_compartido || type.es_deposito)))
     .map(account => account.id)
   const sharedValueLinks = shift.abierto && sharedAccountIds.length
     ? await query(
@@ -190,10 +191,10 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
 
   const accountsForShift = linkedAccounts.filter(link => {
     const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
-    return !accountType?.es_compartido || sharedAccountLinkIds.has(String(link.id))
+    return !(accountType?.es_compartido || accountType?.es_deposito) || sharedAccountLinkIds.has(String(link.id))
   }).map(link => {
     const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
-    if (!accountType?.es_compartido) return link
+    if (!(accountType?.es_compartido || accountType?.es_deposito)) return link
     const sharedBalance = sharedAccountBalances[link.cuenta_id]
     return {
       ...link,
@@ -505,11 +506,11 @@ export async function updateAccountValue(accountShiftId, value) {
 
   const { data: accountType, error: accountTypeError } = await supabase
     .from('tipos_cuenta')
-    .select('es_compartido')
+    .select('es_compartido, es_deposito')
     .eq('id', account.tipo_cuenta_id)
     .single()
   if (accountTypeError) throw accountTypeError
-  if (!accountType.es_compartido) {
+  if (!(accountType.es_compartido || accountType.es_deposito)) {
     return updateRow('cuentas_x_turno', accountShiftId, { valor: Number(value) || 0 })
   }
 
@@ -536,11 +537,13 @@ export async function updateAccountValueOwner(accountShiftId, ownerBoxId) {
   if (accountError) throw accountError
   const { data: accountType, error: typeError } = await supabase
     .from('tipos_cuenta')
-    .select('es_compartido')
+    .select('es_compartido, es_deposito')
     .eq('id', account.tipo_cuenta_id)
     .single()
   if (typeError) throw typeError
-  if (!accountType.es_compartido) throw new Error('La selección de caja solo está disponible para cuentas compartidas')
+  if (!(accountType.es_compartido || accountType.es_deposito)) {
+    throw new Error('La selección de caja solo está disponible para cuentas compartidas o de depósito')
+  }
 
   const { data: activeLinks, error: linksError } = await supabase
     .from('cuentas_x_turno')
@@ -550,6 +553,12 @@ export async function updateAccountValueOwner(accountShiftId, ownerBoxId) {
   if (linksError) throw linksError
 
   if (ownerBoxId != null) {
+    const { data: accountDetails, error: accountDetailsError } = await supabase
+      .from('cuentas')
+      .select('titular_id, billetera_id')
+      .eq('id', currentLink.cuenta_id)
+      .single()
+    if (accountDetailsError) throw accountDetailsError
     const { data: boxMembership, error: membershipError } = await supabase
       .from('cuentas_x_caja')
       .select('cuenta_id')
@@ -558,6 +567,8 @@ export async function updateAccountValueOwner(accountShiftId, ownerBoxId) {
       .maybeSingle()
     if (membershipError) throw membershipError
     if (!boxMembership) await ensureAccountBoxLink({ accountId: currentLink.cuenta_id, boxId: ownerBoxId })
+    await ensureBoxMembership('titulares_x_caja', 'titular_id', accountDetails.titular_id, ownerBoxId)
+    await ensureBoxMembership('billeteras_x_caja', 'billetera_id', accountDetails.billetera_id, ownerBoxId)
   }
 
   const linksByShift = new Map()
@@ -2036,7 +2047,7 @@ export async function createAccount({ holderId, walletId, alias = null, cuil = n
 
   const { data, error } = await supabase.from('cuentas').upsert(payload, { onConflict: 'titular_id,billetera_id' }).select().maybeSingle()
   if (error) throw error
-  await ensureSharedAccountBoxLinks(data.id)
+  await ensureSharedOrDepositAccountBoxLinks(data.id)
   return data
 }
 
@@ -2053,7 +2064,9 @@ export async function updateAccount(id, { alias = null, cuil = null, password = 
 
   const { data, error } = await supabase.from('cuentas').update(payload).eq('id', id).select().maybeSingle()
   if (error) throw error
-  if (payload.tipo_cuenta_id !== undefined) await ensureSharedAccountBoxLinks(data.id)
+  if (payload.tipo_cuenta_id !== undefined || payload.activa !== undefined) {
+    await ensureSharedOrDepositAccountBoxLinks(data.id)
+  }
   return data
 }
 
@@ -2074,7 +2087,7 @@ export async function ensureAccountBoxLink({ accountId, boxId }) {
   return data
 }
 
-async function ensureSharedAccountBoxLinks(accountId) {
+async function ensureSharedOrDepositAccountBoxLinks(accountId) {
   const { data: account, error: accountError } = await supabase
     .from('cuentas')
     .select('id, titular_id, billetera_id, activa, tipo_cuenta_id')
@@ -2084,11 +2097,11 @@ async function ensureSharedAccountBoxLinks(accountId) {
 
   const { data: accountType, error: typeError } = await supabase
     .from('tipos_cuenta')
-    .select('es_compartido')
+    .select('es_compartido, es_deposito')
     .eq('id', account.tipo_cuenta_id)
     .single()
   if (typeError) throw typeError
-  if (!accountType.es_compartido) return
+  if (!(accountType.es_compartido || accountType.es_deposito)) return
 
   const { data: boxes, error: boxesError } = await supabase.from('cajas').select('id')
   if (boxesError) throw boxesError
@@ -2133,6 +2146,74 @@ async function ensureSharedAccountBoxLinks(accountId) {
       cobros: false,
       retiros: false,
     })),
+    { onConflict: 'turno_id,cuenta_id,caja_id', ignoreDuplicates: true },
+  )
+  if (shiftLinksError) throw shiftLinksError
+}
+
+async function ensureActiveDepositAccountsAcrossBoxes() {
+  const { data: depositTypes, error: typesError } = await supabase
+    .from('tipos_cuenta')
+    .select('id')
+    .eq('es_deposito', true)
+  if (typesError) throw typesError
+  const depositTypeIds = (depositTypes || []).map(type => type.id)
+  if (!depositTypeIds.length) return
+
+  const { data: accounts, error: accountsError } = await supabase
+    .from('cuentas')
+    .select('id, titular_id, billetera_id')
+    .eq('activa', true)
+    .in('tipo_cuenta_id', depositTypeIds)
+  if (accountsError) throw accountsError
+  if (!accounts?.length) return
+
+  const walletIds = [...new Set(accounts.map(account => account.billetera_id))]
+  const { data: activeWallets, error: walletsError } = await supabase
+    .from('billeteras')
+    .select('id')
+    .in('id', walletIds)
+    .eq('is_off', false)
+  if (walletsError) throw walletsError
+  const activeWalletIds = new Set((activeWallets || []).map(wallet => String(wallet.id)))
+  const activeAccounts = accounts.filter(account => activeWalletIds.has(String(account.billetera_id)))
+  if (!activeAccounts.length) return
+
+  const { data: boxes, error: boxesError } = await supabase.from('cajas').select('id')
+  if (boxesError) throw boxesError
+  const boxIds = [...new Set((boxes || []).map(box => box.id))]
+  if (!boxIds.length) return
+
+  const membershipTables = [
+    ['titulares_x_caja', 'titular_id', [...new Set(activeAccounts.map(account => account.titular_id))]],
+    ['billeteras_x_caja', 'billetera_id', [...new Set(activeAccounts.map(account => account.billetera_id))]],
+    ['cuentas_x_caja', 'cuenta_id', activeAccounts.map(account => account.id)],
+  ]
+  for (const [table, column, entityIds] of membershipTables) {
+    const { error } = await supabase.from(table).upsert(
+      entityIds.flatMap(entityId => boxIds.map(boxId => ({ [column]: entityId, caja_id: boxId }))),
+      { onConflict: `${column},caja_id`, ignoreDuplicates: true },
+    )
+    if (error) throw error
+  }
+
+  const { data: openShifts, error: shiftsError } = await supabase
+    .from('turnos')
+    .select('id, caja_id')
+    .eq('abierto', true)
+    .in('caja_id', boxIds)
+  if (shiftsError) throw shiftsError
+  if (!openShifts?.length) return
+
+  const { error: shiftLinksError } = await supabase.from('cuentas_x_turno').upsert(
+    activeAccounts.flatMap(account => openShifts.map(shift => ({
+      turno_id: shift.id,
+      cuenta_id: account.id,
+      caja_id: shift.caja_id,
+      valor: 0,
+      cobros: false,
+      retiros: false,
+    }))),
     { onConflict: 'turno_id,cuenta_id,caja_id', ignoreDuplicates: true },
   )
   if (shiftLinksError) throw shiftLinksError
