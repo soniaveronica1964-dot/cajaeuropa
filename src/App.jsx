@@ -958,7 +958,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
         <div className="operations-grid">
           <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
           <MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} />
-          <BonusOperationCard shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} setToast={setToast} />
+          <BonusOperationCard key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} />
           <TaChargesCard shiftId={data.shift.id} rows={data.taCharges || []} onSaved={onSaved} setToast={setToast} />
           <FoundMoneyCard accounts={accounts} rows={data.foundMoney || []} onSaved={onSaved} setToast={setToast} />
           <ShiftNotesCard shiftId={data.shift.id} notes={data.shiftNotes} onSaved={onSaved} setToast={setToast} />
@@ -2679,16 +2679,20 @@ function OperationHistoryModal({ title, items, onClose, onSaveItem, onDeleteItem
   </div>
 }
 
-function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
+function BonusOperationCard({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
   const [value, setValue] = useState('')
   const [type, setType] = useState('granted')
-  const [saving, setSaving] = useState(false)
+  const [optimisticRows, setOptimisticRows] = useState([])
+  const pendingIdCounter = useRef(0)
   const [savingRecentId, setSavingRecentId] = useState(null)
+  const [hiddenRecentIds, setHiddenRecentIds] = useState(() => new Set())
   const [historyOpen, setHistoryOpen] = useState(false)
-  const grantedCount = rows.filter(row => bonusTypeOf(row) === 'granted').length
-  const recoveredCount = rows.filter(row => bonusTypeOf(row) === 'recovered').length
-  const publicityCount = rows.filter(row => bonusTypeOf(row) === 'publicity').length
-  const bonusTotals = rows.reduce((totals, row) => {
+  const displayRows = [...rows, ...optimisticRows.filter(optimistic => !rows.some(row => String(row.id) === String(optimistic.id)))]
+    .sort((left, right) => new Date(right.fecha_hora_creacion) - new Date(left.fecha_hora_creacion))
+  const grantedCount = displayRows.filter(row => bonusTypeOf(row) === 'granted').length
+  const recoveredCount = displayRows.filter(row => bonusTypeOf(row) === 'recovered').length
+  const publicityCount = displayRows.filter(row => bonusTypeOf(row) === 'publicity').length
+  const bonusTotals = displayRows.reduce((totals, row) => {
     totals[bonusTypeOf(row)] += Number(row.valor || 0)
     return totals
   }, { granted: 0, recovered: 0, publicity: 0 })
@@ -2696,45 +2700,68 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
     const order = ['granted', 'recovered', 'publicity']
     return order[(order.indexOf(current) + 1) % order.length]
   })
-  const add = async (event, submittedType = type) => {
+  const add = async event => {
+    if (!['Enter', '+', '-'].includes(event.key)) return
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
-    setSaving(true)
+    const submittedType = event.key === '+' ? 'recovered' : event.key === '-' ? 'publicity' : type
+    const pendingId = `pending-${++pendingIdCounter.current}`
+    const pendingBonus = {
+      id: pendingId,
+      valor: amount,
+      recuperado: submittedType === 'recovered',
+      es_publicidad: submittedType === 'publicity',
+      fecha_hora_creacion: new Date().toISOString(),
+      pending: true,
+    }
+    setOptimisticRows(current => [pendingBonus, ...current])
+    setValue('')
     try {
-      await createBonusLine(shiftId, { value: amount, type: submittedType, bonusId: rows[0]?.bono_id })
-      setValue('')
+      const createdBonus = await createBonusLine(shiftId, { value: amount, type: submittedType, bonusId: rows[0]?.bono_id })
+      setOptimisticRows(current => current.map(bonus => bonus.id === pendingId ? createdBonus : bonus))
       setType('granted')
       setToast(`${bonusTypeLabels[submittedType]} guardado`)
-      onSaved()
+      onCreated(createdBonus)
     } catch (error) {
+      setOptimisticRows(current => current.filter(bonus => bonus.id !== pendingId))
+      setValue(current => current || value)
       setToast(error.message || 'No se pudo guardar el bono')
-    } finally {
-      setSaving(false)
     }
   }
   const saveRecentAmount = async (event, bonus) => {
     if (event.type === 'keydown' && event.key !== 'Enter') return
-    if (event.type === 'keydown') event.preventDefault()
+    if (event.type === 'keydown') {
+      event.preventDefault()
+      event.currentTarget.blur()
+      return
+    }
     const input = event.currentTarget
     const amount = parseLocalizedAmount(input.value)
     if (amount == null || amount < 0) {
-      setToast('Ingresá un monto válido, igual o mayor a cero')
-      input.value = money.format(bonus.valor)
-      return
-    }
-    if (amount === Number(bonus.valor)) {
-      input.value = money.format(bonus.valor)
+      setToast('Ingresá un monto válido')
       return
     }
     setSavingRecentId(bonus.id)
     try {
-      await updateBonusLine(bonus.id, { value: amount })
-      input.value = money.format(amount)
-      setToast('Bono actualizado')
+      if (amount === 0) {
+        setHiddenRecentIds(current => new Set(current).add(bonus.id))
+        await deleteBonusLine(bonus.id)
+        setToast('Bono eliminado')
+      } else {
+        await updateBonusLine(bonus.id, { value: amount })
+        input.value = moneyWithCents.format(amount)
+        setToast('Bono actualizado')
+      }
       onSaved()
     } catch (error) {
-      input.value = money.format(bonus.valor)
+      if (amount === 0) {
+        setHiddenRecentIds(current => {
+          const next = new Set(current)
+          next.delete(bonus.id)
+          return next
+        })
+      }
       setToast(error.message || 'No se pudo guardar el monto del bono')
     } finally {
       setSavingRecentId(null)
@@ -2742,45 +2769,37 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, setToast }) {
   }
   return <section className="panel operation-card operation-bonus-card">
     <PanelTitle icon={Gift} title="Bonos" meta={`Bonos: ${grantedCount} Otorgados | ${recoveredCount} Recuperados | ${publicityCount} Publicidad`} action={<div className="operation-panel-actions">
-      <button className="icon-button" type="button" title="Agregar bono" aria-label="Agregar bono"><Plus size={15} /></button>
+      <button className="icon-button bonus-placeholder-button" type="button" title="Agregar bono manual próximamente" aria-label="Agregar bono manual próximamente"><Plus size={15} /></button>
       <button className="icon-button" type="button" title="Ver bonos del turno" aria-label="Ver bonos del turno" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>
     </div>} />
-    <form className={`bonus-inline-entry bonus-type-${type}`} onSubmit={add}>
-      <label><span>$</span><input aria-label="Monto del bono" inputMode="decimal" placeholder={`Insertar Bono ${bonusTypeLabels[type]}`} value={value} onChange={event => setValue(event.target.value)} onKeyDown={event => {
-        if (event.key === '+') {
-          event.preventDefault()
-          add(event, 'recovered')
-        } else if (event.key === '-') {
-          event.preventDefault()
-          add(event, 'publicity')
-        }
-      }} disabled={saving} /></label>
-      <button className={`bonus-mode-button bonus-type-${type}`} type="button" title={`Tipo: ${bonusTypeLabels[type]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[type]}`} onClick={cycleType} disabled={saving}><ArrowLeftRight size={14} /></button>
-    </form>
+    <div className={`bonus-inline-entry bonus-type-${type}`}>
+      <label><span>$</span><input aria-label="Monto del bono" inputMode="decimal" placeholder={`Insertar Bono ${bonusTypeLabels[type]}`} value={value} onChange={event => setValue(event.target.value)} onKeyDown={add} /></label>
+      <button className={`bonus-mode-button bonus-type-${type}`} type="button" title={`Tipo: ${bonusTypeLabels[type]}. Cambiar tipo`} aria-label={`Tipo de bono: ${bonusTypeLabels[type]}`} onClick={cycleType}><ArrowLeftRight size={14} /></button>
+    </div>
     <div className="operation-recent-list">
       <small>Últimos bonos</small>
-      {[...rows].sort((left, right) => new Date(right.fecha_hora_creacion) - new Date(left.fecha_hora_creacion)).map(row => <div className={`operation-recent-row bonus-type-${bonusTypeOf(row)}`} key={row.id}>
-        <span>{bonusTypeLabels[bonusTypeOf(row)]}</span>
+      {displayRows.filter(row => !hiddenRecentIds.has(row.id)).map(row => <div className={`operation-recent-row bonus-type-${bonusTypeOf(row)}`} key={row.id}>
+        <span>{bonusTypeLabels[bonusTypeOf(row)]}{row.pending && <small className="bonus-pending-status"> · Guardando…</small>}</span>
         <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
         <b className="operation-bonus-amount"><input
           aria-label={`Monto de bono ${bonusTypeLabels[bonusTypeOf(row)]}`}
-          defaultValue={money.format(row.valor)}
+          defaultValue={moneyWithCents.format(row.valor)}
           inputMode="decimal"
-          disabled={savingRecentId === row.id}
+          disabled={row.pending || savingRecentId === row.id}
           onFocus={event => { event.currentTarget.value = numberWithCents.format(row.valor); event.currentTarget.select() }}
           onBlur={event => saveRecentAmount(event, row)}
           onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }}
         /></b>
       </div>)}
-      {!rows.length && <EmptyInline text="Sin bonos registrados." />}
+      {!displayRows.length && <EmptyInline text="Sin bonos registrados." />}
     </div>
     <footer className="operation-total operation-bonus-totals">
       <div><span>Otorgados</span><strong>{moneyWithCents.format(bonusTotals.granted)}</strong></div>
       <div><span>Recuperados</span><strong>{moneyWithCents.format(bonusTotals.recovered)}</strong></div>
       <div><span>Publicidad</span><strong>{moneyWithCents.format(bonusTotals.publicity)}</strong></div>
-      <div><span>Neto</span><strong>{moneyWithCents.format(bonusNetTotal(rows))}</strong></div>
+      <div><span>Neto</span><strong>{moneyWithCents.format(bonusNetTotal(displayRows))}</strong></div>
     </footer>
-    {historyOpen && <BonusHistoryModal bonuses={rows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} editableAmounts showTotals />}
+    {historyOpen && <BonusHistoryModal bonuses={displayRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} />}
   </section>
 }
 
