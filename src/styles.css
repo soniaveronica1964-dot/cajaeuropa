@@ -1281,16 +1281,16 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .publicity-stepper {
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) 14px;
+  display: flex;
   align-items: center;
-  column-gap: 3px;
+  gap: 3px;
   min-width: 0;
   width: 100%;
 }
 
 .publicity-stepper button {
   display: grid;
+  flex: 0 0 14px;
   place-items: center;
   width: 14px;
   min-width: 14px;
@@ -1316,6 +1316,7 @@ input[type="time"] { color-scheme: dark; }
 .publicity-stepper input {
   display: block;
   box-sizing: border-box;
+  flex: 1 1 0;
   width: 100%;
   min-width: 0;
   height: 22px;
