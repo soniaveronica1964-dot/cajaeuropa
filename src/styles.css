@@ -9,7 +9,7 @@
   --bg: #0d1518;
   --bg-2: #0b1215;
   --surface: #121b1e;
-  --panel: #171f22;
+  --panel: #192023;
   --panel-2: #1c2729;
   --panel-elevated: rgba(15, 22, 24, 0.96);
   --field-bg: rgba(20, 29, 31, 0.9);
@@ -90,8 +90,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   min-height: 100vh;
   background:
     radial-gradient(
-      ellipse 78% 58% at 50% 8%,
-      color-mix(in srgb, var(--accent) 18%, #22231f) 0%,
+      ellipse 48% 36% at 50% 8%,
+      color-mix(in srgb, var(--accent) 32%, transparent) 0%,
       rgba(8, 10, 9, 0) 100%
     ),
     linear-gradient(180deg, #090b0a 0%, #050606 100%);
