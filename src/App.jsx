@@ -1594,10 +1594,11 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
 
   const saveAmount = async (bonus, draft) => {
     if (draft === undefined) return
-    const amount = parseLocalizedAmount(draft)
+    const parsedAmount = parseLocalizedAmount(draft)
+    const amount = parsedAmount == null ? null : Math.round(parsedAmount)
     if (amount == null || amount < 0) {
       setToast('Ingresá un monto válido, igual o mayor a cero')
-      setAmountDrafts(current => ({ ...current, [bonus.id]: numberWithCents.format(bonus.valor) }))
+      setAmountDrafts(current => ({ ...current, [bonus.id]: numberWithoutCents.format(bonus.valor) }))
       return
     }
     if (amount === Number(bonus.valor)) {
@@ -1681,15 +1682,15 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
               ? <input
                 className="bonus-history-amount"
                 aria-label={`Monto ${bonusTypeLabels[type]}`}
-                inputMode="decimal"
-                value={amountDrafts[bonus.id] ?? numberWithCents.format(bonus.valor)}
+                inputMode="numeric"
+                value={amountDrafts[bonus.id] ?? numberWithoutCents.format(bonus.valor)}
                 onChange={event => setAmountDrafts(current => ({ ...current, [bonus.id]: event.target.value }))}
                 onFocus={event => event.currentTarget.select()}
                 onBlur={event => saveAmount(bonus, event.currentTarget.value)}
                 onKeyDown={event => {
                   if (event.key === 'Enter') event.currentTarget.blur()
                   if (event.key === 'Escape') {
-                    const originalAmount = numberWithCents.format(bonus.valor)
+                    const originalAmount = numberWithoutCents.format(bonus.valor)
                     event.currentTarget.value = originalAmount
                     setAmountDrafts(current => ({ ...current, [bonus.id]: originalAmount }))
                     event.currentTarget.blur()
@@ -2989,7 +2990,7 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
   const [notes, setNotes] = useState('')
   const [savings, setSavings] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [showAllRows, setShowAllRows] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
   const selectedTransferAccount = accounts[0]
   const destinationTurns = activeTurns.filter(turn => (
     String(turn.id) !== String(shift.id)
@@ -3043,6 +3044,21 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
     const account = accounts.find(item => String(item.id) === String(id))
     return account ? `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}` : 'Cuenta'
   }
+  const transferRows = rows.filter(row => !row.es_ahorro)
+  const savingsRows = rows.filter(row => row.es_ahorro)
+  const movementLabel = row => {
+    const route = `${boxName(row.caja_desde_id)} → ${boxName(row.caja_hasta_id)}`
+    if (!row.es_ahorro) return [route, row.notas].filter(Boolean).join(' · ')
+    const direction = String(row.caja_desde_id) === String(shift.caja_id) ? 'Depósito' : 'Retiro'
+    return [`${direction} · ${accountName(row.cuenta_x_turno_id)}`, route, row.notas].filter(Boolean).join(' · ')
+  }
+  const renderHistoryRows = movementRows => movementRows.length
+    ? movementRows.map(row => <div className="operation-history-row" key={row.id}>
+      <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
+      <span>{movementLabel(row)}</span>
+      <b>{money.format(row.monto)}</b>
+    </div>)
+    : <p className="transfer-history-empty">Sin movimientos registrados.</p>
   const toggleSavings = checked => {
     setSavings(checked)
     if (checked && savingsAccounts.length) {
@@ -3061,7 +3077,7 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
       meta={`${rows.length} registros`}
       action={<div className="operation-panel-actions">
         <label className="savings-toggle"><span>Movimientos de ahorro</span><input type="checkbox" checked={savings} onChange={event => toggleSavings(event.target.checked)} disabled={saving} /></label>
-        <button className="icon-button" type="button" title={showAllRows ? 'Mostrar últimos movimientos' : 'Ver todos los movimientos'} aria-label={showAllRows ? 'Mostrar últimos movimientos' : 'Ver todos los movimientos'} onClick={() => setShowAllRows(current => !current)}><Eye size={15} /></button>
+        <button className="icon-button" type="button" title="Ver todos los movimientos" aria-label="Ver todos los movimientos" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button>
       </div>}
     />
     {savings
@@ -3093,7 +3109,7 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
       </form>}
     <div className="operation-recent-list">
       <small>Últimos movimientos</small>
-      {(showAllRows ? rows : rows.slice(0, 4)).map(row => <div className="operation-recent-row" key={row.id}>
+      {rows.slice(0, 4).map(row => <div className="operation-recent-row" key={row.id}>
         <span>{row.es_ahorro
           ? `Ahorro · ${String(row.caja_desde_id) === String(shift.caja_id) ? 'Depósito' : 'Retiro'} · ${accountName(row.cuenta_x_turno_id)}`
           : `${boxName(row.caja_desde_id)} > ${boxName(row.caja_hasta_id)}`}</span>
@@ -3101,6 +3117,19 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
       </div>)}
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
     </div>
+    {historyOpen && <div className="modal-backdrop operation-history-backdrop" onClick={() => setHistoryOpen(false)}>
+      <section className="bonus-history-modal operation-history-modal transfer-history-modal" role="dialog" aria-modal="true" aria-label="Todos los movimientos" onClick={event => event.stopPropagation()}>
+        <header>
+          <div><h2><Eye size={16} /> Todos los movimientos</h2><span>{rows.length} registros</span></div>
+          <button className="modal-close" type="button" title="Cerrar" aria-label="Cerrar" onClick={() => setHistoryOpen(false)}><X size={17} /></button>
+        </header>
+        <div className="operation-history-scroll transfer-history-groups">
+          <section><h3>Entre cajas <span>{transferRows.length}</span></h3>{renderHistoryRows(transferRows)}</section>
+          <section><h3>Movimientos de ahorro <span>{savingsRows.length}</span></h3>{renderHistoryRows(savingsRows)}</section>
+        </div>
+        <footer><button className="close-button" type="button" onClick={() => setHistoryOpen(false)}>Listo <Check size={15} /></button></footer>
+      </section>
+    </div>}
   </section>
 }
 
