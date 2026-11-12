@@ -605,6 +605,7 @@ function App() {
   }
   const appConfig = appData?.appConfig?.[0]
   const appName = appConfig?.nombre || 'Caja Europa'
+  const pageTitle = appData ? `Caja ${appName} | Control Operativo` : 'Caja'
   const isLightTheme = Boolean(appConfig?.tema)
   const appImageReference = appConfig?.imagen_mini || appConfig?.imagen
   const appImagePreview = getStoragePublicUrl(appImageReference)
@@ -614,8 +615,8 @@ function App() {
   )
 
   useEffect(() => {
-    document.title = `Caja ${appName} | Control Operativo`
-  }, [appName])
+    document.title = pageTitle
+  }, [pageTitle])
 
   useEffect(() => {
     let favicon = document.querySelector('link[rel="icon"]')
@@ -2213,8 +2214,10 @@ function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
     recommendedRow && { row: recommendedRow, label: `${Number(recommendedRow.num_orden) >= dateOrder ? '+' : ''}${(Number(recommendedRow.num_orden) || 0) - dateOrder}`, key: 'recommended', recommended: true },
   ].filter(item => item?.row)
 
+  const walletLabel = row => `${row.cuentas_x_turno?.cuentas?.titulares?.nombre || 'Sin titular'} · ${row.cuentas_x_turno?.cuentas?.billeteras?.nombre || 'Sin billetera'}`
   const selectWallet = async targetRow => {
     if (saving || !targetRow || targetRow.id === currentRow?.id) return
+    if (!window.confirm(`¿Querés cambiar la billetera En uso${currentRow ? ` de "${walletLabel(currentRow)}"` : ''} a "${walletLabel(targetRow)}"?`)) return
     setSaving(true)
     try {
       const previouslySelected = routeRows.filter(row => row.cuentas_x_turno?.cobros && row.id !== targetRow.id)
@@ -2235,8 +2238,6 @@ function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
       setSaving(false)
     }
   }
-
-  const walletLabel = row => `${row.cuentas_x_turno?.cuentas?.titulares?.nombre || 'Sin titular'} · ${row.cuentas_x_turno?.cuentas?.billeteras?.nombre || 'Sin billetera'}`
 
   return <section className="panel mini-card logistics-card">
     <PanelTitle icon={WalletCards} title="Logística" />
