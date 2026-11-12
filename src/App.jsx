@@ -1820,7 +1820,13 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
                 setDraftValues(current => ({ ...current, [chip.id]: parsed == null || !Number.isFinite(parsed) ? value : String(parsed) }))
                 if (parsed == null || Number.isFinite(parsed)) onChipFinalPreview(chip.id, parsed)
               }}
-              onBlur={() => saveFinal(chip)}
+              onBlur={(event) => {
+                const parsed = parseValue(event.currentTarget.value)
+                void saveFinal(chip)
+                if (parsed != null && Number.isFinite(parsed) && parsed >= 0) {
+                  setDraftValues(current => ({ ...current, [chip.id]: formatValue(parsed) }))
+                }
+              }}
               onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
               placeholder="0"
             />
