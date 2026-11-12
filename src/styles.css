@@ -1075,7 +1075,7 @@ input[type="time"] { color-scheme: dark; }
   align-items: center;
   gap: 5px;
   min-width: 0;
-  min-height: 40px;
+  min-height: 35px;
   padding: 3px 8px;
   border: 1px solid var(--chip-color, var(--accent-border));
   border-radius: 5px;
@@ -1086,7 +1086,7 @@ input[type="time"] { color-scheme: dark; }
 .chip-final-value > b { color: var(--muted); font: 11px 'DM Mono', monospace; }
 .chip-final-value > input { flex: 1; width: 100%; min-width: 0; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 11px 'DM Mono', monospace; text-align: center; cursor: text; }
 .chip-final-value > input::placeholder { color: var(--muted); font-family: Manrope, sans-serif; }
-.chip-final-paste { display: grid; flex: 0 0 40px; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid var(--chip-color, var(--accent-border)); border-radius: 5px; background: rgba(12, 17, 20, 0.45); color: var(--muted); cursor: pointer; }
+.chip-final-paste { display: grid; flex: 0 0 35px; place-items: center; width: 35px; height: 35px; padding: 0; border: 1px solid var(--chip-color, var(--accent-border)); border-radius: 5px; background: rgba(12, 17, 20, 0.45); color: var(--muted); cursor: pointer; }
 .chip-final-paste:hover:not(:disabled) { background: color-mix(in srgb, var(--chip-color, var(--accent)) 12%, var(--panel)); color: var(--text); }
 .chip-final-paste:disabled { opacity: .5; cursor: wait; }
 .chip-final-field > small { color: var(--muted); font: 9px 'DM Mono', monospace; text-align: right; }
