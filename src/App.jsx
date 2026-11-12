@@ -2479,7 +2479,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
   }
   return <section className={`panel operation-card movement-card movement-card-${kind}`}>
     <PanelTitle icon={Icon} title={title} action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title={`Ver ${title.toLowerCase()}`} aria-label={`Ver ${title.toLowerCase()}`} onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
-    <form className="entry-form" onSubmit={(event) => { event.preventDefault(); add() }}>
+    <form className="operation-form" onSubmit={(event) => { event.preventDefault(); add() }}>
       {kind === 'expenses'
         ? <select aria-label="Tipo de gasto" value={typeId} onChange={(event) => setTypeId(event.target.value)} disabled={saving || !options.length}>
           {options.map(option => <option value={option.id} key={option.id}>{option.nombre}</option>)}
@@ -2487,7 +2487,7 @@ function MovementCard({ title, kind, shiftId, options = [], icon: Icon, amount, 
         : <input aria-label="Usuario" placeholder="Usuario" value={detail} onChange={(event) => setDetail(event.target.value)} disabled={saving} />}
       <input aria-label="Monto" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
       <input aria-label="Notas" placeholder="Notas" value={notes} onChange={(event) => setNotes(event.target.value)} disabled={saving} />
-      <button className="send-button" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}><Send size={14} /></button>
+      <button className="operation-submit" type="submit" title={`Agregar ${title.toLowerCase()}`} aria-label={`Agregar ${title.toLowerCase()}`} disabled={saving}><Send size={14} /></button>
     </form>
     <small className="section-kicker">{kind === 'expenses' ? 'Últimos gastos' : 'Últimas propinas'}</small>
     {rows.slice(0, 10).map(row => <div className="movement-row" key={row.id}>
