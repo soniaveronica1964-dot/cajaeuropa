@@ -1732,12 +1732,12 @@ function BonusHistoryModal({ bonuses, shift, onClose, onSaved, setToast, editabl
   </div>
 }
 function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) {
-  const formatValue = (value) => value == null ? '' : Number(value).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  const formatValue = (value) => value == null ? '' : Math.round(Number(value)).toLocaleString('es-AR')
   const parseValue = (value) => {
     const normalized = String(value).trim().replace(/\s/g, '').replace(/\./g, '').replace(',', '.')
     if (!normalized) return null
     const parsed = Number(normalized)
-    return Number.isFinite(parsed) ? parsed : Number.NaN
+    return Number.isFinite(parsed) ? Math.round(parsed) : Number.NaN
   }
   const [draftValues, setDraftValues] = useState(() => Object.fromEntries(chips.map(chip => [chip.id, formatValue(chip.fichas_final)])))
   const [copyingChipId, setCopyingChipId] = useState(null)
@@ -1800,25 +1800,31 @@ function ChipSummary({ chips, setToast, onChipFinalSaved, onChipFinalPreview }) 
     {chips.length ? <div className="chip-final-list">{chips.map(chip => (
       <div className="chip-final-field" key={chip.id}>
         <span>Ficha Final ({chip.plataformas?.nombre || 'Plataforma'})</span>
-        <div className="chip-final-value" style={{ '--chip-color': chip.colorHex || 'var(--accent-border)' }} onClick={event => {
+        <div className="chip-final-control" style={{ '--chip-color': chip.colorHex || 'var(--accent-border)' }} onClick={event => {
           if (event.target.closest('button')) return
           event.currentTarget.querySelector('input')?.focus()
         }}>
-          <b>$</b>
-          <input
-            aria-label={`Ficha final ${chip.plataformas?.nombre || 'Plataforma'}`}
-            inputMode="decimal"
-            value={draftValues[chip.id] ?? formatValue(chip.fichas_final)}
-            onChange={(event) => {
-              const value = event.target.value
-              const parsed = parseValue(value)
-              setDraftValues(current => ({ ...current, [chip.id]: value }))
-              if (parsed == null || Number.isFinite(parsed)) onChipFinalPreview(chip.id, parsed)
-            }}
-            onBlur={() => saveFinal(chip)}
-            onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
-            placeholder="0,00"
-          />
+          <div className="chip-final-value">
+            <b>$</b>
+            <input
+              aria-label={`Ficha final ${chip.plataformas?.nombre || 'Plataforma'}`}
+              inputMode="numeric"
+              value={draftValues[chip.id] ?? formatValue(chip.fichas_final)}
+              onFocus={(event) => {
+                const ungroupedValue = event.currentTarget.value.replace(/\./g, '')
+                setDraftValues(current => ({ ...current, [chip.id]: ungroupedValue }))
+              }}
+              onChange={(event) => {
+                const value = event.target.value
+                const parsed = parseValue(value)
+                setDraftValues(current => ({ ...current, [chip.id]: parsed == null || !Number.isFinite(parsed) ? value : String(parsed) }))
+                if (parsed == null || Number.isFinite(parsed)) onChipFinalPreview(chip.id, parsed)
+              }}
+              onBlur={() => saveFinal(chip)}
+              onKeyDown={(event) => { if (event.key === 'Enter') event.currentTarget.blur() }}
+              placeholder="0"
+            />
+          </div>
           <button type="button" className="chip-final-paste" title="Pegar monto del portapapeles" aria-label={`Pegar monto del portapapeles en ${chip.plataformas?.nombre || 'plataforma'}`} onMouseDown={event => event.preventDefault()} onClick={() => pasteFinal(chip)} disabled={copyingChipId === chip.id}><Copy size={13} /></button>
         </div>
         {(() => {
