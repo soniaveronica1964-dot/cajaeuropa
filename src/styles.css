@@ -575,7 +575,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 10.5px;
+  margin-bottom: 16px;
 }
 .page-heading-dashboard {
   display: grid;
@@ -960,7 +960,7 @@ input[type="time"] { color-scheme: dark; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 5.25px;
+  gap: 8px;
   min-height: 26px;
   padding: 5px 0;
   border-top: 1px solid rgba(121, 146, 146, 0.18);
@@ -2073,7 +2073,7 @@ input[type="time"] { color-scheme: dark; }
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: stretch;
-  gap: 8px;
+  gap: 5.25px;
 }
 .operation-card {
   display: flex;
