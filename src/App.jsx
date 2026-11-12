@@ -610,7 +610,7 @@ function App() {
   const appImagePreview = getStoragePublicUrl(appImageReference)
 
   useEffect(() => {
-    document.title = appName
+    document.title = `Caja ${appName} | Control Operativo`
   }, [appName])
 
   useEffect(() => {
