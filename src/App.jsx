@@ -971,6 +971,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
 function Publicity({ rows, boxes, setToast, onSaved }) {
   const [savingCell, setSavingCell] = useState('')
+  const [hoveredStepperButton, setHoveredStepperButton] = useState('')
   const [countDrafts, setCountDrafts] = useState({})
   const [distributionDrafts, setDistributionDrafts] = useState({})
   useEffect(() => {
@@ -1049,13 +1050,13 @@ function Publicity({ rows, boxes, setToast, onSaved }) {
       const stepper = (field, label, value) => {
         const key = `${row.id}:${field}`
         return <label key={field}><small>{label}</small><span className="publicity-stepper">
-          <button type="button" title={`Disminuir ${label}`} aria-label={`Disminuir ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => {
+          <button type="button" className={hoveredStepperButton === `${key}:decrease` ? 'is-hovered' : ''} onMouseEnter={() => setHoveredStepperButton(`${key}:decrease`)} onMouseLeave={() => setHoveredStepperButton('')} title={`Disminuir ${label}`} aria-label={`Disminuir ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => {
             const next = Math.max(0, value - 1)
             setCountDrafts(current => ({ ...current, [key]: next }))
             change(row, key, () => updateAdvertisingLine(row.id, field, next))
           }}><ArrowLeft size={11} /></button>
           <input type="number" min="0" step="1" aria-label={`${label} de ${lineName}`} value={countDrafts[key] ?? value} disabled={savingCell === key} onChange={event => setCountDrafts(current => ({ ...current, [key]: event.target.value }))} onBlur={event => commitNumber(row, key, event.currentTarget.value, next => updateAdvertisingLine(row.id, field, next))} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} />
-          <button type="button" title={`Aumentar ${label}`} aria-label={`Aumentar ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => {
+          <button type="button" className={hoveredStepperButton === `${key}:increase` ? 'is-hovered' : ''} onMouseEnter={() => setHoveredStepperButton(`${key}:increase`)} onMouseLeave={() => setHoveredStepperButton('')} title={`Aumentar ${label}`} aria-label={`Aumentar ${label} de ${lineName}`} disabled={savingCell === key} onClick={() => {
             const next = value + 1
             setCountDrafts(current => ({ ...current, [key]: next }))
             change(row, key, () => updateAdvertisingLine(row.id, field, next))
@@ -1073,13 +1074,13 @@ function Publicity({ rows, boxes, setToast, onSaved }) {
           const value = getDistribution(row, box.id)
           const key = `${row.id}:box:${box.id}`
           return <label key={box.id}><small>{box.nombre}</small><span className="publicity-stepper">
-            <button type="button" title={`Disminuir derivados de ${box.nombre}`} aria-label={`Disminuir derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => {
+            <button type="button" className={hoveredStepperButton === `${key}:decrease` ? 'is-hovered' : ''} onMouseEnter={() => setHoveredStepperButton(`${key}:decrease`)} onMouseLeave={() => setHoveredStepperButton('')} title={`Disminuir derivados de ${box.nombre}`} aria-label={`Disminuir derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => {
               const next = Math.max(0, value - 1)
               setDistributionDrafts(current => ({ ...current, [key]: next }))
               change(row, key, () => updateAdvertisingDistribution(row.id, box.id, next))
             }}><ArrowLeft size={11} /></button>
             <input type="number" min="0" step="1" aria-label={`Derivados de ${box.nombre} en ${lineName}`} value={distributionDrafts[key] ?? value} disabled={savingCell === key} onChange={event => setDistributionDrafts(current => ({ ...current, [key]: event.target.value }))} onBlur={event => commitNumber(row, key, event.currentTarget.value, next => updateAdvertisingDistribution(row.id, box.id, next))} onKeyDown={event => { if (event.key === 'Enter') event.currentTarget.blur() }} />
-            <button type="button" title={`Aumentar derivados de ${box.nombre}`} aria-label={`Aumentar derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => {
+            <button type="button" className={hoveredStepperButton === `${key}:increase` ? 'is-hovered' : ''} onMouseEnter={() => setHoveredStepperButton(`${key}:increase`)} onMouseLeave={() => setHoveredStepperButton('')} title={`Aumentar derivados de ${box.nombre}`} aria-label={`Aumentar derivados de ${box.nombre} en ${lineName}`} disabled={savingCell === key} onClick={() => {
               const next = value + 1
               setDistributionDrafts(current => ({ ...current, [key]: next }))
               change(row, key, () => updateAdvertisingDistribution(row.id, box.id, next))

@@ -1302,7 +1302,7 @@ input[type="time"] { color-scheme: dark; }
   color: var(--muted);
 }
 
-.publicity-stepper button:hover:not(:disabled) {
+.publicity-stepper button.is-hovered:not(:disabled) {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent);
