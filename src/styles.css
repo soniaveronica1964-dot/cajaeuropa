@@ -3540,7 +3540,7 @@ html:has(.app-shell[data-theme='light']) {
 .bonus-quick-amount.bonus-type-recovered,
 .bonus-quick-amount.bonus-type-publicity {
   border-color: color-mix(in srgb, var(--bonus-type-color) 60%, var(--line));
-  background: color-mix(in srgb, var(--bonus-type-color) 10%, var(--field-bg));
+  background: var(--field-bg);
   color: var(--bonus-type-color);
 }
 .bonus-mode-button {
