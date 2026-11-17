@@ -3233,8 +3233,7 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
         <button className="operation-submit transfer-withdraw" type="button" title="Retirar del ahorro" aria-label="Retirar del ahorro" onClick={() => add(null, 'withdrawal')} disabled={saving || boxes.length < 2 || !selectedSavingsAccount}><Download size={14} /></button>
       </form>
       : <form className="transfer-form" onSubmit={event => add(event)}>
-        <label className="transfer-field transfer-box-field"><span>Desde</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(fromBoxId) }}><i aria-hidden="true" /><select aria-label="Caja de origen" value={fromBoxId} onChange={event => { setFromBoxId(event.target.value); setDestinationShiftId('') }} disabled={saving || !originTurns.length}>
-          <option value="">Caja</option>
+        <label className="transfer-field transfer-box-field"><span>Desde</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(fromBoxId) }}><i aria-hidden="true" /><select aria-label="Caja de origen" value={fromBoxId} onChange={event => { setFromBoxId(event.target.value); setDestinationShiftId('') }} disabled={saving || !originTurns.length} required>
           {originTurns.map(turn => <option value={turn.caja_id} key={turn.id}>{boxName(turn.caja_id)}</option>)}
         </select></span></label>
         <button className="transfer-swap" type="button" aria-label="Invertir cajas de origen y destino" onClick={swapBoxes} disabled={saving || !selectedOriginTurn || !selectedDestinationTurn}><ArrowLeftRight size={14} /></button>
