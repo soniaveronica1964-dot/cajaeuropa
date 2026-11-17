@@ -1966,29 +1966,25 @@ input[type="time"] { color-scheme: dark; }
 .logistics-activity-cell label {
   display: grid;
   place-items: center;
-  width: 15px;
-  min-height: 15px;
-  padding: 0;
-  border: 1px solid rgba(121, 146, 146, 0.2);
-  border-radius: 3px;
-  background: var(--field-bg);
+  width: 17px;
+  height: 18px;
 }
 .logistics-activity-cell input {
   appearance: none;
   display: grid;
   place-content: center;
-  width: 11px;
-  height: 11px;
+  width: 15px;
+  height: 15px;
   margin: 0;
   border: 1px solid #536164;
-  border-radius: 2px;
+  border-radius: 3px;
   background: #273235;
   cursor: pointer;
 }
-.logistics-activity-cell:not(.logistics-payments-cell) input:checked { border-color: #83d5a2; background: #83d5a2; }
-.logistics-payments-cell input:checked { border-color: var(--orange); background: var(--orange); }
-.logistics-activity-cell input:checked::after { width: 5px; height: 3px; border: solid #183027; border-width: 0 0 1.5px 1.5px; content: ''; transform: rotate(-45deg) translate(0, -1px); }
-.logistics-payments-cell input:checked::after { border-color: #402713; }
+.logistics-activity-cell:not(.logistics-payments-cell) input:checked { border-color: #83d5a2; }
+.logistics-payments-cell input:checked { border-color: var(--orange); }
+.logistics-activity-cell:not(.logistics-payments-cell) input:checked::after { width: 5px; height: 5px; background: #83d5a2; content: ''; }
+.logistics-payments-cell input:checked::after { width: 5px; height: 5px; background: var(--orange); content: ''; }
 .logistics-holder,
 .logistics-wallet { overflow: hidden; padding: 0 9px; color: var(--text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .logistics-wallet { color: var(--accent); }
