@@ -234,7 +234,7 @@ export async function loadConfigurationData() {
     query('plataformas', 'id, nombre, caja_id, color_id'),
     query('condiciones_bono', 'id, nombre, plataforma'),
     query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
-    query('estados', 'id, nombre, imagen_mini, tipo_estado_id, tipos_estado(nombre, cantidad_porcentaje)'),
+    query('estados', 'id, caja_id, nombre, imagen_mini, tipo_estado_id, tipos_estado(nombre, cantidad_porcentaje)'),
     query('tipos_turno', 'id, caja_id, nombre, color_id'),
     query('dias_turno', 'id, nombre, dia_semana, hora_inicio, hora_fin, cruza_medianoche, tipo_turno_id'),
     query('colores', 'id, nombre, hex'),
@@ -243,9 +243,11 @@ export async function loadConfigurationData() {
   return { boxes, holders, wallets, walletTypes, accountTypes, expenses, platforms, bonusConditions, bonusTypes, states, shiftTypes, shiftDays, colors, appConfig }
 }
 
-export async function loadBonusCatalog() {
+export async function loadBonusCatalog(boxId) {
+  const parsedBoxId = Number(boxId)
+  if (!Number.isInteger(parsedBoxId) || parsedBoxId <= 0) throw new Error('Seleccioná una caja para cargar sus estados')
   const [states, bonusTypes, bonusConditions, subplatforms] = await Promise.all([
-    query('estados', 'id, nombre, imagen, imagen_mini, tipo_estado_id, tipos_estado(nombre, cantidad_porcentaje), lineas_estado(id, porcentaje, condicion_bono_id, subplataforma_id, condiciones_bono(id, nombre, plataforma), subplataformas(id, nombre, plataforma_id, plataformas(nombre)))', request => request.order('id', { ascending: true })),
+    query('estados', 'id, caja_id, nombre, imagen, imagen_mini, tipo_estado_id, tipos_estado(nombre, cantidad_porcentaje), lineas_estado(id, porcentaje, condicion_bono_id, subplataforma_id, condiciones_bono(id, nombre, plataforma), subplataformas(id, nombre, plataforma_id, plataformas(nombre)))', request => request.eq('caja_id', parsedBoxId).order('id', { ascending: true })),
     query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
     query('subplataformas', 'id, nombre, plataforma_id, plataformas(nombre)', request => request.order('id', { ascending: true })),
@@ -342,10 +344,12 @@ async function removeStateImage(path) {
   if (error) throw error
 }
 
-export async function createState({ name, typeId, lines, imageFile, imageMiniFile }) {
+export async function createState({ boxId, name, typeId, lines, imageFile, imageMiniFile }) {
   requireSupabase()
+  const parsedBoxId = Number(boxId)
   const trimmedName = String(name || '').trim()
   const parsedTypeId = Number(typeId)
+  if (!Number.isInteger(parsedBoxId) || parsedBoxId <= 0) throw new Error('Seleccioná una caja para el estado')
   if (!trimmedName) throw new Error('El nombre del estado es obligatorio')
   if (!Number.isInteger(parsedTypeId) || parsedTypeId <= 0) throw new Error('Seleccioná un tipo de estado')
   const validLines = await validateStateLines(parsedTypeId, requireStateLines(lines))
@@ -354,7 +358,7 @@ export async function createState({ name, typeId, lines, imageFile, imageMiniFil
     if (!imageMiniFile) throw new Error('No se generó la miniatura del estado')
   }
   const { data: state, error } = await supabase.from('estados')
-    .insert({ nombre: trimmedName, tipo_estado_id: parsedTypeId })
+    .insert({ caja_id: parsedBoxId, nombre: trimmedName, tipo_estado_id: parsedTypeId })
     .select()
     .single()
   if (error) throw error

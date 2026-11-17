@@ -621,6 +621,8 @@ CREATE TABLE usuarios_vinculados (
 
 CREATE TABLE estados (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    caja_id BIGINT NOT NULL REFERENCES cajas(id)
+        ON DELETE RESTRICT,
     imagen TEXT,
     imagen_mini TEXT,
     nombre VARCHAR(100) NOT NULL,
@@ -786,6 +788,7 @@ CREATE INDEX idx_categorias_x_usuario_usuario ON categorias_x_usuario(usuario_id
 CREATE INDEX idx_usuarios_vinculados_rel ON usuarios_vinculados(usuario_rel_id);
 
 CREATE INDEX idx_estados_tipo_estado ON estados(tipo_estado_id);
+CREATE INDEX idx_estados_caja_id ON estados(caja_id);
 CREATE INDEX idx_lineas_estado_condicion_bono ON lineas_estado(condicion_bono_id);
 CREATE INDEX idx_lineas_estado_subplataforma ON lineas_estado(subplataforma_id);
 CREATE INDEX idx_lineas_estado_estado ON lineas_estado(estado_id);

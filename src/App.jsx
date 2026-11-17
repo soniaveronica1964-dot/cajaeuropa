@@ -798,7 +798,7 @@ function App() {
           {!loadError && appData && view === 'stats' && <LiveStatistics />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} onEdit={setUserEditing} onSaved={reloadData} setToast={setToast} />}
-          {!loadError && appData && view === 'bonuses' && <LiveStates setToast={setToast} />}
+          {!loadError && appData && view === 'bonuses' && <LiveStates key={selectedBoxId} boxId={selectedBoxId} setToast={setToast} />}
           {!loadError && appData && view === 'settings' && <LiveSettings data={appData} selectedBoxId={selectedBoxId} setToast={setToast} onSaved={updateSettingsData} onCloseBox={openCloseBoxDialog} />}
           </fieldset>
         </main>
@@ -1067,7 +1067,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} boxes={data.boxes || []} activeTurns={data.activeTurns || []} currentBoxId={data.shift.caja_id} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
-        <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} /></div>
+        <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard boxId={data.shift.caja_id} setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} /></div>
         <div className="operations-grid">
           <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
           <MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} />
@@ -1360,7 +1360,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
   </section>
 }
 
-function LiveStates({ setToast }) {
+function LiveStates({ boxId, setToast }) {
   const [catalog, setCatalog] = useState({ states: [], bonusTypes: [], bonusConditions: [], subplatforms: [] })
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -1371,20 +1371,26 @@ function LiveStates({ setToast }) {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [editingState, setEditingState] = useState(null)
   const [saving, setSaving] = useState(false)
+  const catalogRequestId = useRef(0)
 
   const refresh = async () => {
+    const requestId = ++catalogRequestId.current
     setLoading(true)
     setLoadError('')
     try {
-      setCatalog(await loadBonusCatalog())
+      const loadedCatalog = await loadBonusCatalog(boxId)
+      if (requestId === catalogRequestId.current) setCatalog(loadedCatalog)
     } catch (error) {
-      setLoadError(error.message || 'No se pudo cargar el catálogo de estados')
+      if (requestId === catalogRequestId.current) setLoadError(error.message || 'No se pudo cargar el catálogo de estados')
     } finally {
-      setLoading(false)
+      if (requestId === catalogRequestId.current) setLoading(false)
     }
   }
 
-  useEffect(() => { refresh() }, [])
+  useEffect(() => {
+    refresh()
+    return () => { catalogRequestId.current += 1 }
+  }, [boxId])
 
   const filteredStates = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('es')
@@ -1431,7 +1437,7 @@ function LiveStates({ setToast }) {
         await updateState(editingState.id, values)
         setToast('Estado actualizado')
       } else {
-        await createState(values)
+        await createState({ ...values, boxId })
         setToast('Estado creado')
       }
       setEditingState(null)
@@ -2384,7 +2390,7 @@ function LogisticsCard({ rows, accountTypes, setToast, onSaved }) {
     </div>}
   </section>
 }
-function StatusCard({ setToast }) {
+function StatusCard({ boxId, setToast }) {
   const [catalog, setCatalog] = useState({ states: [], bonusTypes: [], bonusConditions: [], subplatforms: [] })
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -2396,7 +2402,10 @@ function StatusCard({ setToast }) {
 
   useEffect(() => {
     let active = true
-    loadBonusCatalog().then(data => {
+    setLoading(true)
+    setLoadError('')
+    setCatalog({ states: [], bonusTypes: [], bonusConditions: [], subplatforms: [] })
+    loadBonusCatalog(boxId).then(data => {
       if (active) setCatalog(data)
     }).catch(error => {
       if (active) setLoadError(error.message || 'No se pudieron cargar los estados')
@@ -2404,7 +2413,7 @@ function StatusCard({ setToast }) {
       if (active) setLoading(false)
     })
     return () => { active = false }
-  }, [])
+  }, [boxId])
 
   const filteredStates = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('es')
