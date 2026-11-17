@@ -281,14 +281,18 @@ function signedExpenseImpact(rows = []) {
   }, 0)
 }
 
-function calculateCashDiscrepancy({ shiftId, cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney, savingsMovements, transferMovements }) {
-  const bonusImpact = bonusNetTotal(bonuses)
-  const transferImpact = (transferMovements || []).reduce((sum, movement) => {
+function calculateTransferImpact(shiftId, movements = []) {
+  return movements.reduce((sum, movement) => {
     const amount = Number(movement.monto || 0)
     if (String(movement.turno_id) === String(shiftId)) return sum + amount
     if (String(movement.turno_destino_id) === String(shiftId)) return sum - amount
     return sum
   }, 0)
+}
+
+function calculateCashDiscrepancy({ shiftId, cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney, savingsMovements, transferMovements }) {
+  const bonusImpact = bonusNetTotal(bonuses)
+  const transferImpact = calculateTransferImpact(shiftId, transferMovements)
   return cashDifference
     - countedChipDifference
     + rounding
@@ -1021,7 +1025,11 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   const countedChipDifference = calculateChipDifference(chips)
   const cashDifference = total - cashInitial
   const taChargesTotal = sumMovementAmounts(data.taCharges)
-  const realDifference = cashDifference + signedExpenseImpact(data.expenses) + taChargesTotal
+  const transferImpact = calculateTransferImpact(
+    data.shift.id,
+    (data.movements || []).filter(movement => !movement.es_ahorro),
+  )
+  const realDifference = cashDifference + signedExpenseImpact(data.expenses) + taChargesTotal + transferImpact
   const cashDiscrepancy = calculateCashDiscrepancy({
     shiftId: data.shift.id,
     cashDifference,
