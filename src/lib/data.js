@@ -91,7 +91,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
       query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
       query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     ])
-    return { shift: null, boxes, accounts: [], sharedAccountBalances: {}, advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, userCategories, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
+    return { shift: null, boxes, accounts: [], activeTurnAccountLinks: [], sharedAccountBalances: {}, advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, userCategories, goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
   if (shift.abierto) {
@@ -130,6 +130,9 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     query('movimientos', 'id, caja_desde_id, caja_hasta_id, turno_id, turno_destino_id, fecha_hora_creacion, monto, es_ahorro, cuenta_x_turno_id, notas', request => request.or(`turno_id.eq.${shift.id},turno_destino_id.eq.${shift.id}`).order('fecha_hora_creacion', { ascending: false })),
   ])
 
+  const activeTurnAccountLinks = activeTurns.length
+    ? await query('cuentas_x_turno', 'id, turno_id', request => request.in('turno_id', activeTurns.map(turn => turn.id)).order('id', { ascending: true }))
+    : []
   const accountIds = accountLinks.map(account => account.cuenta_id)
   const accounts = accountIds.length
     ? await query('cuentas', 'id, alias, cuil, patron, notas, tipo_cuenta_id, activa, titular_id, billetera_id, titulares(id, nombre), billeteras(id, nombre)', request => request.in('id', accountIds))
@@ -217,7 +220,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     colorHex: platformColorById.get(String(chip.plataforma_id)) || null,
   }))
 
-  return { shift, boxes, accounts: accountsForShift, sharedAccountBalances, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, goals, chips: chipsWithPlatformColors, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
+  return { shift, boxes, accounts: accountsForShift, activeTurnAccountLinks, sharedAccountBalances, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, goals, chips: chipsWithPlatformColors, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
 
 export async function loadConfigurationData() {

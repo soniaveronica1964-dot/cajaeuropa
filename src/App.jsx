@@ -1075,7 +1075,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
           <TaChargesCard shiftId={data.shift.id} rows={data.taCharges || []} onSaved={onSaved} setToast={setToast} />
           <FoundMoneyCard accounts={accounts} rows={data.foundMoney || []} onSaved={onSaved} setToast={setToast} />
           <ShiftNotesCard shiftId={data.shift.id} notes={data.shiftNotes} onSaved={onSaved} setToast={setToast} />
-          <TransferMovementsCard shift={data.shift} boxes={data.boxes} activeTurns={data.activeTurns || []} accounts={accounts} rows={data.movements || []} onSaved={onSaved} setToast={setToast} />
+          <TransferMovementsCard shift={data.shift} boxes={data.boxes} activeTurns={data.activeTurns || []} activeTurnAccountLinks={data.activeTurnAccountLinks || []} accounts={accounts} rows={data.movements || []} onSaved={onSaved} setToast={setToast} />
           <ChipControlCard chips={chips} onSaved={onSaved} onChipFinalSaved={onChipFinalSaved} setToast={setToast} />
         </div>
       </div>
@@ -3037,11 +3037,11 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
     <PanelTitle icon={Search} title="Dinero encontrado" action={<div className="operation-panel-actions"><small>{rows.length} registros</small><button className="icon-button" type="button" title="Ver dinero encontrado" aria-label="Ver dinero encontrado" onClick={() => setHistoryOpen(true)}><Eye size={15} /></button></div>} />
     <form className="operation-form operation-found-money-form" onSubmit={add}>
       <select aria-label="Titular donde se encontró dinero" value={selectedHolderId} onChange={event => { setHolderId(event.target.value); setWalletId('') }} disabled={saving || !holders.length}>
-        <option value="">Seleccionar titular</option>
+        <option value="">Titular</option>
         {holders.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
       </select>
       <select aria-label="Billetera donde se encontró dinero" value={selectedWalletId} onChange={event => setWalletId(event.target.value)} disabled={saving || !selectedHolderId || !wallets.length}>
-        <option value="">Seleccionar billetera</option>
+        <option value="">Billetera</option>
         {wallets.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
       </select>
       <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
@@ -3095,7 +3095,7 @@ function ShiftNotesCard({ shiftId, notes, onSaved, setToast }) {
   </section>
 }
 
-function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSaved, setToast }) {
+function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLinks, accounts, rows, onSaved, setToast }) {
   const [fromBoxId, setFromBoxId] = useState(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
   const [toBoxId, setToBoxId] = useState(boxes.find(box => String(box.id) !== String(shift.caja_id))?.id?.toString() || '')
   const [destinationShiftId, setDestinationShiftId] = useState('')
@@ -3106,11 +3106,21 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
   const [savings, setSavings] = useState(false)
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
-  const selectedTransferAccount = accounts[0]
-  const destinationTurns = activeTurns.filter(turn => (
-    String(turn.id) !== String(shift.id)
-    && String(turn.caja_id) !== String(shift.caja_id)
+  useEffect(() => {
+    setFromBoxId(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
+    setDestinationShiftId('')
+  }, [shift.id])
+  const openTurnsByBox = activeTurns.filter((turn, index) => (
+    activeTurns.findIndex(candidate => String(candidate.caja_id) === String(turn.caja_id)) === index
   ))
+  const originTurns = openTurnsByBox.filter(turn => (
+    activeTurnAccountLinks.some(link => String(link.turno_id) === String(turn.id))
+  ))
+  const selectedOriginTurn = originTurns.find(turn => String(turn.caja_id) === String(fromBoxId))
+  const selectedOriginAccountLink = activeTurnAccountLinks.find(link => (
+    String(link.turno_id) === String(selectedOriginTurn?.id)
+  ))
+  const destinationTurns = openTurnsByBox.filter(turn => String(turn.caja_id) !== String(fromBoxId))
   const selectedDestinationTurn = destinationTurns.find(turn => String(turn.id) === String(destinationShiftId))
   const savingsAccounts = accounts.filter(account => account.accountType?.ahorro)
   const savingsHolders = [...new Map(savingsAccounts.map(account => [
@@ -3125,17 +3135,18 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
   const add = async (event, movementType = 'transfer') => {
     event?.preventDefault()
     const amount = parseLocalizedAmount(value)
+    if (movementType === 'transfer' && !selectedOriginTurn) { setToast('Seleccioná una caja de origen con turno abierto'); return }
     if (movementType === 'transfer' && !selectedDestinationTurn) { setToast('Seleccioná un turno abierto de destino'); return }
     if (movementType !== 'transfer' && (boxes.length < 2 || String(fromBoxId) === String(toBoxId))) { setToast('Se necesitan dos cajas distintas para crear un movimiento'); return }
-    const selectedAccountId = movementType === 'transfer' ? selectedTransferAccount?.id?.toString() : selectedSavingsAccount?.id?.toString()
+    const selectedAccountId = movementType === 'transfer' ? selectedOriginAccountLink?.id?.toString() : selectedSavingsAccount?.id?.toString()
     if (!selectedAccountId) { setToast(movementType === 'transfer' ? 'No hay cuentas configuradas para registrar el movimiento' : 'No hay una billetera de ahorro disponible para este titular'); return }
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
       const depositing = movementType !== 'withdrawal'
-      const movementFromBoxId = movementType === 'transfer' ? shift.caja_id : depositing ? fromBoxId : toBoxId
+      const movementFromBoxId = movementType === 'transfer' ? selectedOriginTurn.caja_id : depositing ? fromBoxId : toBoxId
       const movementToBoxId = movementType === 'transfer' ? selectedDestinationTurn.caja_id : depositing ? toBoxId : fromBoxId
-      await createTransferMovement(shift.id, {
+      await createTransferMovement(movementType === 'transfer' ? selectedOriginTurn.id : shift.id, {
         fromBoxId: movementFromBoxId,
         toBoxId: movementToBoxId,
         destinationShiftId: movementType === 'transfer' ? selectedDestinationTurn.id : null,
@@ -3201,11 +3212,11 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
     {savings
       ? <form className="transfer-form savings-transfer-form" onSubmit={event => add(event, 'deposit')}>
         <label className="transfer-field"><span>Titular</span><select aria-label="Titular del ahorro" value={selectedSavingsHolderId} onChange={event => { setSavingsHolderId(event.target.value); setSavingsWalletId('') }} disabled={saving || !savingsHolders.length}>
-          <option value="">Seleccionar titular</option>
+          <option value="">Titular</option>
           {savingsHolders.map(([holderId, holderName]) => <option value={holderId} key={holderId}>{holderName}</option>)}
         </select></label>
         <label className="transfer-field"><span>Billetera</span><select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !selectedSavingsHolderId || !savingsWallets.length}>
-          <option value="">Seleccionar billetera</option>
+          <option value="">Billetera</option>
           {savingsWallets.map(account => <option value={account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
         </select></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del ahorro" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
@@ -3214,16 +3225,16 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
         <button className="operation-submit transfer-withdraw" type="button" title="Retirar del ahorro" aria-label="Retirar del ahorro" onClick={() => add(null, 'withdrawal')} disabled={saving || boxes.length < 2 || !selectedSavingsAccount}><Download size={14} /></button>
       </form>
       : <form className="transfer-form" onSubmit={event => add(event)}>
-        <label className="transfer-field transfer-box-field"><span>Desde</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(shift.caja_id) }}><i aria-hidden="true" /><select aria-label="Caja de origen" value={shift.caja_id} disabled><option value={shift.caja_id}>{boxes.find(box => String(box.id) === String(shift.caja_id))?.nombre || 'Caja'}</option></select></span></label>
-        <label className="transfer-field transfer-box-field"><span>Turno destino</span><select aria-label="Turno abierto de destino" value={destinationShiftId} onChange={event => setDestinationShiftId(event.target.value)} disabled={saving || !destinationTurns.length}>
-          <option value="">Seleccionar turno</option>
-          {destinationTurns.map(turn => {
-            const destinationBox = boxes.find(box => String(box.id) === String(turn.caja_id))
-            return <option value={turn.id} key={turn.id}>{destinationBox?.nombre || turn.cajas?.nombre || 'Caja'} · {turn.dias_turno?.nombre || 'Turno'}</option>
-          })}
-        </select></label>
+        <label className="transfer-field transfer-box-field"><span>Desde</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(fromBoxId) }}><i aria-hidden="true" /><select aria-label="Caja de origen" value={fromBoxId} onChange={event => { setFromBoxId(event.target.value); setDestinationShiftId('') }} disabled={saving || !originTurns.length}>
+          <option value="">Caja</option>
+          {originTurns.map(turn => <option value={turn.caja_id} key={turn.id}>{boxName(turn.caja_id)}</option>)}
+        </select></span></label>
+        <label className="transfer-field transfer-box-field"><span>Hasta</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(selectedDestinationTurn?.caja_id) }}><i aria-hidden="true" /><select aria-label="Caja de destino" value={destinationShiftId} onChange={event => setDestinationShiftId(event.target.value)} disabled={saving || !destinationTurns.length}>
+          <option value="">Turno</option>
+          {destinationTurns.map(turn => <option value={turn.id} key={turn.id}>{boxName(turn.caja_id)}</option>)}
+        </select></span></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
-        <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || !destinationTurns.length || !selectedDestinationTurn || !selectedTransferAccount}><Send size={14} /></button>
+        <button className="operation-submit transfer-submit" type="submit" title="Agregar movimiento" aria-label="Agregar movimiento" disabled={saving || !selectedOriginAccountLink || !destinationTurns.length || !selectedDestinationTurn}><Send size={14} /></button>
       </form>}
     <div className="operation-recent-list">
       <small>Últimos movimientos</small>
