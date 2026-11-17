@@ -150,6 +150,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     )
     : accountLinks
   const sharedAccountBalances = {}
+  const accountTypeById = new Map(accountTypes.map(type => [String(type.id), type]))
   for (const accountId of sharedAccountIds) {
     const candidates = sharedValueLinks
       .filter(link => String(link.cuenta_id) === String(accountId))
@@ -158,9 +159,10 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
       .filter(link => link.caja_id_actualizado_en)
       .sort((left, right) => new Date(right.caja_id_actualizado_en) - new Date(left.caja_id_actualizado_en))
     const explicitlyAssignedLink = assignedLinks[0]
+    const accountType = accountTypeById.get(String(accountById.get(accountId)?.tipo_cuenta_id))
     const legacyOwnerLink = candidates.find(link => (
       link.caja_id == null || String(link.caja_id) !== String(link.turnos?.caja_id)
-    )) || candidates.find(link => Number(link.valor) !== 0) || candidates[0]
+    )) || (!accountType?.es_deposito && candidates.find(link => Number(link.valor) !== 0))
     const valueLinks = candidates
       .filter(link => link.valor_actualizado_en)
       .sort((left, right) => new Date(right.valor_actualizado_en) - new Date(left.valor_actualizado_en))

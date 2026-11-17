@@ -2138,11 +2138,6 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
                 key={`${account.id}-${account.displayAmount}-${account.sharedOwnerBoxId}`}
                 defaultValue={account.displayAmount ? numberWithoutCents.format(account.displayAmount) : ''}
                 placeholder="-"
-                title={account.isSharedForeignValue
-                  ? `Editable desde esta caja; el saldo se imputa a ${ownerBox?.nombre || 'otra caja'}`
-                  : account.isSharedUnassigned
-                    ? 'Editable desde cualquier caja; el saldo no se imputa hasta asignarle una'
-                    : undefined}
                 onFocus={(event) => {
                   event.currentTarget.value = event.currentTarget.value.replace(/\./g, '')
                   event.currentTarget.select()
