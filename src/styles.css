@@ -3571,16 +3571,16 @@ html:has(.app-shell[data-theme='light']) {
 .bonus-quick-controls > .icon-button { width: 30px; height: 30px; }
 .bonus-placeholder-button { opacity: .75; }
 .bonus-recent-list { display: grid; align-content: start; gap: 2px; margin-top: 9px; }
-.bonus-recent-list > small { margin-bottom: 2px; color: var(--muted); font: 8px 'DM Mono', monospace; text-transform: uppercase; }
-.bonus-recent-row { display: grid; grid-template-columns: minmax(0, 1fr) 158px; gap: 6px; align-items: center; min-height: 15px; color: var(--bonus-type-color); font-size: 9px; }
-.bonus-pending-status { color: var(--muted); font-size: 8px; }
-.bonus-recent-value { display: grid; grid-template-columns: 58px 8px minmax(0, 1fr); align-items: center; gap: 3px; min-width: 0; }
-.bonus-recent-value time { color: var(--muted-2); font: 8px 'DM Mono', monospace; text-align: right; white-space: nowrap; }
-.bonus-recent-value > span { color: var(--muted-2); font: 8px 'DM Mono', monospace; text-align: center; }
-.bonus-recent-value input { width: 100%; min-width: 0; padding: 0; border: 0; border-bottom: 1px solid transparent; outline: 0; background: transparent; color: inherit; font: 600 9px 'DM Mono', monospace; text-align: right; white-space: nowrap; }
+.bonus-recent-list > small { margin-bottom: 2px; color: var(--muted); font: 9px 'DM Mono', monospace; text-transform: uppercase; }
+.bonus-recent-row { display: grid; grid-template-columns: minmax(0, 1fr) 158px; gap: 6px; align-items: center; min-height: 15px; color: var(--bonus-type-color); font-size: 12px; }
+.bonus-pending-status { color: var(--muted); font-size: 9px; }
+.bonus-recent-value { display: grid; grid-template-columns: 66px 8px minmax(0, 1fr); align-items: center; gap: 3px; min-width: 0; }
+.bonus-recent-value time { color: var(--muted-2); font: 11px 'DM Mono', monospace; text-align: right; white-space: nowrap; }
+.bonus-recent-value > span { color: var(--muted-2); font: 11px 'DM Mono', monospace; text-align: center; }
+.bonus-recent-value input { width: 100%; min-width: 0; padding: 0; border: 0; border-bottom: 1px solid transparent; outline: 0; background: transparent; color: inherit; font: 600 12px 'DM Mono', monospace; text-align: right; white-space: nowrap; }
 .bonus-recent-value input:focus { border-bottom-color: currentColor; }
 .bonus-recent-value input:disabled { opacity: .6; }
-.bonus-recent-empty { padding: 5px 0; color: var(--muted); font-size: 9px; }
+.bonus-recent-empty { padding: 5px 0; color: var(--muted); font-size: 10px; }
 .bonus-library { padding: 14px; }
 .state-catalog {
   display: grid;
