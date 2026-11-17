@@ -3110,9 +3110,11 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
     setFromBoxId(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
     setDestinationShiftId('')
   }, [shift.id])
-  const openTurnsByBox = activeTurns.filter((turn, index) => (
-    activeTurns.findIndex(candidate => String(candidate.caja_id) === String(turn.caja_id)) === index
-  ))
+  const openTurnsByBox = [...activeTurns]
+    .sort((left, right) => Number(left.id) - Number(right.id))
+    .filter((turn, index, turns) => (
+      turns.findIndex(candidate => String(candidate.caja_id) === String(turn.caja_id)) === index
+    ))
   const originTurns = openTurnsByBox.filter(turn => (
     activeTurnAccountLinks.some(link => String(link.turno_id) === String(turn.id))
   ))
@@ -3120,8 +3122,9 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
   const selectedOriginAccountLink = activeTurnAccountLinks.find(link => (
     String(link.turno_id) === String(selectedOriginTurn?.id)
   ))
-  const destinationTurns = openTurnsByBox.filter(turn => String(turn.caja_id) !== String(fromBoxId))
+  const destinationTurns = originTurns.filter(turn => String(turn.caja_id) !== String(fromBoxId))
   const selectedDestinationTurn = destinationTurns.find(turn => String(turn.id) === String(destinationShiftId))
+    || destinationTurns[0]
   const savingsAccounts = accounts.filter(account => account.accountType?.ahorro)
   const savingsHolders = [...new Map(savingsAccounts.map(account => [
     String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
@@ -3132,6 +3135,11 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
   const selectedSavingsWalletId = savingsWalletId
   const selectedSavingsAccount = savingsWallets.find(account => String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '') === selectedSavingsWalletId)
   const boxColor = id => boxes.find(box => String(box.id) === String(id))?.colores?.hex || 'var(--line)'
+  const swapBoxes = () => {
+    if (!selectedOriginTurn || !selectedDestinationTurn) return
+    setFromBoxId(String(selectedDestinationTurn.caja_id))
+    setDestinationShiftId(String(selectedOriginTurn.id))
+  }
   const add = async (event, movementType = 'transfer') => {
     event?.preventDefault()
     const amount = parseLocalizedAmount(value)
@@ -3229,8 +3237,8 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
           <option value="">Caja</option>
           {originTurns.map(turn => <option value={turn.caja_id} key={turn.id}>{boxName(turn.caja_id)}</option>)}
         </select></span></label>
-        <label className="transfer-field transfer-box-field"><span>Hasta</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(selectedDestinationTurn?.caja_id) }}><i aria-hidden="true" /><select aria-label="Caja de destino" value={destinationShiftId} onChange={event => setDestinationShiftId(event.target.value)} disabled={saving || !destinationTurns.length}>
-          <option value="">Turno</option>
+        <button className="transfer-swap" type="button" aria-label="Invertir cajas de origen y destino" onClick={swapBoxes} disabled={saving || !selectedOriginTurn || !selectedDestinationTurn}><ArrowLeftRight size={14} /></button>
+        <label className="transfer-field transfer-box-field"><span>Hasta</span><span className="transfer-box-select" style={{ '--transfer-box-color': boxColor(selectedDestinationTurn?.caja_id) }}><i aria-hidden="true" /><select aria-label="Caja de destino" value={selectedDestinationTurn?.id?.toString() || ''} onChange={event => setDestinationShiftId(event.target.value)} disabled={saving || !destinationTurns.length} required>
           {destinationTurns.map(turn => <option value={turn.id} key={turn.id}>{boxName(turn.caja_id)}</option>)}
         </select></span></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del movimiento" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
