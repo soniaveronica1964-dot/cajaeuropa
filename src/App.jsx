@@ -281,9 +281,15 @@ function signedExpenseImpact(rows = []) {
   }, 0)
 }
 
-function calculateTransferImpact(shiftId, movements = []) {
+function calculateTransferImpact({ shiftId, shiftBoxId, movements = [] }) {
   return movements.reduce((sum, movement) => {
     const amount = Number(movement.monto || 0)
+    if (movement.es_ahorro) {
+      if (shiftBoxId == null) return sum
+      if (String(movement.caja_desde_id) === String(shiftBoxId)) return sum + amount
+      if (String(movement.caja_hasta_id) === String(shiftBoxId)) return sum - amount
+      return sum
+    }
     if (String(movement.turno_id) === String(shiftId)) return sum + amount
     if (String(movement.turno_destino_id) === String(shiftId)) return sum - amount
     return sum
@@ -292,7 +298,7 @@ function calculateTransferImpact(shiftId, movements = []) {
 
 function calculateCashDiscrepancy({ shiftId, cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney, savingsMovements, transferMovements }) {
   const bonusImpact = bonusNetTotal(bonuses)
-  const transferImpact = calculateTransferImpact(shiftId, transferMovements)
+  const transferImpact = calculateTransferImpact({ shiftId, movements: transferMovements })
   return cashDifference
     - countedChipDifference
     + rounding
@@ -1025,10 +1031,11 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   const countedChipDifference = calculateChipDifference(chips)
   const cashDifference = total - cashInitial
   const taChargesTotal = sumMovementAmounts(data.taCharges)
-  const transferImpact = calculateTransferImpact(
-    data.shift.id,
-    (data.movements || []).filter(movement => !movement.es_ahorro),
-  )
+  const transferImpact = calculateTransferImpact({
+    shiftId: data.shift.id,
+    shiftBoxId: data.shift.caja_id,
+    movements: data.movements || [],
+  })
   const realDifference = cashDifference + signedExpenseImpact(data.expenses) + taChargesTotal + transferImpact
   const cashDiscrepancy = calculateCashDiscrepancy({
     shiftId: data.shift.id,
