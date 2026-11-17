@@ -1709,7 +1709,7 @@ input[type="time"] { color-scheme: dark; }
   background: var(--field-bg);
   color: var(--muted);
   text-align: center;
-  transition: background-color 140ms ease, box-shadow 140ms ease;
+  transition: background 140ms ease, box-shadow 140ms ease;
 }
 
 .matrix-row .matrix-value:focus-within {
@@ -1720,13 +1720,13 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-row .matrix-value.collecting {
   border-color: #83d5a2;
-  background: #1f2c2a;
+  background: radial-gradient(ellipse at 100% 50%, color-mix(in srgb, #83d5a2 20%, transparent), transparent 72%), var(--bg-2);
   color: #83d5a2;
 }
 
 .matrix-row .matrix-value.withdrawing {
   border-color: color-mix(in srgb, var(--orange) 55%, transparent);
-  background: color-mix(in srgb, var(--orange) 12%, var(--field-bg));
+  background: radial-gradient(ellipse at 100% 50%, color-mix(in srgb, var(--orange) 20%, transparent), transparent 72%), var(--bg-2);
   color: var(--orange);
 }
 
@@ -1844,16 +1844,15 @@ input[type="time"] { color-scheme: dark; }
 }
 
 .matrix-flag input:checked::after {
-  width: 5px;
-  height: 3px;
-  border: solid #183027;
-  border-width: 0 0 1.5px 1.5px;
+  width: 6px;
+  height: 6px;
+  background: #183027;
+  clip-path: polygon(14% 44%, 0 59%, 39% 97%, 100% 17%, 85% 4%, 38% 65%);
   content: '';
-  transform: rotate(-45deg) translate(0, -1px);
 }
 
 .matrix-account-flags .matrix-flag:last-child input:checked::after {
-  border-color: #402713;
+  background: #402713;
 }
 
 .matrix-account-empty {
