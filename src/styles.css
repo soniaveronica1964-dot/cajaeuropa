@@ -2192,6 +2192,10 @@ input[type="time"] { color-scheme: dark; }
 .operation-recent-row.bonus-type-granted b { color: var(--orange); }
 .operation-recent-row.bonus-type-recovered b { color: var(--green); }
 .operation-recent-row.bonus-type-publicity b { color: #82b8ff; }
+.transfer-card .operation-recent-row { font-size: 10px; }
+.transfer-card .operation-recent-row b { font-size: 10px; }
+.transfer-card .operation-recent-row b.movement-outgoing { color: var(--red); }
+.transfer-card .operation-recent-row b.movement-incoming { color: var(--green); }
 .operation-card .empty-inline { padding: 7px 2px; font-size: 9px; }
 .operation-total { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: auto; padding-top: 8px; color: var(--muted); font-size: 9px; text-transform: uppercase; }
 .operation-card > .operation-total { margin-top: auto; }

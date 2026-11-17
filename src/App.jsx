@@ -3167,6 +3167,9 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
     const direction = String(row.caja_desde_id) === String(shift.caja_id) ? 'Depósito' : 'Retiro'
     return [`${direction} · ${accountName(row.cuenta_x_turno_id)}`, route, row.notas].filter(Boolean).join(' · ')
   }
+  const movementIsIncoming = row => row.es_ahorro
+    ? String(row.caja_hasta_id) === String(shift.caja_id)
+    : String(row.turno_destino_id) === String(shift.id)
   const renderHistoryRows = movementRows => movementRows.length
     ? movementRows.map(row => <div className="operation-history-row" key={row.id}>
       <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
@@ -3224,12 +3227,15 @@ function TransferMovementsCard({ shift, boxes, activeTurns, accounts, rows, onSa
       </form>}
     <div className="operation-recent-list">
       <small>Últimos movimientos</small>
-      {rows.slice(0, 4).map(row => <div className="operation-recent-row" key={row.id}>
-        <span>{row.es_ahorro
-          ? `Ahorro · ${String(row.caja_desde_id) === String(shift.caja_id) ? 'Depósito' : 'Retiro'} · ${accountName(row.cuenta_x_turno_id)}`
-          : `${boxName(row.caja_desde_id)} > ${boxName(row.caja_hasta_id)}`}</span>
-        <b>{money.format(row.monto)}</b>
-      </div>)}
+      {rows.slice(0, 4).map(row => {
+        const incoming = movementIsIncoming(row)
+        return <div className="operation-recent-row" key={row.id}>
+          <span>{row.es_ahorro
+            ? `Ahorro · ${String(row.caja_desde_id) === String(shift.caja_id) ? 'Depósito' : 'Retiro'} · ${accountName(row.cuenta_x_turno_id)}`
+            : `${boxName(row.caja_desde_id)} > ${boxName(row.caja_hasta_id)}`}</span>
+          <b className={incoming ? 'movement-incoming' : 'movement-outgoing'}>{`${incoming ? '+' : '-'}${money.format(row.monto)}`}</b>
+        </div>
+      })}
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
     </div>
     {historyOpen && <div className="modal-backdrop operation-history-backdrop" onClick={() => setHistoryOpen(false)}>
