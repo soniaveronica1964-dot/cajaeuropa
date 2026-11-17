@@ -1720,13 +1720,13 @@ input[type="time"] { color-scheme: dark; }
 
 .matrix-row .matrix-value.collecting {
   border-color: #83d5a2;
-  background: radial-gradient(ellipse at 100% 50%, color-mix(in srgb, #83d5a2 20%, transparent), transparent 72%), var(--bg-2);
+  background: radial-gradient(ellipse at 100% 50%, color-mix(in srgb, #83d5a2 20%, transparent), transparent 72%), var(--field-bg);
   color: #83d5a2;
 }
 
 .matrix-row .matrix-value.withdrawing {
   border-color: color-mix(in srgb, var(--orange) 55%, transparent);
-  background: radial-gradient(ellipse at 100% 50%, color-mix(in srgb, var(--orange) 20%, transparent), transparent 72%), var(--bg-2);
+  background: radial-gradient(ellipse at 100% 50%, color-mix(in srgb, var(--orange) 20%, transparent), transparent 72%), var(--field-bg);
   color: var(--orange);
 }
 
