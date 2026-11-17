@@ -1969,16 +1969,17 @@ input[type="time"] { color-scheme: dark; }
   display: grid;
   place-items: center;
   width: 15px;
-  height: 16px;
+  height: 15px;
   margin: 0;
   border: 1px solid #637174;
   border-radius: 3px;
-  background: rgba(17, 23, 24, .75);
+  background: var(--panel-2);
   cursor: pointer;
 }
-.logistics-activity-cell input:checked { border-color: var(--green); background: var(--green); }
-.logistics-activity-cell input:checked::after { width: 6px; height: 3px; border: solid #183027; border-width: 0 0 1.5px 1.5px; content: ''; transform: rotate(-45deg) translate(0, -1px); }
-.logistics-payments-cell input:checked { border-color: var(--orange); background: var(--orange); }
+.logistics-activity-cell input:checked { border-color: var(--green); background: var(--panel-2); }
+.logistics-activity-cell input:checked::after { width: 6px; height: 3px; border: solid var(--green); border-width: 0 0 1.5px 1.5px; content: ''; transform: rotate(-45deg) translate(0, -1px); }
+.logistics-payments-cell input:checked { border-color: var(--orange); background: var(--panel-2); }
+.logistics-payments-cell input:checked::after { border-color: var(--orange); }
 .logistics-holder,
 .logistics-wallet { overflow: hidden; padding: 0 9px; color: var(--text); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
 .logistics-wallet { color: var(--accent); }
