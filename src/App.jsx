@@ -677,6 +677,10 @@ function App() {
             const height = bounds.height || Number(icon.getAttribute('height')) || 16
             const color = computedStyle.color
             icon.style.color = color
+            icon.style.visibility = 'visible'
+            icon.querySelectorAll('*').forEach(element => {
+              element.style.visibility = 'visible'
+            })
             if (icon.getAttribute('stroke') === 'currentColor') icon.setAttribute('stroke', color)
             if (icon.getAttribute('fill') === 'currentColor') icon.setAttribute('fill', color)
 
