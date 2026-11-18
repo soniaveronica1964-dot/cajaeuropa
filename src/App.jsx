@@ -1206,9 +1206,15 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
   const [createFormOpen, setCreateFormOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [savingTaskId, setSavingTaskId] = useState(null)
+  const [expandedTasks, setExpandedTasks] = useState({})
   const [openNotes, setOpenNotes] = useState({})
   const [amountDrafts, setAmountDrafts] = useState({})
   const [noteDrafts, setNoteDrafts] = useState({})
+  const economicTasks = rows.filter(task => task.tareas?.monto_a_transferir != null)
+  const economicTotal = economicTasks.reduce((sum, task) => sum + Number(task.tareas.monto_a_transferir), 0)
+  const economicCompleted = economicTasks.reduce((sum, task) => (
+    sum + (task.completada ? Number(task.tareas.monto_a_transferir) : 0)
+  ), 0)
 
   const saveChanges = async (task, changes, message = 'Tarea actualizada') => {
     setSavingTaskId(task.id)
@@ -1316,7 +1322,7 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
 
   return <aside className="dashboard-side-panel task-panel">
     <header className="dashboard-side-panel-header">
-      <div><ListTodo size={16} /><strong>Tareas</strong></div>
+      <div><ListTodo size={16} /><strong>Tareas</strong>{economicTasks.length > 0 && <small className="task-economic-progress" aria-label={`${moneyWithCents.format(economicCompleted)} completado de ${moneyWithCents.format(economicTotal)}`} title="Monto completado / objetivo total"><span>Hecho</span><b>{moneyWithCents.format(economicCompleted)}</b><span>/</span>{moneyWithCents.format(economicTotal)}</small>}</div>
       {canEdit && <button type="button" className="icon-button" aria-label="Nueva tarea" title="Nueva tarea" aria-expanded={createFormOpen} disabled={creating || createFormOpen} onClick={() => setCreateFormOpen(true)}><Plus size={16} /></button>}
     </header>
     {canEdit && createFormOpen && <form id="task-add-form" className="task-add-form" onSubmit={createTask}>
@@ -1332,28 +1338,30 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
       </div>
     </form>}
     <div className="task-list">
-      {rows.map(task => <article className={`task-row ${task.completada ? 'task-completed' : ''} ${task.ignorada ? 'task-ignored' : ''}`} key={task.id}>
+      {rows.map(task => <article className={`task-row ${task.completada ? 'task-completed' : ''} ${task.ignorada ? 'task-ignored' : ''} ${expandedTasks[task.id] ? 'task-expanded' : ''}`} key={task.id}>
         <div className="task-row-heading">
-          <strong>{task.titulo}</strong>
+          <button type="button" className="task-collapse-toggle" aria-label={`${expandedTasks[task.id] ? 'Contraer' : 'Expandir'} tarea ${task.titulo}`} aria-expanded={Boolean(expandedTasks[task.id])} onClick={() => setExpandedTasks(current => ({ ...current, [task.id]: !current[task.id] }))}><ChevronDown size={14} /><strong>{task.titulo}</strong></button>
           {canEdit && <div className="task-row-actions">
             <button type="button" className={`task-state-button ${task.completada ? 'selected' : ''}`} title={task.completada ? 'Marcar como pendiente' : 'Marcar como completada'} aria-label={task.completada ? `Marcar ${task.titulo} como pendiente` : `Marcar ${task.titulo} como completada`} disabled={savingTaskId === task.id} onClick={() => saveChanges(task, { completed: !task.completada })}><Check size={14} /></button>
             <button type="button" className={`task-state-button ${task.ignorada ? 'selected' : ''}`} title={task.ignorada ? 'Dejar de ignorar' : 'Ignorar tarea'} aria-label={task.ignorada ? `Dejar de ignorar ${task.titulo}` : `Ignorar ${task.titulo}`} disabled={savingTaskId === task.id} onClick={() => saveChanges(task, { ignored: !task.ignorada })}><Eye size={14} /></button>
             <button type="button" className="task-delete-button" title="Eliminar tarea" aria-label={`Eliminar ${task.titulo}`} disabled={savingTaskId === task.id} onClick={() => removeTask(task)}><Trash2 size={13} /></button>
           </div>}
         </div>
-        {(task.tareas?.alias || task.tareas?.titular || task.tareas?.monto_a_transferir != null) && <div className="task-definition-details">
-          {task.tareas?.alias && <span><b>Alias:</b> {task.tareas.alias}</span>}
-          {task.tareas?.titular && <span><b>Titular:</b> {task.tareas.titular}</span>}
-          {task.tareas?.monto_a_transferir != null && <span><b>Monto a pasar:</b> {moneyWithCents.format(Number(task.tareas.monto_a_transferir))}</span>}
-        </div>}
-        <label className="task-amount-field"><span>Monto / saldo del turno</span><input type="number" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto o saldo de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => saveAmount(task, event)} /></label>
-        <div className="task-note-controls">
-          <button type="button" className="task-note-toggle" aria-expanded={Boolean(openNotes[task.id])} onClick={() => toggleNote(task)}>{openNotes[task.id] ? 'Ocultar nota' : task.notas ? 'Ver nota' : 'Agregar nota'}</button>
-        </div>
-        {openNotes[task.id] && <div className="task-note-editor">
-          <textarea aria-label={`Nota de ${task.titulo}`} value={noteDrafts[task.id] ?? ''} placeholder="Aclaración opcional" disabled={!canEdit || savingTaskId === task.id} onChange={event => setNoteDrafts(current => ({ ...current, [task.id]: event.target.value }))} />
-          {canEdit && <button type="button" className="task-note-save" disabled={savingTaskId === task.id} onClick={() => saveNote(task)}><Check size={13} /> Guardar nota</button>}
-        </div>}
+        {expandedTasks[task.id] && <>
+          {(task.tareas?.alias || task.tareas?.titular || task.tareas?.monto_a_transferir != null) && <div className="task-definition-details">
+            {task.tareas?.alias && <span><b>Alias:</b> {task.tareas.alias}</span>}
+            {task.tareas?.titular && <span><b>Titular:</b> {task.tareas.titular}</span>}
+            {task.tareas?.monto_a_transferir != null && <span><b>Monto a pasar:</b> {moneyWithCents.format(Number(task.tareas.monto_a_transferir))}</span>}
+          </div>}
+          <label className="task-amount-field"><span>Monto / saldo del turno</span><input type="number" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto o saldo de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => saveAmount(task, event)} /></label>
+          <div className="task-note-controls">
+            <button type="button" className="task-note-toggle" aria-expanded={Boolean(openNotes[task.id])} onClick={() => toggleNote(task)}>{openNotes[task.id] ? 'Ocultar nota' : task.notas ? 'Ver nota' : 'Agregar nota'}</button>
+          </div>
+          {openNotes[task.id] && <div className="task-note-editor">
+            <textarea aria-label={`Nota de ${task.titulo}`} value={noteDrafts[task.id] ?? ''} placeholder="Aclaración opcional" disabled={!canEdit || savingTaskId === task.id} onChange={event => setNoteDrafts(current => ({ ...current, [task.id]: event.target.value }))} />
+            {canEdit && <button type="button" className="task-note-save" disabled={savingTaskId === task.id} onClick={() => saveNote(task)}><Check size={13} /> Guardar nota</button>}
+          </div>}
+        </>}
       </article>)}
       {!rows.length && <p className="salary-panel-empty">{canEdit ? 'Todavía no hay tareas para este turno.' : 'Este turno no tiene tareas registradas.'}</p>}
     </div>
