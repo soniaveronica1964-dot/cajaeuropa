@@ -23,6 +23,7 @@ import {
   Gift,
   GripVertical,
   LayoutGrid,
+  ListTodo,
   LockKeyhole,
   Megaphone,
   Pencil,
@@ -70,7 +71,9 @@ import {
   createShiftType,
   createTip,
   createSalaryHolder,
+  createShiftTask,
   deleteExpenseLine,
+  deleteShiftTask,
   deleteTipLine,
   deleteTaChargeLine,
   deleteFoundMoneyLine,
@@ -110,6 +113,7 @@ import {
   formatDatabase,
   loadBonusCatalog,
   loadCurrentShiftData,
+  loadPendingShiftTasks,
   loadShiftHistory,
   deleteAppImage,
   getStoragePublicUrl,
@@ -147,6 +151,7 @@ import {
   updateSalaryHolder,
   updateSalaryAccount,
   updateSalaryAccountValue,
+  updateShiftTask,
 } from './lib/data'
 import { DATABASE_SAVE_EVENT } from './lib/supabase'
 import SnapshotReport from './SnapshotReport'
@@ -910,11 +915,13 @@ function mapGoals(rows) {
   })
 }
 
-function readSalaryPanelPreference() {
+function readDashboardPanelPreference() {
   try {
-    return window.localStorage.getItem('caja-salary-panel-open') === 'true'
+    const storedPanel = window.localStorage.getItem('caja-dashboard-panel')
+    if (storedPanel === 'salary' || storedPanel === 'tasks') return storedPanel
+    return window.localStorage.getItem('caja-salary-panel-open') === 'true' ? 'salary' : null
   } catch {
-    return false
+    return null
   }
 }
 
@@ -922,14 +929,15 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   const [rounding, setRounding] = useState(null)
   const [accountValueDrafts, setAccountValueDrafts] = useState({})
   const [chipFinalDrafts, setChipFinalDrafts] = useState({})
-  const [salaryPanelOpen, setSalaryPanelOpen] = useState(readSalaryPanelPreference)
+  const [sidePanel, setSidePanel] = useState(readDashboardPanelPreference)
   useEffect(() => {
     try {
-      window.localStorage.setItem('caja-salary-panel-open', String(salaryPanelOpen))
+      window.localStorage.setItem('caja-dashboard-panel', sidePanel || '')
+      window.localStorage.setItem('caja-salary-panel-open', String(sidePanel === 'salary'))
     } catch {
       return
     }
-  }, [salaryPanelOpen])
+  }, [sidePanel])
   useEffect(() => setRounding(null), [data.shift?.id])
   useEffect(() => {
     setAccountValueDrafts(current => {
@@ -1084,10 +1092,11 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       <Metric label="Diferencia real" value={moneyWithCents.format(realDifference)} tone={realDifference < 0 ? 'negative' : 'positive'} />
       <div className="summary-rounding-group">
         <label className="rounding"><small>Redondeo</small><span className={Number(parseLocalizedAmount(roundingValue)) ? 'has-value' : ''}>$<input value={roundingValue} placeholder="0,00" onChange={(event) => setRounding(event.target.value)} onBlur={saveRounding} /></span></label>
-        {!salaryPanelOpen && <button type="button" className="salary-inline-toggle" aria-label="Mostrar cuentas sueldo" aria-expanded="false" title="Mostrar cuentas sueldo" onClick={() => setSalaryPanelOpen(true)}><WalletCards size={16} /><span>Sueldo</span></button>}
+        <button type="button" className={`salary-inline-toggle ${sidePanel === 'salary' ? 'active' : ''}`} aria-label="Mostrar cuentas sueldo" aria-expanded={sidePanel === 'salary'} title="Mostrar cuentas sueldo" onClick={() => setSidePanel(current => current === 'salary' ? null : 'salary')}><WalletCards size={16} /><span>Sueldo</span></button>
+        <button type="button" className={`salary-inline-toggle ${sidePanel === 'tasks' ? 'active' : ''}`} aria-label="Mostrar tareas" aria-expanded={sidePanel === 'tasks'} title="Mostrar tareas" onClick={() => setSidePanel(current => current === 'tasks' ? null : 'tasks')}><ListTodo size={16} /><span>Tareas</span></button>
       </div>
     </section>
-    <div className={`dashboard-grid ${salaryPanelOpen ? 'salary-panel-open' : ''}`}>
+    <div className={`dashboard-grid ${sidePanel ? 'side-panel-open' : ''}`}>
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} boxes={data.boxes || []} activeTurns={data.activeTurns || []} currentBoxId={data.shift.caja_id} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
@@ -1103,11 +1112,20 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
           <ChipControlCard chips={chips} onSaved={onSaved} onChipFinalSaved={onChipFinalSaved} setToast={setToast} />
         </div>
       </div>
-      {salaryPanelOpen && <SalaryAccountsPanel
+      {sidePanel === 'salary' && <SalaryAccountsPanel
         rows={(data.salaryAccountValues || []).filter(row => !data.shift.abierto || row.cuentas_sueldo?.activa)}
-        onToggle={() => setSalaryPanelOpen(value => !value)}
+        onToggle={() => setSidePanel(null)}
         onSaved={onSaved}
         setToast={setToast}
+      />}
+      {sidePanel === 'tasks' && <TasksPanel
+        shiftId={data.shift.id}
+        rows={data.tasks || []}
+        previousTasks={data.previousTasks || []}
+        canEdit={Boolean(data.shift.abierto)}
+        onSaved={onSaved}
+        setToast={setToast}
+        onClose={() => setSidePanel(null)}
       />}
     </div>
     <SnapshotReport
@@ -1147,8 +1165,8 @@ function SalaryAccountsPanel({ rows, onToggle, onSaved, setToast }) {
     })
   }
 
-  return <aside className="salary-accounts-panel">
-    <header className="salary-panel-header">
+  return <aside className="dashboard-side-panel">
+    <header className="dashboard-side-panel-header">
       <div><WalletCards size={16} /><strong>Cuentas sueldo</strong></div>
       <button type="button" className="icon-button" aria-label="Minimizar cuentas sueldo" aria-expanded="true" title="Minimizar" onClick={onToggle}><ChevronRight size={16} /></button>
     </header>
@@ -1179,6 +1197,145 @@ function SalaryAccountsPanel({ rows, onToggle, onSaved, setToast }) {
         })}
       </div>
       : <p className="salary-panel-empty">No hay cuentas sueldo activas. Crealas desde Configuración → Matriz de cuentas.</p>}
+  </aside>
+}
+
+function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast, onClose }) {
+  const [title, setTitle] = useState('')
+  const [creating, setCreating] = useState(false)
+  const [savingTaskId, setSavingTaskId] = useState(null)
+  const [openNotes, setOpenNotes] = useState({})
+  const [amountDrafts, setAmountDrafts] = useState({})
+  const [noteDrafts, setNoteDrafts] = useState({})
+
+  const saveChanges = async (task, changes, message = 'Tarea actualizada') => {
+    setSavingTaskId(task.id)
+    try {
+      await updateShiftTask(task.id, changes)
+      setToast(message)
+      await onSaved()
+      return true
+    } catch (error) {
+      setToast(error.message || 'No se pudo guardar la tarea')
+      return false
+    } finally {
+      setSavingTaskId(null)
+    }
+  }
+
+  const createTask = async (event) => {
+    event.preventDefault()
+    if (!title.trim() || creating) return
+    setCreating(true)
+    try {
+      await createShiftTask(shiftId, title)
+      setTitle('')
+      setToast('Tarea creada')
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo crear la tarea')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const saveAmount = (task, event) => {
+    const rawValue = event.currentTarget.value
+    const amount = rawValue === '' ? null : Number(rawValue)
+    if (amount !== null && !Number.isFinite(amount)) {
+      setAmountDrafts(current => {
+        const next = { ...current }
+        delete next[task.id]
+        return next
+      })
+      setToast('Ingresá un monto válido para la tarea')
+      return
+    }
+    if (amount === (task.monto == null ? null : Number(task.monto))) {
+      setAmountDrafts(current => {
+        const next = { ...current }
+        delete next[task.id]
+        return next
+      })
+      return
+    }
+    saveChanges(task, { amount }, 'Monto guardado').then(saved => {
+      if (!saved) {
+        setAmountDrafts(current => {
+          const next = { ...current }
+          delete next[task.id]
+          return next
+        })
+      }
+    })
+  }
+
+  const toggleNote = (task) => {
+    setOpenNotes(current => ({ ...current, [task.id]: !current[task.id] }))
+    setNoteDrafts(current => ({ ...current, [task.id]: current[task.id] ?? task.notas ?? '' }))
+  }
+
+  const saveNote = async (task) => {
+    const notes = noteDrafts[task.id] ?? ''
+    if (notes.trim() === (task.notas || '')) {
+      setOpenNotes(current => ({ ...current, [task.id]: false }))
+      return
+    }
+    if (await saveChanges(task, { notes }, 'Nota guardada')) {
+      setOpenNotes(current => ({ ...current, [task.id]: false }))
+    }
+  }
+
+  const removeTask = async (task) => {
+    if (!window.confirm(`¿Eliminar "${task.titulo}" de este turno y de los próximos? Los turnos anteriores se conservarán.`)) return
+    setSavingTaskId(task.id)
+    try {
+      await deleteShiftTask(task.id)
+      setToast('Tarea eliminada de este turno y de los próximos')
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo eliminar la tarea')
+    } finally {
+      setSavingTaskId(null)
+    }
+  }
+
+  return <aside className="dashboard-side-panel task-panel">
+    <header className="dashboard-side-panel-header">
+      <div><ListTodo size={16} /><strong>Tareas</strong></div>
+      <button type="button" className="icon-button" aria-label="Cerrar panel de tareas" title="Cerrar" onClick={onClose}><ChevronRight size={16} /></button>
+    </header>
+    {canEdit && <form className="task-add-form" onSubmit={createTask}>
+      <input aria-label="Título de nueva tarea" placeholder="Nueva tarea" value={title} onChange={event => setTitle(event.target.value)} disabled={creating} />
+      <button type="submit" className="task-add-button" title="Agregar tarea" aria-label="Agregar tarea" disabled={creating || !title.trim()}><Plus size={16} /></button>
+    </form>}
+    <div className="task-list">
+      {rows.map(task => <article className={`task-row ${task.completada ? 'task-completed' : ''} ${task.ignorada ? 'task-ignored' : ''}`} key={task.id}>
+        <div className="task-row-heading">
+          <strong>{task.titulo}</strong>
+          {canEdit && <div className="task-row-actions">
+            <button type="button" className={`task-state-button ${task.completada ? 'selected' : ''}`} title={task.completada ? 'Marcar como pendiente' : 'Marcar como completada'} aria-label={task.completada ? `Marcar ${task.titulo} como pendiente` : `Marcar ${task.titulo} como completada`} disabled={savingTaskId === task.id} onClick={() => saveChanges(task, { completed: !task.completada })}><Check size={14} /></button>
+            <button type="button" className={`task-state-button ${task.ignorada ? 'selected' : ''}`} title={task.ignorada ? 'Dejar de ignorar' : 'Ignorar tarea'} aria-label={task.ignorada ? `Dejar de ignorar ${task.titulo}` : `Ignorar ${task.titulo}`} disabled={savingTaskId === task.id} onClick={() => saveChanges(task, { ignored: !task.ignorada })}><Eye size={14} /></button>
+            <button type="button" className="task-delete-button" title="Eliminar tarea" aria-label={`Eliminar ${task.titulo}`} disabled={savingTaskId === task.id} onClick={() => removeTask(task)}><Trash2 size={13} /></button>
+          </div>}
+        </div>
+        <label className="task-amount-field"><span>Monto / saldo</span><input type="number" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto o saldo de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => saveAmount(task, event)} /></label>
+        <div className="task-note-controls">
+          <button type="button" className="task-note-toggle" aria-expanded={Boolean(openNotes[task.id])} onClick={() => toggleNote(task)}>{openNotes[task.id] ? 'Ocultar nota' : task.notas ? 'Ver nota' : 'Agregar nota'}</button>
+        </div>
+        {openNotes[task.id] && <div className="task-note-editor">
+          <textarea aria-label={`Nota de ${task.titulo}`} value={noteDrafts[task.id] ?? ''} placeholder="Aclaración opcional" disabled={!canEdit || savingTaskId === task.id} onChange={event => setNoteDrafts(current => ({ ...current, [task.id]: event.target.value }))} />
+          {canEdit && <button type="button" className="task-note-save" disabled={savingTaskId === task.id} onClick={() => saveNote(task)}><Check size={13} /> Guardar nota</button>}
+        </div>}
+      </article>)}
+      {!rows.length && <p className="salary-panel-empty">{canEdit ? 'Todavía no hay tareas para este turno.' : 'Este turno no tiene tareas registradas.'}</p>}
+    </div>
+    <section className="previous-task-list">
+      <strong>Tareas sin realizar en el turno anterior</strong>
+      {previousTasks.length
+        ? <ul>{previousTasks.map(task => <li key={task.id}>{task.titulo}</li>)}</ul>
+        : <small>Ninguna</small>}
+    </section>
   </aside>
 }
 
@@ -4165,6 +4322,7 @@ function accountTypeFlagsAfterToggle(type, field, enabled) {
 function CloseAndStartShiftModal({ data, boxId, onClose, onClosed, setToast }) {
   const [closing, setClosing] = useState(false)
   const currentShift = data.shift
+  const pendingTasks = (data.tasks || []).filter(task => !task.completada && !task.ignorada && !task.eliminada)
   const targetBoxId = boxId ?? currentShift?.caja_id
   const shiftTypes = (data.shiftTypes || []).filter((type) => String(type.caja_id) === String(targetBoxId))
   const shiftDays = (data.shiftDays || []).filter((day) => shiftTypes.some((type) => String(type.id) === String(day.tipo_turno_id)))
@@ -4220,7 +4378,7 @@ function CloseAndStartShiftModal({ data, boxId, onClose, onClosed, setToast }) {
     <form className="modal shift-close-modal" role="dialog" aria-modal="true" aria-labelledby="close-shift-title" onSubmit={submit}>
       <header className="shift-close-header">
         <span className="shift-close-icon"><ArrowRight size={20} /></span>
-        <div><h2 id="close-shift-title">¿Cerrar caja y abrir el siguiente turno?</h2><p>El turno actual quedará guardado en el historial y el nuevo heredará los saldos, fichas, notas y logística.</p></div>
+        <div><h2 id="close-shift-title">¿Cerrar caja y abrir el siguiente turno?</h2><p>El turno actual quedará guardado en el historial y el nuevo heredará los saldos, fichas, notas y logística. Las tareas activas se crearán nuevamente, sin completar y sin sus montos ni notas.</p></div>
         <button type="button" className="modal-close" title="Cancelar" aria-label="Cancelar" onClick={onClose} disabled={closing}><X size={17} /></button>
       </header>
       {scheduleError
@@ -4230,6 +4388,11 @@ function CloseAndStartShiftModal({ data, boxId, onClose, onClosed, setToast }) {
           <ArrowRight size={15} aria-hidden="true" />
           <span>Siguiente turno</span><strong>{nextShiftChoice.name} · {nextShiftChoice.date}</strong>
         </div>}
+      {pendingTasks.length > 0 && <div className="shift-close-task-warning" role="alert">
+        <strong>Quedan {pendingTasks.length} {pendingTasks.length === 1 ? 'tarea pendiente' : 'tareas pendientes'}</strong>
+        <ul>{pendingTasks.map(task => <li key={task.id}>{task.titulo}</li>)}</ul>
+        <small>Revisá la lista antes de continuar. Podés cerrar la caja aunque queden tareas pendientes.</small>
+      </div>}
       <div className="shift-close-cash">
         <span>Caja final e inicial del siguiente turno</span>
         <strong>{moneyWithCents.format(closingAmount)}</strong>
@@ -4357,6 +4520,24 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
       setToast(error.message || 'No se pudo guardar la configuración')
       return false
     }
+  }
+
+  const requestCloseTurn = async (turn) => {
+    let pendingTasks
+    try {
+      pendingTasks = await loadPendingShiftTasks(turn.id)
+    } catch (error) {
+      setToast(error.message || 'No se pudieron consultar las tareas pendientes')
+      return
+    }
+    if (pendingTasks.length) {
+      const taskNames = pendingTasks.map(task => `- ${task.titulo}`).join('\n')
+      const confirmed = window.confirm(`Quedan ${pendingTasks.length} ${pendingTasks.length === 1 ? 'tarea pendiente' : 'tareas pendientes'}:\n\n${taskNames}\n\n¿Cerrar el turno de todas formas?`)
+      if (!confirmed) return
+    }
+    const finalAmount = window.prompt('Caja final', String(turn.caja_inicial || 0))
+    if (finalAmount === null) return
+    await persistUpdate(() => closeShift(turn.id, finalAmount), 'Turno cerrado')
   }
 
   const refreshLocalData = async () => {
@@ -4899,9 +5080,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
             <span><strong>{turn.dias_turno?.tipos_turno?.nombre || 'Turno'}</strong><br /><small>{weekdayLabels[(turn.dias_turno?.dia_semana || 1) - 1]} · {turn.dias_turno?.nombre || 'Día'} · Caja inicial {money.format(turn.caja_inicial || 0)}</small></span>
             <small>{new Date(turn.fecha_hora_inicio).toLocaleString('es-AR')}</small>
             <button type="button" className="delete-button" title="Cerrar turno" onClick={() => {
-              const finalAmount = window.prompt('Caja final', String(turn.caja_inicial || 0))
-              if (finalAmount === null) return
-              persistUpdate(() => closeShift(turn.id, finalAmount), 'Turno cerrado')
+              requestCloseTurn(turn)
             }}><Trash2 size={14} /></button>
           </div>)}
           {!currentActiveTurns.length && <EmptyInline text="No hay turnos activos para esta caja." />}

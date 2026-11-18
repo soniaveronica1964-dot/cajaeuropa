@@ -244,6 +244,40 @@ EXECUTE FUNCTION fn_set_caja_id_turno();
 CREATE UNIQUE INDEX idx_turno_unico_abierto_por_caja
     ON turnos(caja_id) WHERE abierto;
 
+CREATE TABLE tareas (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    caja_id BIGINT NOT NULL REFERENCES cajas(id)
+        ON DELETE CASCADE,
+    titulo TEXT NOT NULL
+        CHECK (length(btrim(titulo)) > 0),
+    activa BOOLEAN NOT NULL DEFAULT TRUE,
+    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX idx_tareas_titulo_activo_por_caja
+    ON tareas(caja_id, lower(btrim(titulo))) WHERE activa;
+
+CREATE TABLE tareas_x_turno (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    turno_id BIGINT NOT NULL REFERENCES turnos(id)
+        ON DELETE CASCADE,
+    tarea_id BIGINT NOT NULL REFERENCES tareas(id)
+        ON DELETE CASCADE,
+    titulo TEXT NOT NULL
+        CHECK (length(btrim(titulo)) > 0),
+    completada BOOLEAN NOT NULL DEFAULT FALSE,
+    ignorada BOOLEAN NOT NULL DEFAULT FALSE,
+    eliminada BOOLEAN NOT NULL DEFAULT FALSE,
+    monto NUMERIC(14,2),
+    notas TEXT,
+
+    UNIQUE (turno_id, tarea_id),
+    CHECK (NOT (completada AND ignorada))
+);
+
+CREATE INDEX idx_tareas_x_turno_turno
+    ON tareas_x_turno(turno_id, id);
+
 CREATE TABLE cuentas (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     titular_id BIGINT NOT NULL

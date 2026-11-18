@@ -93,16 +93,35 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
       query('condiciones_bono', 'id, nombre, plataforma', request => request.order('id', { ascending: true })),
       query('tipos_estado', 'id, nombre, cantidad_porcentaje', request => request.order('id', { ascending: true })),
     ])
-    return { shift: null, boxes, accounts: [], activeTurnAccountLinks: [], sharedAccountBalances: {}, advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, userCategories, salaryHolders, salaryAccounts, salaryAccountValues: [], goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
+    return { shift: null, boxes, accounts: [], activeTurnAccountLinks: [], sharedAccountBalances: {}, advertising: [], bonuses: [], tips: [], expenses: [], expenseTypes, logistics: [], users, panels, userCategories, salaryHolders, salaryAccounts, salaryAccountValues: [], tasks: [], previousTasks: [], goals: [], chips: [], holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, walletTypes, accountTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges: [], foundMoney: [], shiftNotes: null, movements: [] }
   }
 
   if (shift.abierto) {
     await ensureActiveDepositAccountsAcrossBoxes()
     await ensureShiftAccounts(shift.id, shift.caja_id)
     await ensureShiftSalaryAccounts(shift.id)
+    await ensureShiftTasks(shift.id, shift.caja_id)
     await ensureAdvertisingLines(shift.id)
     await ensureShiftChips(shift.id, shift.caja_id)
   }
+
+  const [tasks, previousShifts] = await Promise.all([
+    query('tareas_x_turno', 'id, tarea_id, titulo, completada, ignorada, eliminada, monto, notas', request => request.eq('turno_id', shift.id).eq('eliminada', false).order('id', { ascending: true })),
+    query('turnos', 'id', request => request
+      .eq('caja_id', shift.caja_id)
+      .eq('abierto', false)
+      .lte('fecha_hora_fin', shift.fecha_hora_inicio)
+      .order('fecha_hora_fin', { ascending: false })
+      .limit(1)),
+  ])
+  const previousTasks = previousShifts.length
+    ? await query('tareas_x_turno', 'id, titulo, completada, ignorada, eliminada', request => request
+      .eq('turno_id', previousShifts[0].id)
+      .eq('completada', false)
+      .eq('ignorada', false)
+      .eq('eliminada', false)
+      .order('id', { ascending: true }))
+    : []
 
   const salaryAccountValues = await query(
     'cuentas_sueldo_x_turno',
@@ -231,7 +250,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     colorHex: platformColorById.get(String(chip.plataforma_id)) || null,
   }))
 
-  return { shift, boxes, accounts: accountsForShift, activeTurnAccountLinks, sharedAccountBalances, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, salaryHolders, salaryAccounts, salaryAccountValues, goals, chips: chipsWithPlatformColors, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
+  return { shift, boxes, accounts: accountsForShift, activeTurnAccountLinks, sharedAccountBalances, advertising, bonuses, tips, expenses, expenseTypes, logistics: logisticsWithAccounts, users, panels, userCategories, salaryHolders, salaryAccounts, salaryAccountValues, tasks, previousTasks, goals, chips: chipsWithPlatformColors, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes: shiftNotes[0] || null, movements }
 }
 
 export async function loadConfigurationData() {
@@ -1299,6 +1318,133 @@ export async function updateSalaryAccountValue(valueLinkId, value) {
   return updatedValue
 }
 
+async function ensureShiftTasks(shiftId, boxId) {
+  const tasks = await query('tareas', 'id, titulo', request => request
+    .eq('caja_id', boxId)
+    .eq('activa', true)
+    .order('id', { ascending: true }))
+  if (!tasks.length) return
+
+  const { error } = await supabase.from('tareas_x_turno').upsert(
+    tasks.map(task => ({
+      turno_id: shiftId,
+      tarea_id: task.id,
+      titulo: task.titulo,
+    })),
+    { onConflict: 'turno_id,tarea_id', ignoreDuplicates: true },
+  )
+  if (error) throw error
+}
+
+export async function createShiftTask(shiftId, title) {
+  requireSupabase()
+  const trimmedTitle = normalizeEntityName(title)
+  if (!trimmedTitle) throw new Error('El título de la tarea no puede estar vacío')
+
+  const { data: shift, error: shiftError } = await supabase.from('turnos')
+    .select('id, caja_id, abierto')
+    .eq('id', shiftId)
+    .single()
+  if (shiftError) throw shiftError
+  if (!shift.abierto) throw new Error('No se pueden agregar tareas a un turno cerrado')
+
+  const { data: task, error: taskError } = await supabase.from('tareas')
+    .insert({ caja_id: shift.caja_id, titulo: trimmedTitle, activa: true })
+    .select('id, titulo')
+    .single()
+  if (taskError) throw taskError
+
+  const { data: line, error: lineError } = await supabase.from('tareas_x_turno')
+    .insert({ turno_id: shiftId, tarea_id: task.id, titulo: task.titulo })
+    .select('id, tarea_id, titulo, completada, ignorada, eliminada, monto, notas')
+    .single()
+  if (lineError) {
+    const { error: rollbackError } = await supabase.from('tareas').delete().eq('id', task.id)
+    if (rollbackError) {
+      throw new Error(`${lineError.message}. No se pudo revertir la tarea creada: ${rollbackError.message}`)
+    }
+    throw lineError
+  }
+  return line
+}
+
+export async function updateShiftTask(id, changes) {
+  requireSupabase()
+  const { data: existing, error: loadError } = await supabase.from('tareas_x_turno')
+    .select('id, completada, ignorada, eliminada, turnos!inner(abierto)')
+    .eq('id', id)
+    .single()
+  if (loadError) throw loadError
+  if (!existing.turnos?.abierto) throw new Error('No se puede modificar una tarea de un turno cerrado')
+  if (existing.eliminada) throw new Error('La tarea ya fue eliminada de este turno')
+
+  const values = {}
+  if (Object.prototype.hasOwnProperty.call(changes, 'completed')) {
+    values.completada = Boolean(changes.completed)
+    if (values.completada) values.ignorada = false
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'ignored')) {
+    values.ignorada = Boolean(changes.ignored)
+    if (values.ignorada) values.completada = false
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'amount')) {
+    if (changes.amount == null || changes.amount === '') values.monto = null
+    else {
+      const amount = Number(changes.amount)
+      if (!Number.isFinite(amount)) throw new Error('Ingresá un monto válido para la tarea')
+      values.monto = amount
+    }
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'notes')) {
+    values.notas = String(changes.notes ?? '').trim() || null
+  }
+  if (!Object.keys(values).length) throw new Error('No hay cambios para guardar en la tarea')
+  return updateRow('tareas_x_turno', id, values)
+}
+
+export async function deleteShiftTask(id) {
+  requireSupabase()
+  const { data: existing, error: loadError } = await supabase.from('tareas_x_turno')
+    .select('id, tarea_id, eliminada, turnos!inner(abierto), tareas!inner(activa)')
+    .eq('id', id)
+    .single()
+  if (loadError) throw loadError
+  if (!existing.turnos?.abierto) throw new Error('No se puede eliminar una tarea de un turno cerrado')
+  if (existing.eliminada) return
+
+  const { data: archivedTask, error: archiveError } = await supabase.from('tareas')
+    .update({ activa: false })
+    .eq('id', existing.tarea_id)
+    .select('id')
+    .maybeSingle()
+  if (archiveError) throw archiveError
+  if (!archivedTask) throw new Error('La tarea ya no existe')
+
+  const { data: removedLine, error: removeError } = await supabase.from('tareas_x_turno')
+    .update({ eliminada: true })
+    .eq('id', id)
+    .eq('eliminada', false)
+    .select('id')
+    .maybeSingle()
+  if (removeError || !removedLine) {
+    const rollback = await supabase.from('tareas').update({ activa: Boolean(existing.tareas?.activa) }).eq('id', existing.tarea_id)
+    if (rollback.error) {
+      throw new Error(`${removeError?.message || 'No se pudo quitar la tarea de este turno'}. No se pudo reactivar la tarea: ${rollback.error.message}`)
+    }
+    if (removeError) throw removeError
+    throw new Error('La tarea ya no existe en este turno')
+  }
+}
+
+export async function loadPendingShiftTasks(shiftId) {
+  return query('tareas_x_turno', 'id, titulo', request => request
+    .eq('turno_id', shiftId)
+    .eq('completada', false)
+    .eq('ignorada', false)
+    .eq('eliminada', false)
+    .order('id', { ascending: true }))
+}
+
 export async function createWallet({ name, typeName = 'Cobros y retiros', boxId = null, shiftId = null }) {
   requireSupabase()
   const trimmedName = normalizeEntityName(name)
@@ -1802,6 +1948,7 @@ export async function createShift({ dayId, initialAmount = 0, startedAt = new Da
   if (error) throw error
   await ensureShiftAccounts(data.id, data.caja_id)
   await ensureShiftSalaryAccounts(data.id)
+  await ensureShiftTasks(data.id, data.caja_id)
   await ensureAdvertisingLines(data.id)
   await ensureShiftChips(data.id, data.caja_id)
   return data
@@ -1884,6 +2031,7 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
     newShift = data
     await ensureShiftAccounts(newShift.id, newShift.caja_id)
     await ensureShiftSalaryAccounts(newShift.id)
+    await ensureShiftTasks(newShift.id, newShift.caja_id)
     await ensureAdvertisingLines(newShift.id)
     await ensureShiftChips(newShift.id, newShift.caja_id)
 
@@ -2025,6 +2173,7 @@ export async function resetShiftHistory({ boxId, shiftId, dayId, startedAt = new
   })
   if (error) throw error
   if (!data) throw new Error('Supabase no devolvió el identificador del turno nuevo')
+  await ensureShiftTasks(data, boxId)
   return data
 }
 
@@ -2679,6 +2828,7 @@ export async function createInitialSetup({ boxName, shiftName = null, startTime 
   if (shiftError) throw shiftError
   const shift = openShift || (await supabase.from('turnos').insert({ dia_turno_id: day.id, abierto: true, caja_inicial: Number(initialAmount) || 0, redondeo: 0 }).select().single()).data
   if (!shift) throw new Error('No se pudo crear el turno inicial')
+  await ensureShiftTasks(shift.id, box.id)
 
   for (const holder of holders) {
     for (const wallet of wallets) {

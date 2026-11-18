@@ -31,6 +31,8 @@ ALTER TABLE lineas_publicidad_x_caja ENABLE ROW LEVEL SECURITY;
 ALTER TABLE publicidad ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lineas_bonos ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bonos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tareas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tareas_x_turno ENABLE ROW LEVEL SECURITY;
 ALTER TABLE propinas ENABLE ROW LEVEL SECURITY;
 ALTER TABLE cargas_ta ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dinero_encontrado ENABLE ROW LEVEL SECURITY;
@@ -70,7 +72,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'cajas', 'turnos', 'dias_turno', 'tipos_turno', 'colores', 'tipos_billetera', 'tipos_cuenta',
     'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja', 'cuentas_x_caja',
-    'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
+    'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos', 'tareas', 'tareas_x_turno',
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'movimientos', 'notas_turno', 'tipos_gasto', 'lineas_logistica', 'logistica',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario',
     'paneles_x_usuario', 'paneles', 'categorias_usuario', 'categorias_x_usuario', 'subplataformas_x_usuario', 'subobjetivos_x_turno', 'subobjetivos',
@@ -90,7 +92,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'colores', 'tipos_billetera', 'tipos_cuenta', 'tipos_gasto', 'cajas', 'billeteras', 'titulares',
     'titulares_x_caja', 'billeteras_x_caja', 'tipos_turno', 'dias_turno', 'turnos',
-    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'condiciones_bono', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas',
+    'cuentas', 'cuentas_x_caja', 'cuentas_x_turno', 'publicidad', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'bonos', 'lineas_bonos', 'tareas', 'tareas_x_turno', 'logistica', 'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'condiciones_bono', 'tipos_estado', 'estados', 'lineas_estado', 'subplataformas',
     'usuarios', 'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'subplataformas_x_usuario', 'paneles', 'categorias_usuario', 'categorias_x_usuario'
   ] LOOP
     EXECUTE format('DROP POLICY IF EXISTS dev_insert_%I ON public.%I', table_name, table_name);
@@ -138,7 +140,7 @@ BEGIN
   FOREACH table_name IN ARRAY ARRAY[
     'cajas', 'turnos', 'dias_turno', 'tipos_turno', 'colores', 'tipos_billetera', 'tipos_cuenta',
     'cuentas_x_turno', 'cuentas', 'titulares', 'billeteras', 'titulares_x_caja', 'billeteras_x_caja',
-    'cuentas_x_caja', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos',
+    'cuentas_x_caja', 'lineas_publicidad', 'lineas_publicidad_x_caja', 'publicidad', 'lineas_bonos', 'bonos', 'tareas', 'tareas_x_turno',
     'propinas', 'cargas_ta', 'dinero_encontrado', 'gastos', 'notas_turno', 'tipos_gasto', 'lineas_logistica', 'logistica', 'usuarios',
     'nombres_usuario', 'telefonos_usuario', 'titulares_usuario', 'paneles_x_usuario', 'paneles', 'categorias_usuario', 'categorias_x_usuario', 'subplataformas_x_usuario',
     'subobjetivos_x_turno', 'subobjetivos', 'objetivos', 'fichas', 'plataformas', 'cargas_fichas',
@@ -194,6 +196,8 @@ CREATE POLICY dev_insert_movimientos ON public.movimientos
 
 GRANT SELECT, INSERT ON public.movimientos TO anon;
 GRANT SELECT ON public.turnos, public.cuentas_x_turno TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.tareas, public.tareas_x_turno TO anon;
+GRANT USAGE, SELECT ON SEQUENCE public.tareas_id_seq, public.tareas_x_turno_id_seq TO anon;
 
 -- Bucket público para la imagen original y la miniatura de la aplicación.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
