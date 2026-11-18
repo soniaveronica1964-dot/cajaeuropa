@@ -268,6 +268,9 @@ CREATE TABLE tareas_x_turno (
         ON DELETE CASCADE,
     titulo TEXT NOT NULL
         CHECK (length(btrim(titulo)) > 0),
+    alias TEXT,
+    titular TEXT,
+    monto_a_transferir NUMERIC(14,2),
     completada BOOLEAN NOT NULL DEFAULT FALSE,
     ignorada BOOLEAN NOT NULL DEFAULT FALSE,
     eliminada BOOLEAN NOT NULL DEFAULT FALSE,

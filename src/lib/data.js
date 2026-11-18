@@ -106,7 +106,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   }
 
   const [tasks, previousShifts] = await Promise.all([
-    query('tareas_x_turno', 'id, tarea_id, titulo, completada, ignorada, eliminada, monto, notas, tareas(alias, titular, monto_a_transferir)', request => request.eq('turno_id', shift.id).eq('eliminada', false).order('id', { ascending: true })),
+    query('tareas_x_turno', 'id, tarea_id, titulo, alias, titular, monto_a_transferir, completada, ignorada, eliminada, monto, notas', request => request.eq('turno_id', shift.id).eq('eliminada', false).order('id', { ascending: true })),
     query('turnos', 'id', request => request
       .eq('caja_id', shift.caja_id)
       .eq('abierto', false)
@@ -1319,7 +1319,7 @@ export async function updateSalaryAccountValue(valueLinkId, value) {
 }
 
 async function ensureShiftTasks(shiftId, boxId) {
-  const tasks = await query('tareas', 'id, titulo', request => request
+  const tasks = await query('tareas', 'id, titulo, alias, titular, monto_a_transferir', request => request
     .eq('caja_id', boxId)
     .eq('activa', true)
     .order('id', { ascending: true }))
@@ -1330,6 +1330,9 @@ async function ensureShiftTasks(shiftId, boxId) {
       turno_id: shiftId,
       tarea_id: task.id,
       titulo: task.titulo,
+      alias: task.alias,
+      titular: task.titular,
+      monto_a_transferir: task.monto_a_transferir,
     })),
     { onConflict: 'turno_id,tarea_id', ignoreDuplicates: true },
   )
@@ -1362,13 +1365,20 @@ export async function createShiftTask(shiftId, { title, alias, holder, transferA
       monto_a_transferir: transferValue,
       activa: true,
     })
-    .select('id, titulo')
+    .select('id, titulo, alias, titular, monto_a_transferir')
     .single()
   if (taskError) throw taskError
 
   const { data: line, error: lineError } = await supabase.from('tareas_x_turno')
-    .insert({ turno_id: shiftId, tarea_id: task.id, titulo: task.titulo })
-    .select('id, tarea_id, titulo, completada, ignorada, eliminada, monto, notas')
+    .insert({
+      turno_id: shiftId,
+      tarea_id: task.id,
+      titulo: task.titulo,
+      alias: task.alias,
+      titular: task.titular,
+      monto_a_transferir: task.monto_a_transferir,
+    })
+    .select('id, tarea_id, titulo, alias, titular, monto_a_transferir, completada, ignorada, eliminada, monto, notas')
     .single()
   if (lineError) {
     const { error: rollbackError } = await supabase.from('tareas').delete().eq('id', task.id)
@@ -1378,6 +1388,71 @@ export async function createShiftTask(shiftId, { title, alias, holder, transferA
     throw lineError
   }
   return line
+}
+
+export async function updateShiftTaskDefinition(id, { title, alias, holder, transferAmount }) {
+  requireSupabase()
+  const trimmedTitle = normalizeEntityName(title)
+  if (!trimmedTitle) throw new Error('El título de la tarea no puede estar vacío')
+  const taskAlias = normalizeEntityName(alias) || null
+  const taskHolder = normalizeEntityName(holder) || null
+  const transferValue = transferAmount == null || transferAmount === ''
+    ? null
+    : requireNonNegativeAmount(transferAmount)
+
+  const { data: line, error: lineLoadError } = await supabase.from('tareas_x_turno')
+    .select('id, tarea_id, eliminada, turnos!inner(abierto)')
+    .eq('id', id)
+    .single()
+  if (lineLoadError) throw lineLoadError
+  if (!line.turnos?.abierto) throw new Error('No se puede editar una tarea de un turno cerrado')
+  if (line.eliminada) throw new Error('La tarea ya fue eliminada de este turno')
+
+  const { data: previousTask, error: taskLoadError } = await supabase.from('tareas')
+    .select('id, titulo, alias, titular, monto_a_transferir, activa')
+    .eq('id', line.tarea_id)
+    .single()
+  if (taskLoadError) throw taskLoadError
+  if (!previousTask.activa) throw new Error('La tarea ya no está activa')
+
+  const taskValues = {
+    titulo: trimmedTitle,
+    alias: taskAlias,
+    titular: taskHolder,
+    monto_a_transferir: transferValue,
+  }
+  const { data: updatedTask, error: taskUpdateError } = await supabase.from('tareas')
+    .update(taskValues)
+    .eq('id', line.tarea_id)
+    .select('id')
+    .maybeSingle()
+  if (taskUpdateError) throw taskUpdateError
+  if (!updatedTask) throw new Error('La tarea ya no existe')
+
+  const { data: updatedLine, error: lineUpdateError } = await supabase.from('tareas_x_turno')
+    .update({
+      titulo: trimmedTitle,
+      alias: taskAlias,
+      titular: taskHolder,
+      monto_a_transferir: transferValue,
+    })
+    .eq('id', id)
+    .eq('eliminada', false)
+    .select('id')
+    .maybeSingle()
+  if (lineUpdateError || !updatedLine) {
+    const { error: rollbackError } = await supabase.from('tareas').update({
+      titulo: previousTask.titulo,
+      alias: previousTask.alias,
+      titular: previousTask.titular,
+      monto_a_transferir: previousTask.monto_a_transferir,
+    }).eq('id', line.tarea_id)
+    if (rollbackError) {
+      throw new Error(`${lineUpdateError?.message || 'No se pudo actualizar la tarea del turno'}. No se pudo revertir la tarea: ${rollbackError.message}`)
+    }
+    if (lineUpdateError) throw lineUpdateError
+    throw new Error('La tarea ya no existe en este turno')
+  }
 }
 
 export async function updateShiftTask(id, changes) {

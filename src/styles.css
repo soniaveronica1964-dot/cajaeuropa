@@ -992,6 +992,7 @@ input[type="time"] { color-scheme: dark; }
   padding: 9px;
   border-bottom: 1px solid var(--line);
 }
+.task-edit-form { padding: 0; border-bottom: 0; }
 .task-add-form input {
   width: 100%;
   min-width: 0;
@@ -1010,7 +1011,8 @@ input[type="time"] { color-scheme: dark; }
 .task-add-form input:focus { border-color: var(--accent); }
 .task-add-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .task-state-button,
-.task-delete-button {
+.task-delete-button,
+.task-edit-button {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
@@ -1023,7 +1025,8 @@ input[type="time"] { color-scheme: dark; }
   cursor: pointer;
 }
 .task-state-button:disabled,
-.task-delete-button:disabled { opacity: .5; cursor: wait; }
+.task-delete-button:disabled,
+.task-edit-button:disabled { opacity: .5; cursor: wait; }
 .task-list { display: grid; gap: 7px; padding: 9px; }
 .task-row {
   display: grid;
@@ -1060,6 +1063,7 @@ input[type="time"] { color-scheme: dark; }
 .task-state-button { width: 25px; height: 25px; }
 .task-state-button.selected { border-color: var(--accent-border); background: color-mix(in srgb, var(--accent) 18%, var(--panel-2)); color: var(--accent); }
 .task-delete-button { width: 25px; height: 25px; color: var(--danger, #ef8888); }
+.task-edit-button { width: 25px; height: 25px; color: var(--accent); }
 .task-amount-field { display: grid; gap: 4px; color: var(--muted); font-size: 8px; }
 .task-amount-field input {
   width: 100%;

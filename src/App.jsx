@@ -152,6 +152,7 @@ import {
   updateSalaryAccount,
   updateSalaryAccountValue,
   updateShiftTask,
+  updateShiftTaskDefinition,
 } from './lib/data'
 import { DATABASE_SAVE_EVENT } from './lib/supabase'
 import SnapshotReport from './SnapshotReport'
@@ -1207,13 +1208,15 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
   const [creating, setCreating] = useState(false)
   const [savingTaskId, setSavingTaskId] = useState(null)
   const [expandedTasks, setExpandedTasks] = useState({})
+  const [editingTaskId, setEditingTaskId] = useState(null)
+  const [editDraft, setEditDraft] = useState({ title: '', alias: '', holder: '', transferAmount: '' })
   const [openNotes, setOpenNotes] = useState({})
   const [amountDrafts, setAmountDrafts] = useState({})
   const [noteDrafts, setNoteDrafts] = useState({})
-  const economicTasks = rows.filter(task => task.tareas?.monto_a_transferir != null)
-  const economicTotal = economicTasks.reduce((sum, task) => sum + Number(task.tareas.monto_a_transferir), 0)
+  const economicTasks = rows.filter(task => task.monto_a_transferir != null && !task.ignorada && !task.eliminada)
+  const economicTotal = economicTasks.reduce((sum, task) => sum + Number(task.monto_a_transferir), 0)
   const economicCompleted = economicTasks.reduce((sum, task) => (
-    sum + (task.completada ? Number(task.tareas.monto_a_transferir) : 0)
+    sum + (task.completada ? Number(task.monto_a_transferir) : 0)
   ), 0)
 
   const saveChanges = async (task, changes, message = 'Tarea actualizada') => {
@@ -1312,6 +1315,38 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
     }
   }
 
+  const startEditingTask = (task) => {
+    setExpandedTasks(current => ({ ...current, [task.id]: true }))
+    setEditingTaskId(task.id)
+    setEditDraft({
+      title: task.titulo,
+      alias: task.alias || '',
+      holder: task.titular || '',
+      transferAmount: task.monto_a_transferir ?? '',
+    })
+  }
+
+  const saveTaskDefinition = async (task, event) => {
+    event.preventDefault()
+    if (savingTaskId === task.id) return
+    setSavingTaskId(task.id)
+    try {
+      await updateShiftTaskDefinition(task.id, editDraft)
+      setEditingTaskId(null)
+      setToast('Tarea actualizada')
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo actualizar la tarea')
+    } finally {
+      setSavingTaskId(null)
+    }
+  }
+
+  const cancelEditingTask = () => {
+    setEditingTaskId(null)
+    setEditDraft({ title: '', alias: '', holder: '', transferAmount: '' })
+  }
+
   const cancelCreateTask = () => {
     setTitle('')
     setAlias('')
@@ -1340,19 +1375,35 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
     <div className="task-list">
       {rows.map(task => <article className={`task-row ${task.completada ? 'task-completed' : ''} ${task.ignorada ? 'task-ignored' : ''} ${expandedTasks[task.id] ? 'task-expanded' : ''}`} key={task.id}>
         <div className="task-row-heading">
-          <button type="button" className="task-collapse-toggle" aria-label={`${expandedTasks[task.id] ? 'Contraer' : 'Expandir'} tarea ${task.titulo}`} aria-expanded={Boolean(expandedTasks[task.id])} onClick={() => setExpandedTasks(current => ({ ...current, [task.id]: !current[task.id] }))}><ChevronDown size={14} /><strong>{task.titulo}</strong></button>
+          <button type="button" className="task-collapse-toggle" aria-label={`${expandedTasks[task.id] ? 'Contraer' : 'Expandir'} tarea ${task.titulo}`} aria-expanded={Boolean(expandedTasks[task.id])} disabled={editingTaskId === task.id} onClick={() => setExpandedTasks(current => ({ ...current, [task.id]: !current[task.id] }))}><ChevronDown size={14} /><strong>{task.titulo}</strong></button>
           {canEdit && <div className="task-row-actions">
-            <button type="button" className={`task-state-button ${task.completada ? 'selected' : ''}`} title={task.completada ? 'Marcar como pendiente' : 'Marcar como completada'} aria-label={task.completada ? `Marcar ${task.titulo} como pendiente` : `Marcar ${task.titulo} como completada`} disabled={savingTaskId === task.id} onClick={() => saveChanges(task, { completed: !task.completada })}><Check size={14} /></button>
-            <button type="button" className={`task-state-button ${task.ignorada ? 'selected' : ''}`} title={task.ignorada ? 'Dejar de ignorar' : 'Ignorar tarea'} aria-label={task.ignorada ? `Dejar de ignorar ${task.titulo}` : `Ignorar ${task.titulo}`} disabled={savingTaskId === task.id} onClick={() => saveChanges(task, { ignored: !task.ignorada })}><Eye size={14} /></button>
-            <button type="button" className="task-delete-button" title="Eliminar tarea" aria-label={`Eliminar ${task.titulo}`} disabled={savingTaskId === task.id} onClick={() => removeTask(task)}><Trash2 size={13} /></button>
+            <button type="button" className={`task-state-button ${task.completada ? 'selected' : ''}`} title={task.completada ? 'Marcar como pendiente' : 'Marcar como completada'} aria-label={task.completada ? `Marcar ${task.titulo} como pendiente` : `Marcar ${task.titulo} como completada`} disabled={savingTaskId === task.id || editingTaskId === task.id} onClick={() => saveChanges(task, { completed: !task.completada })}><Check size={14} /></button>
+            <button type="button" className={`task-state-button ${task.ignorada ? 'selected' : ''}`} title={task.ignorada ? 'Dejar de ignorar' : 'Ignorar tarea'} aria-label={task.ignorada ? `Dejar de ignorar ${task.titulo}` : `Ignorar ${task.titulo}`} disabled={savingTaskId === task.id || editingTaskId === task.id} onClick={() => saveChanges(task, { ignored: !task.ignorada })}><Eye size={14} /></button>
+            {expandedTasks[task.id] && <>
+              <button type="button" className="task-edit-button" title="Editar tarea" aria-label={`Editar ${task.titulo}`} disabled={savingTaskId === task.id || editingTaskId === task.id} onClick={() => startEditingTask(task)}><Pencil size={13} /></button>
+              <button type="button" className="task-delete-button" title="Eliminar tarea" aria-label={`Eliminar ${task.titulo}`} disabled={savingTaskId === task.id || editingTaskId === task.id} onClick={() => removeTask(task)}><Trash2 size={13} /></button>
+            </>}
           </div>}
         </div>
         {expandedTasks[task.id] && <>
-          {(task.tareas?.alias || task.tareas?.titular || task.tareas?.monto_a_transferir != null) && <div className="task-definition-details">
-            {task.tareas?.alias && <span><b>Alias:</b> {task.tareas.alias}</span>}
-            {task.tareas?.titular && <span><b>Titular:</b> {task.tareas.titular}</span>}
-            {task.tareas?.monto_a_transferir != null && <span><b>Monto a pasar:</b> {moneyWithCents.format(Number(task.tareas.monto_a_transferir))}</span>}
-          </div>}
+          {editingTaskId === task.id
+            ? <form className="task-add-form task-edit-form" onSubmit={event => saveTaskDefinition(task, event)}>
+              <input aria-label="Título de tarea" value={editDraft.title} onChange={event => setEditDraft(current => ({ ...current, title: event.target.value }))} disabled={savingTaskId === task.id} />
+              <div className="task-add-details">
+                <input aria-label="Alias de tarea" placeholder="Alias (opcional)" value={editDraft.alias} onChange={event => setEditDraft(current => ({ ...current, alias: event.target.value }))} disabled={savingTaskId === task.id} />
+                <input aria-label="Titular de tarea" placeholder="Titular (opcional)" value={editDraft.holder} onChange={event => setEditDraft(current => ({ ...current, holder: event.target.value }))} disabled={savingTaskId === task.id} />
+                <label><span>Monto a pasar</span><input aria-label="Monto a pasar" type="number" min="0" step="0.01" placeholder="Opcional" value={editDraft.transferAmount} onChange={event => setEditDraft(current => ({ ...current, transferAmount: event.target.value }))} disabled={savingTaskId === task.id} /></label>
+              </div>
+              <div className="task-add-actions">
+                <button type="button" className="secondary-button" onClick={cancelEditingTask} disabled={savingTaskId === task.id}>Cancelar</button>
+                <button type="submit" className="close-button" disabled={savingTaskId === task.id || !editDraft.title.trim()}>{savingTaskId === task.id ? 'Guardando...' : 'Guardar cambios'} <Check size={14} /></button>
+              </div>
+            </form>
+            : (task.alias || task.titular || task.monto_a_transferir != null) && <div className="task-definition-details">
+              {task.alias && <span><b>Alias:</b> {task.alias}</span>}
+              {task.titular && <span><b>Titular:</b> {task.titular}</span>}
+              {task.monto_a_transferir != null && <span><b>Monto a pasar:</b> {moneyWithCents.format(Number(task.monto_a_transferir))}</span>}
+            </div>}
           <label className="task-amount-field"><span>Monto / saldo del turno</span><input type="number" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto o saldo de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => saveAmount(task, event)} /></label>
           <div className="task-note-controls">
             <button type="button" className="task-note-toggle" aria-expanded={Boolean(openNotes[task.id])} onClick={() => toggleNote(task)}>{openNotes[task.id] ? 'Ocultar nota' : task.notas ? 'Ver nota' : 'Agregar nota'}</button>
