@@ -33,6 +33,14 @@ const reportMoney = new Intl.NumberFormat('es-AR', {
 
 const amountOf = value => Number(value) || 0
 
+function hexToRgba(hex, alpha) {
+  let digits = String(hex || '').trim().replace(/^#/, '')
+  if (!/^(?:[\da-f]{3}|[\da-f]{6})$/i.test(digits)) return null
+  if (digits.length === 3) digits = [...digits].map(channel => channel + channel).join('')
+  const [red, green, blue] = digits.match(/.{2}/g).map(channel => Number.parseInt(channel, 16))
+  return `rgba(${red}, ${green}, ${blue}, ${alpha})`
+}
+
 function formatTime(value) {
   if (!value) return '--:--'
   const date = new Date(value)
@@ -245,7 +253,7 @@ function SnapshotReport({
   )
 
   return (
-    <div ref={snapshotRef} className="snapshot-export report-card report-v5" data-snapshot-export="true" aria-hidden="true" style={{ '--box-accent': accentColor }}>
+    <div ref={snapshotRef} className="snapshot-export report-card report-v5" data-snapshot-export="true" aria-hidden="true" style={{ '--box-accent': accentColor, '--box-accent-glow': hexToRgba(accentColor, 0.16) }}>
       <header className="report-v5-header">
         <div className="report-v5-brand">
           <span><BrandIcon size={24} /></span>
