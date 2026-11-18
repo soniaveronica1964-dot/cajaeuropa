@@ -2552,28 +2552,41 @@ export async function createInitialSetup({ boxName, shiftName = null, startTime 
   return shift
 }
 
-export async function loadStatistics(from, to, cajaId) {
+export async function loadStatistics(from, to, cajaIds = null) {
   const [shifts, tips, expenses, bonuses] = await Promise.all([
-    query('turnos', 'id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, dias_turno(nombre, hora_inicio, hora_fin)', request => {
+    query('turnos', 'id, abierto, fecha_hora_inicio, fecha_hora_fin, caja_inicial, caja_final, redondeo, caja_id, dias_turno(nombre, hora_inicio, hora_fin, tipos_turno(nombre))', request => {
       let next = request.gte('fecha_hora_inicio', from).lte('fecha_hora_inicio', to).order('fecha_hora_inicio', { ascending: false })
-      if (cajaId) next = next.eq('caja_id', cajaId)
+      if (Array.isArray(cajaIds)) next = next.in('caja_id', cajaIds)
+      else if (cajaIds != null) next = next.eq('caja_id', cajaIds)
       return next
     }),
     query('propinas', 'id, monto, fecha_hora_creacion, turno_id, turnos!inner(fecha_hora_inicio, caja_id)', request => {
       let next = request.gte('fecha_hora_creacion', from).lte('fecha_hora_creacion', to)
-      if (cajaId) next = next.eq('turnos.caja_id', cajaId)
+      if (Array.isArray(cajaIds)) next = next.in('turnos.caja_id', cajaIds)
+      else if (cajaIds != null) next = next.eq('turnos.caja_id', cajaIds)
       return next
     }),
-    query('gastos', 'id, monto, fecha_hora_creacion, turno_id, turnos!inner(fecha_hora_inicio, caja_id)', request => {
+    query('gastos', 'id, monto, fecha_hora_creacion, turno_id, tipos_gasto(nombre, invertir_signo), turnos!inner(fecha_hora_inicio, caja_id)', request => {
       let next = request.gte('fecha_hora_creacion', from).lte('fecha_hora_creacion', to)
-      if (cajaId) next = next.eq('turnos.caja_id', cajaId)
+      if (Array.isArray(cajaIds)) next = next.in('turnos.caja_id', cajaIds)
+      else if (cajaIds != null) next = next.eq('turnos.caja_id', cajaIds)
       return next
     }),
     query('lineas_bonos', 'id, valor, recuperado, fecha_hora_creacion, bonos!inner(turno_id, turnos!inner(fecha_hora_inicio, caja_id))', request => {
       let next = request.gte('fecha_hora_creacion', from).lte('fecha_hora_creacion', to)
-      if (cajaId) next = next.eq('bonos.turnos.caja_id', cajaId)
+      if (Array.isArray(cajaIds)) next = next.in('bonos.turnos.caja_id', cajaIds)
+      else if (cajaIds != null) next = next.eq('bonos.turnos.caja_id', cajaIds)
       return next
     }),
   ])
-  return { shifts, tips, expenses, bonuses }
+  if (!shifts.length) return { shifts, tips, expenses, bonuses }
+
+  const shiftIds = shifts.map(shift => shift.id)
+  const [chips, taCharges, foundMoney, movements] = await Promise.all([
+    query('fichas', 'id, turno_id, fichas_inicial, fichas_final, plataforma_id, plataformas(nombre), cargas_fichas(valor, fecha_hora_creacion)', request => request.in('turno_id', shiftIds)),
+    query('cargas_ta', 'id, turno_id, monto, fecha_hora_creacion', request => request.in('turno_id', shiftIds)),
+    query('dinero_encontrado', 'id, monto, fecha_hora_creacion, cuentas_x_turno!inner(turno_id)', request => request.in('cuentas_x_turno.turno_id', shiftIds)),
+    query('movimientos', 'id, turno_id, turno_destino_id, caja_desde_id, caja_hasta_id, monto, es_ahorro, fecha_hora_creacion', request => request.gte('fecha_hora_creacion', from).lte('fecha_hora_creacion', to)),
+  ])
+  return { shifts, tips, expenses, bonuses, chips, taCharges, foundMoney, movements }
 }

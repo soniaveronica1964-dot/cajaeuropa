@@ -146,6 +146,7 @@ import {
 } from './lib/data'
 import { DATABASE_SAVE_EVENT } from './lib/supabase'
 import SnapshotReport from './SnapshotReport'
+import Statistics from './Statistics'
 
 const money = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 })
 const moneyWithCents = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -795,7 +796,7 @@ function App() {
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
           {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} accentColor={accentColor} isLightTheme={isLightTheme} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} snapshotRef={snapshotRef} />}
-          {!loadError && appData && view === 'stats' && <LiveStatistics />}
+          {!loadError && appData && view === 'stats' && <Statistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} onEdit={setUserEditing} onSaved={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'bonuses' && <LiveStates key={selectedBoxId} boxId={selectedBoxId} setToast={setToast} />}
@@ -3546,12 +3547,6 @@ function EmojiSelect({ value = '', onChange, ariaLabel }) {
 }
 
 function ConfigList({ title, items, select }) { return <section className="panel config-list"><div className="panel-title"><h2>{title}</h2><small>{items.length} elementos</small></div>{items.map(item => <div className="config-row" key={item.id || item}><span className="drag">⠿</span><input defaultValue={item.nombre || item} />{select && <select defaultValue="Cobros + retiros"><option>Cobros + retiros</option><option>Solo cobros</option><option>Solo depósito</option></select>}<button className="icon-button"><Trash2 size={14} /></button></div>)}{!items.length && <EmptyInline text="No hay registros configurados." />}<button className="secondary-button"><Plus size={14} /> Agregar</button></section> }
-
-function LiveStatistics() {
-  return <section className="panel stats-development">
-    <h2>En desarrollo</h2>
-  </section>
-}
 
 function dateTone(value) {
   if (!value) return 'stale'
