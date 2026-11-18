@@ -69,6 +69,7 @@ import {
   createSubplatform,
   createShiftType,
   createTip,
+  createSalaryHolder,
   deleteExpenseLine,
   deleteTipLine,
   deleteTaChargeLine,
@@ -143,6 +144,9 @@ import {
   updateState,
   updateShiftType,
   updateWallet,
+  updateSalaryHolder,
+  updateSalaryAccount,
+  updateSalaryAccountValue,
 } from './lib/data'
 import { DATABASE_SAVE_EVENT } from './lib/supabase'
 import SnapshotReport from './SnapshotReport'
@@ -906,10 +910,26 @@ function mapGoals(rows) {
   })
 }
 
+function readSalaryPanelPreference() {
+  try {
+    return window.localStorage.getItem('caja-salary-panel-open') === 'true'
+  } catch {
+    return false
+  }
+}
+
 function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, setToast, onSaved, onBonusCreated, onCreateUser, onChipFinalSaved, onRoundingChange, onDiscrepancyChange, snapshotRef }) {
   const [rounding, setRounding] = useState(null)
   const [accountValueDrafts, setAccountValueDrafts] = useState({})
   const [chipFinalDrafts, setChipFinalDrafts] = useState({})
+  const [salaryPanelOpen, setSalaryPanelOpen] = useState(readSalaryPanelPreference)
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('caja-salary-panel-open', String(salaryPanelOpen))
+    } catch {
+      return
+    }
+  }, [salaryPanelOpen])
   useEffect(() => setRounding(null), [data.shift?.id])
   useEffect(() => {
     setAccountValueDrafts(current => {
@@ -1064,7 +1084,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       <Metric label="Diferencia real" value={moneyWithCents.format(realDifference)} tone={realDifference < 0 ? 'negative' : 'positive'} />
       <label className="rounding"><small>Redondeo</small><span className={Number(parseLocalizedAmount(roundingValue)) ? 'has-value' : ''}>$<input value={roundingValue} placeholder="0,00" onChange={(event) => setRounding(event.target.value)} onBlur={saveRounding} /></span></label>
     </section>
-    <div className="dashboard-grid">
+    <div className={`dashboard-grid ${salaryPanelOpen ? 'salary-panel-open' : 'salary-panel-closed'}`}>
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} boxes={data.boxes || []} activeTurns={data.activeTurns || []} currentBoxId={data.shift.caja_id} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
@@ -1080,6 +1100,13 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
           <ChipControlCard chips={chips} onSaved={onSaved} onChipFinalSaved={onChipFinalSaved} setToast={setToast} />
         </div>
       </div>
+      <SalaryAccountsPanel
+        rows={(data.salaryAccountValues || []).filter(row => !data.shift.abierto || row.cuentas_sueldo?.activa)}
+        expanded={salaryPanelOpen}
+        onToggle={() => setSalaryPanelOpen(value => !value)}
+        onSaved={onSaved}
+        setToast={setToast}
+      />
     </div>
     <SnapshotReport
       data={data}
@@ -1098,6 +1125,68 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
     />
   </>
 }
+
+function SalaryAccountsPanel({ rows, expanded, onToggle, onSaved, setToast }) {
+  const saveValue = (row, event) => {
+    const input = event.currentTarget
+    const savedValue = Number(row.valor || 0)
+    const amount = parseLocalizedAmount(input.value)
+    if (amount == null || amount < 0) {
+      input.value = savedValue ? numberCompact.format(savedValue) : ''
+      setToast('Ingresá un monto válido para la cuenta de sueldo')
+      return
+    }
+
+    input.value = amount ? numberCompact.format(amount) : ''
+    if (amount === savedValue) return
+    updateSalaryAccountValue(row.id, amount).then(() => onSaved()).catch(error => {
+      input.value = savedValue ? numberCompact.format(savedValue) : ''
+      setToast(error.message || 'No se pudo guardar el valor de sueldo')
+    })
+  }
+
+  return <aside className={`salary-accounts-panel ${expanded ? 'expanded' : 'collapsed'}`}>
+    {expanded
+      ? <>
+        <header className="salary-panel-header">
+          <div><WalletCards size={16} /><strong>Cuentas sueldo</strong></div>
+          <button type="button" className="icon-button" aria-label="Minimizar cuentas sueldo" title="Minimizar" onClick={onToggle}><ChevronRight size={16} /></button>
+        </header>
+        {rows.length
+          ? <div className="salary-account-columns">
+            {rows.map(row => {
+              const account = row.cuentas_sueldo
+              const holderName = account?.titulares_sueldo?.nombre || 'Titular'
+              const value = Number(row.valor || 0)
+              return <article className="salary-account-column" key={row.id}>
+                <h3>{holderName}</h3>
+                {account?.alias && <span className="salary-account-alias">{account.alias}</span>}
+                {account?.cuil && <span className="salary-account-detail">CUIL {account.cuil}</span>}
+                {account?.patron && <span className="salary-account-detail">Clave {account.patron}</span>}
+                {account?.notas && <span className="salary-account-detail">{account.notas}</span>}
+                <label className="salary-account-value">
+                  <span>Saldo</span>
+                  <span className="salary-account-input"><b>$</b><input
+                    key={`${row.id}-${value}`}
+                    type="text"
+                    inputMode="decimal"
+                    aria-label={`Saldo de ${holderName}`}
+                    defaultValue={value ? numberCompact.format(value) : ''}
+                    placeholder="0"
+                    onBlur={event => saveValue(row, event)}
+                  /></span>
+                </label>
+              </article>
+            })}
+          </div>
+          : <p className="salary-panel-empty">No hay cuentas sueldo activas. Crealas desde Configuración → Matriz de cuentas.</p>}
+      </>
+      : <button type="button" className="salary-panel-collapsed-button" aria-label="Mostrar cuentas sueldo" aria-expanded="false" title="Mostrar cuentas sueldo" onClick={onToggle}>
+        <WalletCards size={18} /><span>Sueldo</span><ChevronRight size={15} />
+      </button>}
+  </aside>
+}
+
 function Metric({ label, value, tone = '' }) { return <div className="metric"><small>{label}</small><strong className={tone}>{value}</strong></div> }
 function Publicity({ rows, boxes, setToast, onSaved }) {
   const [savingCell, setSavingCell] = useState('')
@@ -4242,6 +4331,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
   const [selectedWeekdays, setSelectedWeekdays] = useState([])
   const [dayDraft, setDayDraft] = useState({ typeId: '', name: '', start: '08:00', end: '18:00', crossesMidnight: false })
   const [turnDraft, setTurnDraft] = useState({ dayId: '', initialAmount: '0' })
+  const [salaryHolderDraft, setSalaryHolderDraft] = useState('')
   const weekdayLabels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom']
   const currentBoxId = selectedBoxId ?? data.shift?.caja_id ?? data.boxes?.[0]?.id ?? null
   const currentBox = data.boxes?.find((box) => String(box.id) === String(currentBoxId))
@@ -4278,6 +4368,21 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
     const fresh = await loadCurrentShiftData(currentBoxId)
     setLocalData(fresh)
     return fresh
+  }
+
+  const saveSalaryAccountField = async (event, account, field, changeKey, label) => {
+    const input = event.currentTarget
+    const previousValue = String(account?.[field] || '')
+    const value = input.value.trim()
+    if (!account || value === previousValue) {
+      input.value = previousValue
+      return
+    }
+    const saved = await persistUpdate(
+      () => updateSalaryAccount(account.id, { [changeKey]: value }),
+      `${label} actualizado`,
+    )
+    input.value = saved ? value : previousValue
   }
 
   const handleFormatDatabase = async () => {
@@ -4950,6 +5055,68 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
               {draft.accounts.wallets.map((wallet) => <span key={wallet}>{wallet || 'Sin billetera'}</span>)}
             </div>
             {accountEntryRows}
+          </div>
+        </section>
+
+        <section className="config-card salary-settings-card">
+          <div className="config-list-head">
+            <h3>Cuentas sueldo</h3>
+            <span>Independientes de la caja y de los titulares operativos</span>
+          </div>
+          <p className="salary-settings-description">Cada titular tiene una cuenta propia y un saldo por turno. Estos saldos no se incluyen en los totales ni en los reportes de caja.</p>
+          <form className="salary-holder-add" onSubmit={async (event) => {
+            event.preventDefault()
+            const name = salaryHolderDraft.trim()
+            if (!name) {
+              setToast('Ingresá el nombre del titular de sueldo')
+              return
+            }
+            const saved = await persistUpdate(() => createSalaryHolder({ name }), 'Titular y cuenta de sueldo creados')
+            if (saved) setSalaryHolderDraft('')
+          }}>
+            <input value={salaryHolderDraft} onChange={(event) => setSalaryHolderDraft(event.target.value)} placeholder="Nombre del titular de sueldo" aria-label="Nombre del titular de sueldo" />
+            <button type="submit" className="config-add"><Plus size={15} /> Agregar titular</button>
+          </form>
+          <div className="salary-settings-list">
+            {(localData.salaryHolders || []).map((holder) => {
+              const account = (localData.salaryAccounts || []).find(item => String(item.titular_sueldo_id) === String(holder.id))
+              return <article className="salary-settings-row" key={holder.id}>
+                <div className="salary-settings-row-heading">
+                  <label className="toggle-cell" title="Mostrar cuenta sueldo en el panel">
+                    <input type="checkbox" checked={Boolean(account?.activa)} disabled={!account} onChange={(event) => {
+                      const active = event.target.checked
+                      persistUpdate(
+                        () => updateSalaryAccount(account.id, { active }),
+                        active ? 'Cuenta sueldo activada' : 'Cuenta sueldo desactivada',
+                      )
+                    }} />
+                    <span />
+                  </label>
+                  <input
+                    className="salary-holder-name"
+                    defaultValue={holder.nombre}
+                    aria-label={`Titular sueldo ${holder.nombre}`}
+                    onBlur={async (event) => {
+                      const input = event.currentTarget
+                      const name = input.value.trim()
+                      if (!name || name === holder.nombre) {
+                        input.value = holder.nombre
+                        return
+                      }
+                      const saved = await persistUpdate(() => updateSalaryHolder(holder.id, { name }), 'Titular sueldo actualizado')
+                      input.value = saved ? name : holder.nombre
+                    }}
+                  />
+                </div>
+                <div className="salary-settings-fields">
+                  <label><span>Alias</span><input defaultValue={account?.alias || ''} onBlur={(event) => saveSalaryAccountField(event, account, 'alias', 'alias', 'Alias')} /></label>
+                  <label><span>CUIL</span><input defaultValue={account?.cuil || ''} onBlur={(event) => saveSalaryAccountField(event, account, 'cuil', 'cuil', 'CUIL')} /></label>
+                  <label><span>Contraseña / patrón</span><input defaultValue={account?.patron || ''} onBlur={(event) => saveSalaryAccountField(event, account, 'patron', 'password', 'Contraseña')} /></label>
+                  <label><span>Notas</span><input defaultValue={account?.notas || ''} onBlur={(event) => saveSalaryAccountField(event, account, 'notas', 'notes', 'Notas')} /></label>
+                </div>
+              </article>
+            })}
+            {!localData.salaryHolders?.length && <p className="salary-settings-empty">Todavía no hay titulares de sueldo.</p>}
           </div>
         </section>
 
