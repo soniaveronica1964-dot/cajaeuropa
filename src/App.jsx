@@ -658,7 +658,7 @@ function App() {
         useCORS: true,
         windowWidth: 1920,
         windowHeight: 1080,
-        onclone: clonedDocument => {
+        onclone: async clonedDocument => {
           const report = clonedDocument.querySelector('[data-snapshot-export="true"]')
           if (!report) throw new Error('No se encontró el reporte para capturar')
           clonedDocument.documentElement.style.zoom = '1'
@@ -669,16 +669,51 @@ function App() {
           report.style.transform = 'none'
           report.style.zIndex = 'auto'
           report.style.visibility = 'visible'
-          report.querySelectorAll('svg').forEach(icon => {
-            const color = clonedDocument.defaultView.getComputedStyle(icon).color
+          const cloneWindow = clonedDocument.defaultView
+          await Promise.all(Array.from(report.querySelectorAll('svg'), icon => new Promise((resolve, reject) => {
+            const computedStyle = cloneWindow.getComputedStyle(icon)
+            const bounds = icon.getBoundingClientRect()
+            const width = bounds.width || Number(icon.getAttribute('width')) || 16
+            const height = bounds.height || Number(icon.getAttribute('height')) || 16
+            const color = computedStyle.color
             icon.style.color = color
-            if (icon.getAttribute('stroke') === 'currentColor') {
-              icon.setAttribute('stroke', color)
+            if (icon.getAttribute('stroke') === 'currentColor') icon.setAttribute('stroke', color)
+            if (icon.getAttribute('fill') === 'currentColor') icon.setAttribute('fill', color)
+
+            const svg = new cloneWindow.XMLSerializer().serializeToString(icon)
+            const svgUrl = cloneWindow.URL.createObjectURL(new cloneWindow.Blob([svg], { type: 'image/svg+xml;charset=utf-8' }))
+            const image = new cloneWindow.Image()
+            image.onload = () => {
+              try {
+                const canvas = clonedDocument.createElement('canvas')
+                const scale = 2
+                canvas.width = Math.ceil(width * scale)
+                canvas.height = Math.ceil(height * scale)
+                const context = canvas.getContext('2d')
+                if (!context) throw new Error('No se pudo preparar el ícono para la captura')
+                context.scale(scale, scale)
+                context.drawImage(image, 0, 0, width, height)
+
+                const bitmap = clonedDocument.createElement('img')
+                bitmap.src = canvas.toDataURL('image/png')
+                bitmap.alt = ''
+                bitmap.setAttribute('aria-hidden', 'true')
+                bitmap.className = icon.className.baseVal
+                bitmap.style.cssText = `display:${computedStyle.display};width:${width}px;height:${height}px;flex:${computedStyle.flex};`
+                icon.replaceWith(bitmap)
+                resolve()
+              } catch (error) {
+                reject(error)
+              } finally {
+                cloneWindow.URL.revokeObjectURL(svgUrl)
+              }
             }
-            if (icon.getAttribute('fill') === 'currentColor') {
-              icon.setAttribute('fill', color)
+            image.onerror = () => {
+              cloneWindow.URL.revokeObjectURL(svgUrl)
+              reject(new Error('No se pudo convertir un ícono para la captura'))
             }
-          })
+            image.src = svgUrl
+          })))
         },
       })
       const snapshotDate = new Intl.DateTimeFormat('es-AR', {
