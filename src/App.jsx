@@ -1096,7 +1096,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
         <button type="button" className={`salary-inline-toggle ${sidePanel === 'tasks' ? 'active' : ''}`} aria-label="Mostrar tareas" aria-expanded={sidePanel === 'tasks'} title="Mostrar tareas" onClick={() => setSidePanel(current => current === 'tasks' ? null : 'tasks')}><ListTodo size={16} /><span>Tareas</span></button>
       </div>
     </section>
-    <div className={`dashboard-grid ${sidePanel ? 'side-panel-open' : ''}`}>
+    <div className={`dashboard-grid ${sidePanel ? 'side-panel-open' : ''} ${sidePanel === 'tasks' ? 'tasks-panel-open' : ''}`}>
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} boxes={data.boxes || []} activeTurns={data.activeTurns || []} currentBoxId={data.shift.caja_id} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
