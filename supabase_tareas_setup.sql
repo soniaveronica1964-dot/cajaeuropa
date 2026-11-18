@@ -4,9 +4,17 @@ CREATE TABLE IF NOT EXISTS public.tareas (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   caja_id BIGINT NOT NULL REFERENCES public.cajas(id) ON DELETE CASCADE,
   titulo TEXT NOT NULL CHECK (length(btrim(titulo)) > 0),
+  alias TEXT,
+  titular TEXT,
+  monto_a_transferir NUMERIC(14,2),
   activa BOOLEAN NOT NULL DEFAULT TRUE,
   fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE public.tareas
+  ADD COLUMN IF NOT EXISTS alias TEXT,
+  ADD COLUMN IF NOT EXISTS titular TEXT,
+  ADD COLUMN IF NOT EXISTS monto_a_transferir NUMERIC(14,2);
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_tareas_titulo_activo_por_caja
   ON public.tareas(caja_id, lower(btrim(titulo))) WHERE activa;

@@ -106,7 +106,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   }
 
   const [tasks, previousShifts] = await Promise.all([
-    query('tareas_x_turno', 'id, tarea_id, titulo, completada, ignorada, eliminada, monto, notas', request => request.eq('turno_id', shift.id).eq('eliminada', false).order('id', { ascending: true })),
+    query('tareas_x_turno', 'id, tarea_id, titulo, completada, ignorada, eliminada, monto, notas, tareas(alias, titular, monto_a_transferir)', request => request.eq('turno_id', shift.id).eq('eliminada', false).order('id', { ascending: true })),
     query('turnos', 'id', request => request
       .eq('caja_id', shift.caja_id)
       .eq('abierto', false)
@@ -1336,10 +1336,15 @@ async function ensureShiftTasks(shiftId, boxId) {
   if (error) throw error
 }
 
-export async function createShiftTask(shiftId, title) {
+export async function createShiftTask(shiftId, { title, alias, holder, transferAmount }) {
   requireSupabase()
   const trimmedTitle = normalizeEntityName(title)
   if (!trimmedTitle) throw new Error('El título de la tarea no puede estar vacío')
+  const taskAlias = normalizeEntityName(alias) || null
+  const taskHolder = normalizeEntityName(holder) || null
+  const transferValue = transferAmount == null || transferAmount === ''
+    ? null
+    : requireNonNegativeAmount(transferAmount)
 
   const { data: shift, error: shiftError } = await supabase.from('turnos')
     .select('id, caja_id, abierto')
@@ -1349,7 +1354,14 @@ export async function createShiftTask(shiftId, title) {
   if (!shift.abierto) throw new Error('No se pueden agregar tareas a un turno cerrado')
 
   const { data: task, error: taskError } = await supabase.from('tareas')
-    .insert({ caja_id: shift.caja_id, titulo: trimmedTitle, activa: true })
+    .insert({
+      caja_id: shift.caja_id,
+      titulo: trimmedTitle,
+      alias: taskAlias,
+      titular: taskHolder,
+      monto_a_transferir: transferValue,
+      activa: true,
+    })
     .select('id, titulo')
     .single()
   if (taskError) throw taskError

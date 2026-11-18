@@ -250,6 +250,9 @@ CREATE TABLE tareas (
         ON DELETE CASCADE,
     titulo TEXT NOT NULL
         CHECK (length(btrim(titulo)) > 0),
+    alias TEXT,
+    titular TEXT,
+    monto_a_transferir NUMERIC(14,2),
     activa BOOLEAN NOT NULL DEFAULT TRUE,
     fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

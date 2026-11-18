@@ -1079,6 +1079,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
     savingsMovements: (data.movements || []).filter(movement => movement.es_ahorro),
     transferMovements: (data.movements || []).filter(movement => !movement.es_ahorro),
   })
+  const pendingTaskCount = (data.tasks || []).filter(task => !task.completada && !task.ignorada && !task.eliminada).length
   useLayoutEffect(() => {
     onDiscrepancyChange(cashDiscrepancy)
   }, [cashDiscrepancy, onDiscrepancyChange])
@@ -1093,7 +1094,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       <div className="summary-rounding-group">
         <label className="rounding"><small>Redondeo</small><span className={Number(parseLocalizedAmount(roundingValue)) ? 'has-value' : ''}>$<input value={roundingValue} placeholder="0,00" onChange={(event) => setRounding(event.target.value)} onBlur={saveRounding} /></span></label>
         <button type="button" className={`salary-inline-toggle ${sidePanel === 'salary' ? 'active' : ''}`} aria-label="Mostrar cuentas sueldo" aria-expanded={sidePanel === 'salary'} title="Mostrar cuentas sueldo" onClick={() => setSidePanel(current => current === 'salary' ? null : 'salary')}><WalletCards size={16} /><span>Sueldo</span></button>
-        <button type="button" className={`salary-inline-toggle ${sidePanel === 'tasks' ? 'active' : ''}`} aria-label="Mostrar tareas" aria-expanded={sidePanel === 'tasks'} title="Mostrar tareas" onClick={() => setSidePanel(current => current === 'tasks' ? null : 'tasks')}><ListTodo size={16} /><span>Tareas</span></button>
+        <button type="button" className={`salary-inline-toggle task-panel-toggle ${sidePanel === 'tasks' ? 'active' : ''} ${sidePanel !== 'tasks' && pendingTaskCount ? 'has-pending-tasks' : ''}`} aria-label={pendingTaskCount ? `Mostrar tareas; ${pendingTaskCount} pendientes` : 'Mostrar tareas'} aria-expanded={sidePanel === 'tasks'} title="Mostrar tareas" onClick={() => setSidePanel(current => current === 'tasks' ? null : 'tasks')}><ListTodo size={16} /><span>Tareas</span>{sidePanel !== 'tasks' && pendingTaskCount > 0 && <b className="task-pending-badge">{pendingTaskCount}</b>}</button>
       </div>
     </section>
     <div className={`dashboard-grid ${sidePanel ? 'side-panel-open' : ''} ${sidePanel === 'tasks' ? 'tasks-panel-open' : ''}`}>
@@ -1202,6 +1203,9 @@ function SalaryAccountsPanel({ rows, onToggle, onSaved, setToast }) {
 
 function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast, onClose }) {
   const [title, setTitle] = useState('')
+  const [alias, setAlias] = useState('')
+  const [holder, setHolder] = useState('')
+  const [transferAmount, setTransferAmount] = useState('')
   const [creating, setCreating] = useState(false)
   const [savingTaskId, setSavingTaskId] = useState(null)
   const [openNotes, setOpenNotes] = useState({})
@@ -1228,8 +1232,11 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast, 
     if (!title.trim() || creating) return
     setCreating(true)
     try {
-      await createShiftTask(shiftId, title)
+      await createShiftTask(shiftId, { title, alias, holder, transferAmount })
       setTitle('')
+      setAlias('')
+      setHolder('')
+      setTransferAmount('')
       setToast('Tarea creada')
       await onSaved()
     } catch (error) {
@@ -1306,8 +1313,15 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast, 
       <button type="button" className="icon-button" aria-label="Cerrar panel de tareas" title="Cerrar" onClick={onClose}><ChevronRight size={16} /></button>
     </header>
     {canEdit && <form className="task-add-form" onSubmit={createTask}>
-      <input aria-label="Título de nueva tarea" placeholder="Nueva tarea" value={title} onChange={event => setTitle(event.target.value)} disabled={creating} />
-      <button type="submit" className="task-add-button" title="Agregar tarea" aria-label="Agregar tarea" disabled={creating || !title.trim()}><Plus size={16} /></button>
+      <div className="task-add-title-row">
+        <input aria-label="Título de nueva tarea" placeholder="Título de la tarea" value={title} onChange={event => setTitle(event.target.value)} disabled={creating} />
+        <button type="submit" className="task-add-button" title="Agregar tarea" aria-label="Agregar tarea" disabled={creating || !title.trim()}><Plus size={16} /></button>
+      </div>
+      <div className="task-add-details">
+        <input aria-label="Alias de la tarea" placeholder="Alias (opcional)" value={alias} onChange={event => setAlias(event.target.value)} disabled={creating} />
+        <input aria-label="Titular de la tarea" placeholder="Titular (opcional)" value={holder} onChange={event => setHolder(event.target.value)} disabled={creating} />
+        <label><span>Monto a pasar</span><input aria-label="Monto a pasar de la tarea" type="number" min="0" step="0.01" placeholder="Opcional" value={transferAmount} onChange={event => setTransferAmount(event.target.value)} disabled={creating} /></label>
+      </div>
     </form>}
     <div className="task-list">
       {rows.map(task => <article className={`task-row ${task.completada ? 'task-completed' : ''} ${task.ignorada ? 'task-ignored' : ''}`} key={task.id}>
@@ -1319,7 +1333,12 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast, 
             <button type="button" className="task-delete-button" title="Eliminar tarea" aria-label={`Eliminar ${task.titulo}`} disabled={savingTaskId === task.id} onClick={() => removeTask(task)}><Trash2 size={13} /></button>
           </div>}
         </div>
-        <label className="task-amount-field"><span>Monto / saldo</span><input type="number" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto o saldo de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => saveAmount(task, event)} /></label>
+        {(task.tareas?.alias || task.tareas?.titular || task.tareas?.monto_a_transferir != null) && <div className="task-definition-details">
+          {task.tareas?.alias && <span><b>Alias:</b> {task.tareas.alias}</span>}
+          {task.tareas?.titular && <span><b>Titular:</b> {task.tareas.titular}</span>}
+          {task.tareas?.monto_a_transferir != null && <span><b>Monto a pasar:</b> {moneyWithCents.format(Number(task.tareas.monto_a_transferir))}</span>}
+        </div>}
+        <label className="task-amount-field"><span>Monto / saldo del turno</span><input type="number" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto o saldo de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => saveAmount(task, event)} /></label>
         <div className="task-note-controls">
           <button type="button" className="task-note-toggle" aria-expanded={Boolean(openNotes[task.id])} onClick={() => toggleNote(task)}>{openNotes[task.id] ? 'Ocultar nota' : task.notas ? 'Ver nota' : 'Agregar nota'}</button>
         </div>
