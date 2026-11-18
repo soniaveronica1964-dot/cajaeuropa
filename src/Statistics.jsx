@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import { BarChart3, Gift, Coins } from 'lucide-react'
 import { loadStatistics } from './lib/data'
 import './statistics.css'
