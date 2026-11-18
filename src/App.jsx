@@ -669,6 +669,16 @@ function App() {
           report.style.transform = 'none'
           report.style.zIndex = 'auto'
           report.style.visibility = 'visible'
+          report.querySelectorAll('svg').forEach(icon => {
+            const color = clonedDocument.defaultView.getComputedStyle(icon).color
+            icon.style.color = color
+            if (icon.getAttribute('stroke') === 'currentColor') {
+              icon.setAttribute('stroke', color)
+            }
+            if (icon.getAttribute('fill') === 'currentColor') {
+              icon.setAttribute('fill', color)
+            }
+          })
         },
       })
       const snapshotDate = new Intl.DateTimeFormat('es-AR', {
