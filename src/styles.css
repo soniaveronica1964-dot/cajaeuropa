@@ -3996,11 +3996,38 @@ html:has(.app-shell[data-theme='light']) {
 }
 
 @media (max-width: 700px) {
-  .topbar { display: flex; padding: 0 15px; gap: 8px; }
-  .topbar-leading { flex: 1; gap: 8px; }
-  .brand { min-width: 0; }
-  .shift-nav { gap: 8px; }
-  .box-select { min-width: 140px; }
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 40px 40px;
+    grid-template-areas:
+      "brand camera lock"
+      "shift shift shift"
+      "box box box";
+    gap: 8px;
+    height: auto;
+    min-height: 0;
+    padding: 10px 12px;
+  }
+  .topbar-leading,
+  .top-actions { display: contents; }
+  .brand { grid-area: brand; min-width: 0; }
+  .shift-nav {
+    position: static;
+    top: auto;
+    left: auto;
+    grid-area: shift;
+    gap: 8px;
+    justify-self: center;
+    max-width: 100%;
+    transform: none;
+  }
+  .shift-title { max-width: calc(100vw - 120px); }
+  .box-select { grid-area: box; width: 100%; min-width: 0; }
+  .top-actions .saved { display: none; }
+  .top-actions .camera-button { grid-area: camera; }
+  .top-actions .lock-button { grid-area: lock; }
+  .top-actions .camera-button,
+  .top-actions .lock-button { width: 40px; height: 40px; }
   .workspace { display: block; }
   .sidebar { position: static; bottom: auto; left: auto; width: 100%; min-height: unset; flex-basis: auto; border-right: 0; border-bottom: 1px solid var(--line); flex-direction: row; justify-content: center; gap: 4px; padding: 8px 6px; overflow-y: visible; }
   .side-link { width: auto; min-width: 0; min-height: 48px; flex: 1 1 0; gap: 3px; }
