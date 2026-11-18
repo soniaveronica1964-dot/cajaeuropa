@@ -1115,7 +1115,6 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       </div>
       {sidePanel === 'salary' && <SalaryAccountsPanel
         rows={(data.salaryAccountValues || []).filter(row => !data.shift.abierto || row.cuentas_sueldo?.activa)}
-        onToggle={() => setSidePanel(null)}
         onSaved={onSaved}
         setToast={setToast}
       />}
@@ -1126,7 +1125,6 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
         canEdit={Boolean(data.shift.abierto)}
         onSaved={onSaved}
         setToast={setToast}
-        onClose={() => setSidePanel(null)}
       />}
     </div>
     <SnapshotReport
@@ -1147,7 +1145,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   </>
 }
 
-function SalaryAccountsPanel({ rows, onToggle, onSaved, setToast }) {
+function SalaryAccountsPanel({ rows, onSaved, setToast }) {
   const saveValue = (row, event) => {
     const input = event.currentTarget
     const savedValue = Number(row.valor || 0)
@@ -1169,7 +1167,6 @@ function SalaryAccountsPanel({ rows, onToggle, onSaved, setToast }) {
   return <aside className="dashboard-side-panel">
     <header className="dashboard-side-panel-header">
       <div><WalletCards size={16} /><strong>Cuentas sueldo</strong></div>
-      <button type="button" className="icon-button" aria-label="Minimizar cuentas sueldo" aria-expanded="true" title="Minimizar" onClick={onToggle}><ChevronRight size={16} /></button>
     </header>
     {rows.length
       ? <div className="salary-account-columns">
@@ -1201,11 +1198,12 @@ function SalaryAccountsPanel({ rows, onToggle, onSaved, setToast }) {
   </aside>
 }
 
-function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast, onClose }) {
+function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }) {
   const [title, setTitle] = useState('')
   const [alias, setAlias] = useState('')
   const [holder, setHolder] = useState('')
   const [transferAmount, setTransferAmount] = useState('')
+  const [createFormOpen, setCreateFormOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [savingTaskId, setSavingTaskId] = useState(null)
   const [openNotes, setOpenNotes] = useState({})
@@ -1237,6 +1235,7 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast, 
       setAlias('')
       setHolder('')
       setTransferAmount('')
+      setCreateFormOpen(false)
       setToast('Tarea creada')
       await onSaved()
     } catch (error) {
@@ -1307,20 +1306,29 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast, 
     }
   }
 
+  const cancelCreateTask = () => {
+    setTitle('')
+    setAlias('')
+    setHolder('')
+    setTransferAmount('')
+    setCreateFormOpen(false)
+  }
+
   return <aside className="dashboard-side-panel task-panel">
     <header className="dashboard-side-panel-header">
       <div><ListTodo size={16} /><strong>Tareas</strong></div>
-      <button type="button" className="icon-button" aria-label="Cerrar panel de tareas" title="Cerrar" onClick={onClose}><ChevronRight size={16} /></button>
+      {canEdit && <button type="button" className="icon-button" aria-label="Nueva tarea" title="Nueva tarea" aria-expanded={createFormOpen} disabled={creating || createFormOpen} onClick={() => setCreateFormOpen(true)}><Plus size={16} /></button>}
     </header>
-    {canEdit && <form className="task-add-form" onSubmit={createTask}>
-      <div className="task-add-title-row">
-        <input aria-label="Título de nueva tarea" placeholder="Título de la tarea" value={title} onChange={event => setTitle(event.target.value)} disabled={creating} />
-        <button type="submit" className="task-add-button" title="Agregar tarea" aria-label="Agregar tarea" disabled={creating || !title.trim()}><Plus size={16} /></button>
-      </div>
+    {canEdit && createFormOpen && <form id="task-add-form" className="task-add-form" onSubmit={createTask}>
+      <input aria-label="Título de nueva tarea" placeholder="Título de la tarea" value={title} onChange={event => setTitle(event.target.value)} disabled={creating} autoFocus />
       <div className="task-add-details">
         <input aria-label="Alias de la tarea" placeholder="Alias (opcional)" value={alias} onChange={event => setAlias(event.target.value)} disabled={creating} />
         <input aria-label="Titular de la tarea" placeholder="Titular (opcional)" value={holder} onChange={event => setHolder(event.target.value)} disabled={creating} />
         <label><span>Monto a pasar</span><input aria-label="Monto a pasar de la tarea" type="number" min="0" step="0.01" placeholder="Opcional" value={transferAmount} onChange={event => setTransferAmount(event.target.value)} disabled={creating} /></label>
+      </div>
+      <div className="task-add-actions">
+        <button type="button" className="secondary-button" onClick={cancelCreateTask} disabled={creating}>Cancelar</button>
+        <button type="submit" className="close-button" disabled={creating || !title.trim()}>{creating ? 'Creando...' : 'Crear tarea'} <Check size={14} /></button>
       </div>
     </form>}
     <div className="task-list">

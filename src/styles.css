@@ -976,15 +976,12 @@ input[type="time"] { color-scheme: dark; }
   white-space: nowrap;
 }
 
-.dashboard-side-panel-header button svg { transform: rotate(180deg); }
-
 .task-add-form {
   display: grid;
   gap: 7px;
   padding: 9px;
   border-bottom: 1px solid var(--line);
 }
-.task-add-title-row { display: flex; gap: 6px; }
 .task-add-form input {
   width: 100%;
   min-width: 0;
@@ -997,12 +994,11 @@ input[type="time"] { color-scheme: dark; }
   color: var(--text);
   font-size: 10px;
 }
-.task-add-title-row input { flex: 1; }
 .task-add-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .task-add-details label { display: grid; grid-column: 1 / -1; gap: 4px; color: var(--muted); font-size: 8px; }
 .task-add-details label input { width: 100%; }
 .task-add-form input:focus { border-color: var(--accent); }
-.task-add-button,
+.task-add-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .task-state-button,
 .task-delete-button {
   display: grid;
@@ -1016,8 +1012,6 @@ input[type="time"] { color-scheme: dark; }
   color: var(--muted);
   cursor: pointer;
 }
-.task-add-button { color: var(--accent); }
-.task-add-button:disabled,
 .task-state-button:disabled,
 .task-delete-button:disabled { opacity: .5; cursor: wait; }
 .task-list { display: grid; gap: 7px; padding: 9px; }
