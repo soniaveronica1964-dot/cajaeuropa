@@ -1017,7 +1017,8 @@ input[type="time"] { color-scheme: dark; }
   border-bottom: 1px solid var(--line);
 }
 .task-edit-form { padding: 0; border-bottom: 0; }
-.task-add-form input {
+.task-add-form input,
+.task-add-form select {
   width: 100%;
   min-width: 0;
   height: 32px;
@@ -1029,10 +1030,32 @@ input[type="time"] { color-scheme: dark; }
   color: var(--text);
   font-size: 10px;
 }
+.task-kind-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.task-kind-toggle > .task-kind-label {
+  position: static;
+  display: block;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  color: var(--muted);
+  font-size: 9px;
+  cursor: default;
+}
+.task-kind-toggle > .task-kind-label::after { content: none; }
 .task-add-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .task-add-details label { display: grid; grid-column: 1 / -1; gap: 4px; color: var(--muted); font-size: 8px; }
 .task-add-details label input { width: 100%; }
-.task-add-form input:focus { border-color: var(--accent); }
+.task-add-form input:focus,
+.task-add-form select:focus { border-color: var(--accent); }
 .task-add-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .task-state-button,
 .task-delete-button,
@@ -2660,6 +2683,7 @@ input[type="time"] { color-scheme: dark; }
 .savings-history-item { border-bottom: 1px solid rgba(121, 146, 146, .16); }
 .savings-history-item:last-child { border-bottom: 0; }
 .operation-history-row.savings-history-row { grid-template-columns: 52px minmax(0, 1fr) auto 28px 28px; }
+.task-linked-movement-label { grid-column: 4 / 6; color: var(--muted); font-size: 8px; text-align: center; }
 .savings-history-editor { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; padding: 6px 0 10px 62px; }
 .savings-history-editor > label { display: grid; gap: 4px; min-width: 0; color: var(--muted); font-size: 8px; text-transform: uppercase; }
 .savings-history-editor input,

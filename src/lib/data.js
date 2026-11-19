@@ -106,7 +106,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   }
 
   const [tasks, previousShifts] = await Promise.all([
-    query('tareas_x_turno', 'id, tarea_id, titulo, alias, titular, monto_a_transferir, completada, ignorada, eliminada, monto, notas', request => request.eq('turno_id', shift.id).eq('eliminada', false).order('id', { ascending: true })),
+    query('tareas_x_turno', 'id, tarea_id, titulo, alias, titular, monto_a_transferir, es_ahorro, cuenta_ahorro_id, completada, ignorada, eliminada, monto, notas', request => request.eq('turno_id', shift.id).eq('eliminada', false).order('id', { ascending: true })),
     query('turnos', 'id', request => request
       .eq('caja_id', shift.caja_id)
       .eq('abierto', false)
@@ -155,7 +155,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     query('cargas_ta', 'id, usuario_texto, monto, notas, fecha_hora_creacion', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('dinero_encontrado', 'id, cuenta_x_turno_id, monto, notas, fecha_hora_creacion, cuentas_x_turno!inner(turno_id)', request => request.eq('cuentas_x_turno.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('notas_turno', 'id, nota_general, nota_heredable', request => request.eq('turno_id', shift.id)),
-    query('movimientos', 'id, caja_desde_id, caja_hasta_id, turno_id, turno_destino_id, fecha_hora_creacion, monto, es_ahorro, cuenta_x_turno_id, notas', request => request.or(`turno_id.eq.${shift.id},turno_destino_id.eq.${shift.id}`).order('fecha_hora_creacion', { ascending: false })),
+    query('movimientos', 'id, caja_desde_id, caja_hasta_id, turno_id, turno_destino_id, fecha_hora_creacion, monto, es_ahorro, cuenta_x_turno_id, tarea_x_turno_id, notas', request => request.or(`turno_id.eq.${shift.id},turno_destino_id.eq.${shift.id}`).order('fecha_hora_creacion', { ascending: false })),
   ])
 
   const activeTurnAccountLinks = activeTurns.length
@@ -1348,7 +1348,7 @@ export async function updateSalaryAccountValue(valueLinkId, value) {
 }
 
 async function ensureShiftTasks(shiftId, boxId) {
-  const tasks = await query('tareas', 'id, titulo, alias, titular, monto_a_transferir', request => request
+  const tasks = await query('tareas', 'id, titulo, alias, titular, monto_a_transferir, es_ahorro, cuenta_ahorro_id', request => request
     .eq('caja_id', boxId)
     .eq('activa', true)
     .order('id', { ascending: true }))
@@ -1362,18 +1362,48 @@ async function ensureShiftTasks(shiftId, boxId) {
       alias: task.alias,
       titular: task.titular,
       monto_a_transferir: task.monto_a_transferir,
+      es_ahorro: task.es_ahorro,
+      cuenta_ahorro_id: task.cuenta_ahorro_id,
     })),
     { onConflict: 'turno_id,tarea_id', ignoreDuplicates: true },
   )
   if (error) throw error
 }
 
-export async function createShiftTask(shiftId, { title, alias, holder, transferAmount }) {
+async function requireSavingsAccountForShift(shiftId, accountId) {
+  if (accountId == null || accountId === '') throw new Error('Seleccioná un titular y una billetera de ahorro')
+
+  const { data: account, error: accountError } = await supabase.from('cuentas')
+    .select('id, tipo_cuenta_id')
+    .eq('id', accountId)
+    .single()
+  if (accountError) throw accountError
+
+  const { data: accountType, error: typeError } = await supabase.from('tipos_cuenta')
+    .select('ahorro')
+    .eq('id', account.tipo_cuenta_id)
+    .single()
+  if (typeError) throw typeError
+  if (!accountType.ahorro) throw new Error('La cuenta seleccionada no es una cuenta de ahorro')
+
+  const { data: shiftAccount, error: shiftAccountError } = await supabase.from('cuentas_x_turno')
+    .select('id')
+    .eq('turno_id', shiftId)
+    .eq('cuenta_id', account.id)
+    .limit(1)
+    .maybeSingle()
+  if (shiftAccountError) throw shiftAccountError
+  if (!shiftAccount) throw new Error('La cuenta de ahorro no está disponible en este turno')
+  return account.id
+}
+
+export async function createShiftTask(shiftId, { title, alias, holder, transferAmount, isSavings = false, savingsAccountId = null }) {
   requireSupabase()
   const trimmedTitle = normalizeEntityName(title)
   if (!trimmedTitle) throw new Error('El título de la tarea no puede estar vacío')
   const taskAlias = normalizeEntityName(alias) || null
-  const taskHolder = normalizeEntityName(holder) || null
+  const taskIsSavings = Boolean(isSavings)
+  const taskHolder = taskIsSavings ? null : normalizeEntityName(holder) || null
   const transferValue = transferAmount == null || transferAmount === ''
     ? null
     : requireNonNegativeAmount(transferAmount)
@@ -1385,6 +1415,9 @@ export async function createShiftTask(shiftId, { title, alias, holder, transferA
   if (shiftError) throw shiftError
   if (!shift.abierto) throw new Error('No se pueden agregar tareas a un turno cerrado')
 
+  const taskSavingsAccountId = taskIsSavings
+    ? await requireSavingsAccountForShift(shiftId, savingsAccountId)
+    : null
   const { data: task, error: taskError } = await supabase.from('tareas')
     .insert({
       caja_id: shift.caja_id,
@@ -1392,9 +1425,11 @@ export async function createShiftTask(shiftId, { title, alias, holder, transferA
       alias: taskAlias,
       titular: taskHolder,
       monto_a_transferir: transferValue,
+      es_ahorro: taskIsSavings,
+      cuenta_ahorro_id: taskSavingsAccountId,
       activa: true,
     })
-    .select('id, titulo, alias, titular, monto_a_transferir')
+    .select('id, titulo, alias, titular, monto_a_transferir, es_ahorro, cuenta_ahorro_id')
     .single()
   if (taskError) throw taskError
 
@@ -1406,8 +1441,10 @@ export async function createShiftTask(shiftId, { title, alias, holder, transferA
       alias: task.alias,
       titular: task.titular,
       monto_a_transferir: task.monto_a_transferir,
+      es_ahorro: task.es_ahorro,
+      cuenta_ahorro_id: task.cuenta_ahorro_id,
     })
-    .select('id, tarea_id, titulo, alias, titular, monto_a_transferir, completada, ignorada, eliminada, monto, notas')
+    .select('id, tarea_id, titulo, alias, titular, monto_a_transferir, es_ahorro, cuenta_ahorro_id, completada, ignorada, eliminada, monto, notas')
     .single()
   if (lineError) {
     const { error: rollbackError } = await supabase.from('tareas').delete().eq('id', task.id)
@@ -1419,18 +1456,19 @@ export async function createShiftTask(shiftId, { title, alias, holder, transferA
   return line
 }
 
-export async function updateShiftTaskDefinition(id, { title, alias, holder, transferAmount }) {
+export async function updateShiftTaskDefinition(id, { title, alias, holder, transferAmount, isSavings = false, savingsAccountId = null }) {
   requireSupabase()
   const trimmedTitle = normalizeEntityName(title)
   if (!trimmedTitle) throw new Error('El título de la tarea no puede estar vacío')
   const taskAlias = normalizeEntityName(alias) || null
-  const taskHolder = normalizeEntityName(holder) || null
+  const taskIsSavings = Boolean(isSavings)
+  const taskHolder = taskIsSavings ? null : normalizeEntityName(holder) || null
   const transferValue = transferAmount == null || transferAmount === ''
     ? null
     : requireNonNegativeAmount(transferAmount)
 
   const { data: line, error: lineLoadError } = await supabase.from('tareas_x_turno')
-    .select('id, tarea_id, eliminada, turnos!inner(abierto)')
+    .select('id, tarea_id, turno_id, eliminada, turnos!inner(abierto)')
     .eq('id', id)
     .single()
   if (lineLoadError) throw lineLoadError
@@ -1438,17 +1476,22 @@ export async function updateShiftTaskDefinition(id, { title, alias, holder, tran
   if (line.eliminada) throw new Error('La tarea ya fue eliminada de este turno')
 
   const { data: previousTask, error: taskLoadError } = await supabase.from('tareas')
-    .select('id, titulo, alias, titular, monto_a_transferir, activa')
+    .select('id, titulo, alias, titular, monto_a_transferir, es_ahorro, cuenta_ahorro_id, activa')
     .eq('id', line.tarea_id)
     .single()
   if (taskLoadError) throw taskLoadError
   if (!previousTask.activa) throw new Error('La tarea ya no está activa')
 
+  const taskSavingsAccountId = taskIsSavings
+    ? await requireSavingsAccountForShift(line.turno_id, savingsAccountId)
+    : null
   const taskValues = {
     titulo: trimmedTitle,
     alias: taskAlias,
     titular: taskHolder,
     monto_a_transferir: transferValue,
+    es_ahorro: taskIsSavings,
+    cuenta_ahorro_id: taskSavingsAccountId,
   }
   const { data: updatedTask, error: taskUpdateError } = await supabase.from('tareas')
     .update(taskValues)
@@ -1464,6 +1507,8 @@ export async function updateShiftTaskDefinition(id, { title, alias, holder, tran
       alias: taskAlias,
       titular: taskHolder,
       monto_a_transferir: transferValue,
+      es_ahorro: taskIsSavings,
+      cuenta_ahorro_id: taskSavingsAccountId,
     })
     .eq('id', id)
     .eq('eliminada', false)
@@ -1475,6 +1520,8 @@ export async function updateShiftTaskDefinition(id, { title, alias, holder, tran
       alias: previousTask.alias,
       titular: previousTask.titular,
       monto_a_transferir: previousTask.monto_a_transferir,
+      es_ahorro: previousTask.es_ahorro,
+      cuenta_ahorro_id: previousTask.cuenta_ahorro_id,
     }).eq('id', line.tarea_id)
     if (rollbackError) {
       throw new Error(`${lineUpdateError?.message || 'No se pudo actualizar la tarea del turno'}. No se pudo revertir la tarea: ${rollbackError.message}`)

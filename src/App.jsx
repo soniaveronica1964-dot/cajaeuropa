@@ -287,6 +287,25 @@ function isSavingsAccount(account, accountTypes = []) {
   return Boolean(accountType?.ahorro)
 }
 
+function savingsAccountsFor(accounts = []) {
+  return accounts.filter(account => account.accountType?.ahorro)
+}
+
+function savingsAccountHolderId(account) {
+  return String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '')
+}
+
+function savingsAccountWalletId(account) {
+  return String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '')
+}
+
+function savingsHoldersFor(accounts) {
+  return [...new Map(accounts.map(account => [
+    savingsAccountHolderId(account),
+    account.cuentas?.titulares?.nombre || 'Sin titular',
+  ])).entries()]
+}
+
 function calculateChipDifference(chips = []) {
   return chips.reduce((sum, chip) => sum + Number(chip.fichas_inicial || 0) - Number(chip.fichas_final || 0), 0)
 }
@@ -1233,6 +1252,9 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       />}
       {sidePanel === 'tasks' && <TasksPanel
         shiftId={data.shift.id}
+        currentBoxId={data.shift.caja_id}
+        boxes={data.boxes || []}
+        accounts={accounts}
         rows={data.tasks || []}
         previousTasks={data.previousTasks || []}
         canEdit={Boolean(data.shift.abierto)}
@@ -1346,20 +1368,36 @@ function SalaryAccountsPanel({ rows, onSaved, setToast }) {
   </aside>
 }
 
-function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }) {
+function TasksPanel({ shiftId, currentBoxId, boxes, accounts, rows, previousTasks, canEdit, onSaved, setToast }) {
   const [title, setTitle] = useState('')
   const [alias, setAlias] = useState('')
   const [holder, setHolder] = useState('')
   const [transferAmount, setTransferAmount] = useState('')
+  const [isSavings, setIsSavings] = useState(false)
+  const [savingsHolderId, setSavingsHolderId] = useState('')
+  const [savingsWalletId, setSavingsWalletId] = useState('')
   const [createFormOpen, setCreateFormOpen] = useState(false)
   const [creating, setCreating] = useState(false)
   const [savingTaskId, setSavingTaskId] = useState(null)
   const [expandedTasks, setExpandedTasks] = useState({})
   const [editingTaskId, setEditingTaskId] = useState(null)
-  const [editDraft, setEditDraft] = useState({ title: '', alias: '', holder: '', transferAmount: '' })
+  const [editDraft, setEditDraft] = useState({ title: '', alias: '', holder: '', transferAmount: '', isSavings: false, savingsHolderId: '', savingsWalletId: '' })
   const [openNotes, setOpenNotes] = useState({})
   const [amountDrafts, setAmountDrafts] = useState({})
   const [noteDrafts, setNoteDrafts] = useState({})
+  const savingsAccounts = savingsAccountsFor(accounts)
+  const savingsHolders = savingsHoldersFor(savingsAccounts)
+  const hasSavingsDestination = boxes.some(box => String(box.id) !== String(currentBoxId))
+  const savingsWalletsFor = selectedHolderId => savingsAccounts.filter(account => savingsAccountHolderId(account) === String(selectedHolderId))
+  const findSavingsAccount = (selectedHolderId, selectedWalletId) => savingsWalletsFor(selectedHolderId)
+    .find(account => savingsAccountWalletId(account) === String(selectedWalletId))
+  const findSavingsAccountById = accountId => savingsAccounts.find(account => String(account.cuentas?.id ?? '') === String(accountId ?? ''))
+  const savingsAccountLabel = accountId => {
+    const account = findSavingsAccountById(accountId)
+    return account
+      ? `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}`
+      : 'Cuenta no disponible'
+  }
   const economicTasks = rows.filter(task => task.monto_a_transferir != null && !task.ignorada && !task.eliminada)
   const economicTotal = economicTasks.reduce((sum, task) => sum + Number(task.monto_a_transferir), 0)
   const economicCompleted = economicTasks.reduce((sum, task) => (
@@ -1410,13 +1448,32 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
   const createTask = async (event) => {
     event.preventDefault()
     if (!title.trim() || creating) return
+    const selectedSavingsAccount = findSavingsAccount(savingsHolderId, savingsWalletId)
+    if (isSavings && !selectedSavingsAccount) {
+      setToast('Seleccioná un titular y una billetera de ahorro')
+      return
+    }
+    if (isSavings && !hasSavingsDestination) {
+      setToast('Se necesita otra caja para registrar el movimiento de ahorro')
+      return
+    }
     setCreating(true)
     try {
-      await createShiftTask(shiftId, { title, alias, holder, transferAmount })
+      await createShiftTask(shiftId, {
+        title,
+        alias,
+        holder,
+        transferAmount,
+        isSavings,
+        savingsAccountId: selectedSavingsAccount?.cuentas?.id,
+      })
       setTitle('')
       setAlias('')
       setHolder('')
       setTransferAmount('')
+      setIsSavings(false)
+      setSavingsHolderId('')
+      setSavingsWalletId('')
       setCreateFormOpen(false)
       setToast('Tarea creada')
       await onSaved()
@@ -1447,14 +1504,17 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
       })
       return
     }
-    saveChanges(task, { amount }, 'Monto guardado').then(saved => {
-      if (!saved) {
-        setAmountDrafts(current => {
-          const next = { ...current }
-          delete next[task.id]
-          return next
-        })
-      }
+    const savedMessage = !task.completada
+      ? 'Monto guardado'
+      : task.es_ahorro
+        ? 'Monto y movimiento de ahorro de la tarea actualizados'
+        : 'Monto y gasto de la tarea actualizados'
+    saveChanges(task, { amount }, savedMessage).then(() => {
+      setAmountDrafts(current => {
+        const next = { ...current }
+        delete next[task.id]
+        return next
+      })
     })
   }
 
@@ -1489,6 +1549,7 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
   }
 
   const startEditingTask = (task) => {
+    const savingsAccount = findSavingsAccountById(task.cuenta_ahorro_id)
     setExpandedTasks(current => ({ ...current, [task.id]: true }))
     setEditingTaskId(task.id)
     setEditDraft({
@@ -1496,15 +1557,30 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
       alias: task.alias || '',
       holder: task.titular || '',
       transferAmount: task.monto_a_transferir ?? '',
+      isSavings: Boolean(task.es_ahorro),
+      savingsHolderId: savingsAccount ? savingsAccountHolderId(savingsAccount) : '',
+      savingsWalletId: savingsAccount ? savingsAccountWalletId(savingsAccount) : '',
     })
   }
 
   const saveTaskDefinition = async (task, event) => {
     event.preventDefault()
     if (savingTaskId === task.id) return
+    const selectedSavingsAccount = findSavingsAccount(editDraft.savingsHolderId, editDraft.savingsWalletId)
+    if (editDraft.isSavings && !selectedSavingsAccount) {
+      setToast('Seleccioná un titular y una billetera de ahorro')
+      return
+    }
+    if (editDraft.isSavings && !hasSavingsDestination) {
+      setToast('Se necesita otra caja para registrar el movimiento de ahorro')
+      return
+    }
     setSavingTaskId(task.id)
     try {
-      await updateShiftTaskDefinition(task.id, editDraft)
+      await updateShiftTaskDefinition(task.id, {
+        ...editDraft,
+        savingsAccountId: selectedSavingsAccount?.cuentas?.id,
+      })
       setEditingTaskId(null)
       setToast('Tarea actualizada')
       await onSaved()
@@ -1517,7 +1593,7 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
 
   const cancelEditingTask = () => {
     setEditingTaskId(null)
-    setEditDraft({ title: '', alias: '', holder: '', transferAmount: '' })
+    setEditDraft({ title: '', alias: '', holder: '', transferAmount: '', isSavings: false, savingsHolderId: '', savingsWalletId: '' })
   }
 
   const cancelCreateTask = () => {
@@ -1525,6 +1601,9 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
     setAlias('')
     setHolder('')
     setTransferAmount('')
+    setIsSavings(false)
+    setSavingsHolderId('')
+    setSavingsWalletId('')
     setCreateFormOpen(false)
   }
 
@@ -1535,9 +1614,40 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
     </header>
     {canEdit && createFormOpen && <form id="task-add-form" className="task-add-form" onSubmit={createTask}>
       <input aria-label="Título de nueva tarea" placeholder="Título de la tarea" value={title} onChange={event => setTitle(event.target.value)} disabled={creating} autoFocus />
+      <label className="toggle-cell task-kind-toggle">
+        <span className="task-kind-label">Tipo: {isSavings ? 'Ahorro' : 'Gasto'}</span>
+        <input
+          type="checkbox"
+          aria-label="La tarea genera un movimiento de ahorro"
+          checked={isSavings}
+          onChange={event => {
+            const checked = event.target.checked
+            setIsSavings(checked)
+            if (checked) setHolder('')
+            else {
+              setSavingsHolderId('')
+              setSavingsWalletId('')
+            }
+          }}
+          disabled={creating || (!isSavings && (!savingsAccounts.length || !hasSavingsDestination))}
+          title={!hasSavingsDestination ? 'Se necesita otra caja para registrar el movimiento de ahorro' : !savingsAccounts.length ? 'No hay cuentas de ahorro disponibles' : undefined}
+        />
+        <span aria-hidden="true" />
+      </label>
       <div className="task-add-details">
         <input aria-label="Alias de la tarea" placeholder="Alias (opcional)" value={alias} onChange={event => setAlias(event.target.value)} disabled={creating} />
-        <input aria-label="Titular de la tarea" placeholder="Titular (opcional)" value={holder} onChange={event => setHolder(event.target.value)} disabled={creating} />
+        {isSavings
+          ? <>
+            <label><span>Titular *</span><select aria-label="Titular de ahorro de la tarea" value={savingsHolderId} onChange={event => { setSavingsHolderId(event.target.value); setSavingsWalletId('') }} disabled={creating || !savingsHolders.length} required>
+              <option value="">Titular</option>
+              {savingsHolders.map(([holderId, holderName]) => <option value={holderId} key={holderId}>{holderName}</option>)}
+            </select></label>
+            <label><span>Billetera *</span><select aria-label="Billetera de ahorro de la tarea" value={savingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={creating || !savingsHolderId || !savingsWalletsFor(savingsHolderId).length} required>
+              <option value="">Billetera</option>
+              {savingsWalletsFor(savingsHolderId).map(account => <option value={savingsAccountWalletId(account)} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
+            </select></label>
+          </>
+          : <input aria-label="Titular de la tarea" placeholder="Titular (opcional)" value={holder} onChange={event => setHolder(event.target.value)} disabled={creating} />}
         <label><span>Monto fijo (opcional)</span><input aria-label="Monto fijo de la tarea" type="number" min="0" step="0.01" placeholder="Opcional" value={transferAmount} onChange={event => setTransferAmount(event.target.value)} disabled={creating} /></label>
       </div>
       <div className="task-add-actions">
@@ -1562,9 +1672,41 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
           {editingTaskId === task.id
             ? <form className="task-add-form task-edit-form" onSubmit={event => saveTaskDefinition(task, event)}>
               <input aria-label="Título de tarea" value={editDraft.title} onChange={event => setEditDraft(current => ({ ...current, title: event.target.value }))} disabled={savingTaskId === task.id} />
+              <label className="toggle-cell task-kind-toggle">
+                <span className="task-kind-label">Tipo: {editDraft.isSavings ? 'Ahorro' : 'Gasto'}</span>
+                <input
+                  type="checkbox"
+                  aria-label="La tarea genera un movimiento de ahorro"
+                  checked={editDraft.isSavings}
+                  onChange={event => {
+                    const checked = event.target.checked
+                    setEditDraft(current => ({
+                      ...current,
+                      isSavings: checked,
+                      holder: checked ? '' : current.holder,
+                      savingsHolderId: checked ? current.savingsHolderId : '',
+                      savingsWalletId: checked ? current.savingsWalletId : '',
+                    }))
+                  }}
+                  disabled={savingTaskId === task.id || (!editDraft.isSavings && (!savingsAccounts.length || !hasSavingsDestination))}
+                  title={!hasSavingsDestination ? 'Se necesita otra caja para registrar el movimiento de ahorro' : !savingsAccounts.length ? 'No hay cuentas de ahorro disponibles' : undefined}
+                />
+                <span aria-hidden="true" />
+              </label>
               <div className="task-add-details">
                 <input aria-label="Alias de tarea" placeholder="Alias (opcional)" value={editDraft.alias} onChange={event => setEditDraft(current => ({ ...current, alias: event.target.value }))} disabled={savingTaskId === task.id} />
-                <input aria-label="Titular de tarea" placeholder="Titular (opcional)" value={editDraft.holder} onChange={event => setEditDraft(current => ({ ...current, holder: event.target.value }))} disabled={savingTaskId === task.id} />
+                {editDraft.isSavings
+                  ? <>
+                    <label><span>Titular *</span><select aria-label="Titular de ahorro de la tarea" value={editDraft.savingsHolderId} onChange={event => setEditDraft(current => ({ ...current, savingsHolderId: event.target.value, savingsWalletId: '' }))} disabled={savingTaskId === task.id || !savingsHolders.length} required>
+                      <option value="">Titular</option>
+                      {savingsHolders.map(([holderId, holderName]) => <option value={holderId} key={holderId}>{holderName}</option>)}
+                    </select></label>
+                    <label><span>Billetera *</span><select aria-label="Billetera de ahorro de la tarea" value={editDraft.savingsWalletId} onChange={event => setEditDraft(current => ({ ...current, savingsWalletId: event.target.value }))} disabled={savingTaskId === task.id || !editDraft.savingsHolderId || !savingsWalletsFor(editDraft.savingsHolderId).length} required>
+                      <option value="">Billetera</option>
+                      {savingsWalletsFor(editDraft.savingsHolderId).map(account => <option value={savingsAccountWalletId(account)} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
+                    </select></label>
+                  </>
+                  : <input aria-label="Titular de tarea" placeholder="Titular (opcional)" value={editDraft.holder} onChange={event => setEditDraft(current => ({ ...current, holder: event.target.value }))} disabled={savingTaskId === task.id} />}
                 <label><span>Monto fijo (opcional)</span><input aria-label="Monto fijo de la tarea" type="number" min="0" step="0.01" placeholder="Opcional" value={editDraft.transferAmount} onChange={event => setEditDraft(current => ({ ...current, transferAmount: event.target.value }))} disabled={savingTaskId === task.id} /></label>
               </div>
               <div className="task-add-actions">
@@ -1572,9 +1714,11 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
                 <button type="submit" className="close-button" disabled={savingTaskId === task.id || !editDraft.title.trim()}>{savingTaskId === task.id ? 'Guardando...' : 'Guardar cambios'} <Check size={14} /></button>
               </div>
             </form>
-            : (task.alias || task.titular || task.monto_a_transferir != null) && <div className="task-definition-details">
+            : (task.alias || task.titular || task.es_ahorro || task.monto_a_transferir != null) && <div className="task-definition-details">
               {task.alias && <span><b>Alias:</b> {task.alias}</span>}
-              {task.titular && <span><b>Titular:</b> {task.titular}</span>}
+              {task.es_ahorro
+                ? <span><b>Ahorro:</b> {savingsAccountLabel(task.cuenta_ahorro_id)}</span>
+                : task.titular && <span><b>Titular:</b> {task.titular}</span>}
               {task.monto_a_transferir != null && <span><b>Monto fijo:</b> {moneyWithCents.format(Number(task.monto_a_transferir))}</span>}
             </div>}
           <label className="task-amount-field"><span>Monto realizado (vacío usa el monto fijo)</span><input type="number" min="0" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto realizado de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => { if (!event.relatedTarget?.classList.contains('task-complete-button')) saveAmount(task, event) }} /></label>
@@ -3627,15 +3771,12 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
   const destinationTurns = originTurns.filter(turn => String(turn.caja_id) !== String(fromBoxId))
   const selectedDestinationTurn = destinationTurns.find(turn => String(turn.id) === String(destinationShiftId))
     || destinationTurns[0]
-  const savingsAccounts = accounts.filter(account => account.accountType?.ahorro)
-  const savingsHolders = [...new Map(savingsAccounts.map(account => [
-    String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? ''),
-    account.cuentas?.titulares?.nombre || 'Sin titular',
-  ])).entries()]
+  const savingsAccounts = savingsAccountsFor(accounts)
+  const savingsHolders = savingsHoldersFor(savingsAccounts)
   const selectedSavingsHolderId = savingsHolderId
-  const savingsWallets = savingsAccounts.filter(account => String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === selectedSavingsHolderId)
+  const savingsWallets = savingsAccounts.filter(account => savingsAccountHolderId(account) === selectedSavingsHolderId)
   const selectedSavingsWalletId = savingsWalletId
-  const selectedSavingsAccount = savingsWallets.find(account => String(account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id ?? '') === selectedSavingsWalletId)
+  const selectedSavingsAccount = savingsWallets.find(account => savingsAccountWalletId(account) === selectedSavingsWalletId)
   const boxColor = id => boxes.find(box => String(box.id) === String(id))?.colores?.hex || 'var(--line)'
   const swapBoxes = () => {
     if (!selectedOriginTurn || !selectedDestinationTurn) return
@@ -3703,8 +3844,8 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
     setEditingSavingsId(row.id)
     setSavingsDraft({
       direction: String(row.caja_desde_id) === String(shift.caja_id) ? 'deposit' : 'withdrawal',
-      holderId: account?.cuentas?.titular_id ?? account?.cuentas?.titulares?.id ?? '',
-      walletId: account?.cuentas?.billetera_id ?? account?.cuentas?.billeteras?.id ?? '',
+      holderId: account ? savingsAccountHolderId(account) : '',
+      walletId: account ? savingsAccountWalletId(account) : '',
       amount: numberWithCents.format(row.monto),
       notes: row.notas || '',
     })
@@ -3714,8 +3855,8 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
     const amount = parseLocalizedAmount(savingsDraft?.amount)
     if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
     const account = savingsAccounts.find(item => (
-      String(item.cuentas?.titular_id ?? item.cuentas?.titulares?.id ?? '') === String(savingsDraft?.holderId)
-      && String(item.cuentas?.billetera_id ?? item.cuentas?.billeteras?.id ?? '') === String(savingsDraft?.walletId)
+      savingsAccountHolderId(item) === String(savingsDraft?.holderId)
+      && savingsAccountWalletId(item) === String(savingsDraft?.walletId)
     ))
     if (!account) { setToast('Seleccioná una billetera de ahorro disponible'); return }
     const otherBoxId = [row.caja_desde_id, row.caja_hasta_id].find(id => String(id) !== String(shift.caja_id))
@@ -3761,7 +3902,7 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
     ? savingsRows.map(row => {
       const editing = String(editingSavingsId) === String(row.id)
       const editWallets = savingsAccounts.filter(account => (
-        String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === String(savingsDraft?.holderId ?? '')
+        savingsAccountHolderId(account) === String(savingsDraft?.holderId ?? '')
       ))
       const busy = savingMovementId != null || deletingMovementId != null
       return <div className="savings-history-item" key={row.id}>
@@ -3769,8 +3910,12 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
           <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
           <span>{movementLabel(row)}</span>
           <b>{money.format(row.monto)}</b>
-          <button className="icon-button" type="button" title="Editar movimiento de ahorro" aria-label="Editar movimiento de ahorro" onClick={() => editSavingsMovement(row)} disabled={busy}><Pencil size={13} /></button>
-          <button className="delete-button" type="button" title="Eliminar movimiento de ahorro" aria-label="Eliminar movimiento de ahorro" onClick={() => removeSavingsMovement(row)} disabled={busy}><Trash2 size={13} /></button>
+          {row.tarea_x_turno_id == null
+            ? <>
+              <button className="icon-button" type="button" title="Editar movimiento de ahorro" aria-label="Editar movimiento de ahorro" onClick={() => editSavingsMovement(row)} disabled={busy}><Pencil size={13} /></button>
+              <button className="delete-button" type="button" title="Eliminar movimiento de ahorro" aria-label="Eliminar movimiento de ahorro" onClick={() => removeSavingsMovement(row)} disabled={busy}><Trash2 size={13} /></button>
+            </>
+            : <small className="task-linked-movement-label">Tarea</small>}
         </div>
         {editing && <form className="savings-history-editor" onSubmit={event => saveSavingsMovement(event, row)}>
           <label><span>Tipo</span><select aria-label="Tipo de movimiento de ahorro" value={savingsDraft.direction} onChange={event => setSavingsDraft(current => ({ ...current, direction: event.target.value }))} disabled={busy}>
@@ -3783,7 +3928,7 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
           </select></label>
           <label><span>Billetera</span><select aria-label="Billetera de ahorro a editar" value={savingsDraft.walletId} onChange={event => setSavingsDraft(current => ({ ...current, walletId: event.target.value }))} disabled={busy || !editWallets.length}>
             <option value="">Billetera</option>
-            {editWallets.map(account => <option value={account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
+            {editWallets.map(account => <option value={savingsAccountWalletId(account)} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
           </select></label>
           <label><span>Monto</span><input aria-label="Monto del movimiento de ahorro a editar" inputMode="decimal" value={savingsDraft.amount} onChange={event => setSavingsDraft(current => ({ ...current, amount: event.target.value }))} disabled={busy} /></label>
           <label className="savings-history-editor-notes"><span>Notas</span><input aria-label="Notas del movimiento de ahorro a editar" value={savingsDraft.notes} onChange={event => setSavingsDraft(current => ({ ...current, notes: event.target.value }))} disabled={busy} /></label>
@@ -3824,7 +3969,7 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
         </select></label>
         <label className="transfer-field"><span>Billetera</span><select aria-label="Billetera de ahorro" value={selectedSavingsWalletId} onChange={event => setSavingsWalletId(event.target.value)} disabled={saving || !selectedSavingsHolderId || !savingsWallets.length}>
           <option value="">Billetera</option>
-          {savingsWallets.map(account => <option value={account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
+          {savingsWallets.map(account => <option value={savingsAccountWalletId(account)} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
         </select></label>
         <label className="transfer-field transfer-amount"><span>Monto</span><input aria-label="Monto del ahorro" inputMode="decimal" placeholder="$ 0,00" value={value} onChange={event => setValue(event.target.value)} disabled={saving} /></label>
         <label className="transfer-field"><span>Notas</span><input className="transfer-notes savings-transfer-notes" aria-label="Nota del movimiento de ahorro" placeholder="Nota" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} /></label>
