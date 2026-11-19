@@ -105,23 +105,20 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     await ensureShiftChips(shift.id, shift.caja_id)
   }
 
-  const [tasks, previousShifts] = await Promise.all([
-    query('tareas_x_turno', 'id, tarea_id, titulo, alias, titular, monto_a_transferir, es_ahorro, cuenta_ahorro_id, completada, ignorada, eliminada, monto, notas', request => request.eq('turno_id', shift.id).eq('eliminada', false).order('id', { ascending: true })),
-    query('turnos', 'id', request => request
-      .eq('caja_id', shift.caja_id)
-      .eq('abierto', false)
-      .lte('fecha_hora_fin', shift.fecha_hora_inicio)
-      .order('fecha_hora_fin', { ascending: false })
-      .limit(1)),
-  ])
-  const previousTasks = previousShifts.length
-    ? await query('tareas_x_turno', 'id, titulo, completada, ignorada, eliminada', request => request
-      .eq('turno_id', previousShifts[0].id)
-      .eq('completada', false)
-      .eq('ignorada', false)
-      .eq('eliminada', false)
-      .order('id', { ascending: true }))
-    : []
+  const previousShifts = await query('turnos', 'id', request => request
+    .eq('caja_id', shift.caja_id)
+    .eq('abierto', false)
+    .lte('fecha_hora_fin', shift.fecha_hora_inicio)
+    .order('fecha_hora_fin', { ascending: false })
+    .limit(1))
+  if (shift.abierto && previousShifts.length) {
+    await ensurePreviousPendingShiftTasks(shift.id, previousShifts[0].id)
+  }
+  const tasks = await query('tareas_x_turno', 'id, tarea_id, origen_tarea_x_turno_id, titulo, alias, titular, monto_a_transferir, es_ahorro, cuenta_ahorro_id, completada, ignorada, eliminada, monto, notas', request => request
+    .eq('turno_id', shift.id)
+    .eq('eliminada', false)
+    .order('id', { ascending: true }))
+  const previousTasks = tasks.filter(task => task.origen_tarea_x_turno_id != null)
 
   const salaryAccountValues = await query(
     'cuentas_sueldo_x_turno',
@@ -168,7 +165,10 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   const accountById = new Map(accounts.map(account => [account.id, account]))
   const linkedAccounts = accountLinks.map(link => ({ ...link, cuentas: accountById.get(link.cuenta_id) || null }))
   const sharedAccountIds = accounts
-    .filter(account => accountTypes.some(type => String(type.id) === String(account.tipo_cuenta_id) && (type.es_compartido || type.es_deposito)))
+    .filter(account => accountTypes.some(type => (
+      String(type.id) === String(account.tipo_cuenta_id)
+      && (type.es_compartido || type.es_deposito || type.ahorro)
+    )))
     .map(account => account.id)
   const sharedValueLinks = shift.abierto && sharedAccountIds.length
     ? await query(
@@ -213,25 +213,31 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   for (const accountId of sharedAccountIds) {
     const accountLinksForShift = linkedAccounts.filter(link => String(link.cuenta_id) === String(accountId))
     const sharedBalance = sharedAccountBalances[accountId]
-    const selectedLink = accountLinksForShift.find(link => (
-      sharedBalance?.ownerBoxId != null && String(link.caja_id) === String(sharedBalance.ownerBoxId)
-    )) || accountLinksForShift.find(link => String(link.id) === String(sharedBalance?.valueLinkId))
-      || accountLinksForShift.find(link => link.caja_id == null)
-      || accountLinksForShift.find(link => Number(link.valor) !== 0)
-      || accountLinksForShift[0]
+    const accountType = accountTypeById.get(String(accountById.get(accountId)?.tipo_cuenta_id))
+    const selectedLink = accountType?.ahorro
+      ? accountLinksForShift.find(link => String(link.caja_id) === String(shift.caja_id))
+        || accountLinksForShift.find(link => String(link.id) === String(sharedBalance?.valueLinkId))
+        || accountLinksForShift[0]
+      : accountLinksForShift.find(link => (
+        sharedBalance?.ownerBoxId != null && String(link.caja_id) === String(sharedBalance.ownerBoxId)
+      )) || accountLinksForShift.find(link => String(link.id) === String(sharedBalance?.valueLinkId))
+        || accountLinksForShift.find(link => link.caja_id == null)
+        || accountLinksForShift.find(link => Number(link.valor) !== 0)
+        || accountLinksForShift[0]
     if (selectedLink) sharedAccountLinkIds.add(String(selectedLink.id))
   }
 
   const accountsForShift = linkedAccounts.filter(link => {
     const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
-    return !(accountType?.es_compartido || accountType?.es_deposito) || sharedAccountLinkIds.has(String(link.id))
+    return !(accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro)
+      || sharedAccountLinkIds.has(String(link.id))
   }).map(link => {
     const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
-    if (!(accountType?.es_compartido || accountType?.es_deposito)) return link
+    if (!(accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro)) return link
     const sharedBalance = sharedAccountBalances[link.cuenta_id]
     return {
       ...link,
-      valor: sharedBalance && String(sharedBalance.ownerBoxId) !== String(shift.caja_id)
+      valor: sharedBalance && !accountType?.ahorro && String(sharedBalance.ownerBoxId) !== String(shift.caja_id)
         ? 0
         : sharedBalance?.value ?? Number(link.valor || 0),
     }
@@ -543,11 +549,11 @@ export async function updateAccountValue(accountShiftId, value) {
 
   const { data: accountType, error: accountTypeError } = await supabase
     .from('tipos_cuenta')
-    .select('es_compartido, es_deposito')
+    .select('es_compartido, es_deposito, ahorro')
     .eq('id', account.tipo_cuenta_id)
     .single()
   if (accountTypeError) throw accountTypeError
-  if (!(accountType.es_compartido || accountType.es_deposito)) {
+  if (!(accountType.es_compartido || accountType.es_deposito || accountType.ahorro)) {
     return updateRow('cuentas_x_turno', accountShiftId, { valor: Number(value) || 0 })
   }
 
@@ -1367,6 +1373,47 @@ async function ensureShiftTasks(shiftId, boxId) {
     })),
     { onConflict: 'turno_id,tarea_id', ignoreDuplicates: true },
   )
+  if (error) throw error
+}
+
+async function ensurePreviousPendingShiftTasks(shiftId, previousShiftId) {
+  const [previousTasks, existingCopies] = await Promise.all([
+    query('tareas_x_turno', 'id, titulo, alias, titular, monto_a_transferir, es_ahorro, cuenta_ahorro_id, monto, notas', request => request
+      .eq('turno_id', previousShiftId)
+      .eq('completada', false)
+      .eq('ignorada', false)
+      .eq('eliminada', false)
+      .is('origen_tarea_x_turno_id', null)
+      .order('id', { ascending: true })),
+    query('tareas_x_turno', 'origen_tarea_x_turno_id', request => request
+      .eq('turno_id', shiftId)
+      .not('origen_tarea_x_turno_id', 'is', null)),
+  ])
+  const existingOriginIds = new Set(existingCopies.map(task => String(task.origen_tarea_x_turno_id)))
+  const copies = previousTasks
+    .filter(task => !existingOriginIds.has(String(task.id)))
+    .map(task => ({
+      turno_id: shiftId,
+      tarea_id: null,
+      origen_tarea_x_turno_id: task.id,
+      titulo: `${task.titulo} (Turno Anterior)`,
+      alias: task.alias,
+      titular: task.titular,
+      monto_a_transferir: task.monto_a_transferir,
+      es_ahorro: task.es_ahorro,
+      cuenta_ahorro_id: task.cuenta_ahorro_id,
+      completada: false,
+      ignorada: false,
+      eliminada: false,
+      monto: task.monto,
+      notas: task.notas,
+    }))
+  if (!copies.length) return
+
+  const { error } = await supabase.from('tareas_x_turno').upsert(copies, {
+    onConflict: 'turno_id,origen_tarea_x_turno_id',
+    ignoreDuplicates: true,
+  })
   if (error) throw error
 }
 

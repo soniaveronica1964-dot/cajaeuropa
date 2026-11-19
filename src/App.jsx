@@ -1103,7 +1103,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       Object.entries(current).forEach(([accountId, value]) => {
         const account = data.accounts.find(item => String(item.id) === accountId)
         const accountType = data.accountTypes?.find(type => String(type.id) === String(account?.cuentas?.tipo_cuenta_id))
-        const savedValue = (accountType?.es_compartido || accountType?.es_deposito)
+        const savedValue = (accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro)
           ? Number(data.sharedAccountBalances?.[account.cuenta_id]?.value ?? account.valor ?? 0)
           : Number(account?.valor || 0)
         if (account && savedValue === value) {
@@ -1170,7 +1170,8 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   const accounts = data.accounts.map(account => {
     const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account.cuentas?.tipo_cuenta_id)) || null
     const isCrossBoxAccount = Boolean(accountType?.es_compartido || accountType?.es_deposito)
-    const sharedBalance = isCrossBoxAccount ? data.sharedAccountBalances?.[account.cuenta_id] : null
+    const usesSharedBalance = isCrossBoxAccount || Boolean(accountType?.ahorro)
+    const sharedBalance = usesSharedBalance ? data.sharedAccountBalances?.[account.cuenta_id] : null
     const displayAmount = Number(sharedBalance?.value ?? account.valor ?? 0)
     const sharedOwnerBoxId = sharedBalance
       ? sharedBalance.ownerBoxId
@@ -1283,7 +1284,6 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
         boxes={data.boxes || []}
         accounts={accounts}
         rows={data.tasks || []}
-        previousTasks={data.previousTasks || []}
         canEdit={Boolean(data.shift.abierto)}
         onSaved={onSaved}
         setToast={setToast}
@@ -1395,7 +1395,7 @@ function SalaryAccountsPanel({ rows, onSaved, setToast }) {
   </aside>
 }
 
-function TasksPanel({ shiftId, currentBoxId, boxes, accounts, rows, previousTasks, canEdit, onSaved, setToast }) {
+function TasksPanel({ shiftId, currentBoxId, boxes, accounts, rows, canEdit, onSaved, setToast }) {
   const [title, setTitle] = useState('')
   const [alias, setAlias] = useState('')
   const [holder, setHolder] = useState('')
@@ -1425,6 +1425,8 @@ function TasksPanel({ shiftId, currentBoxId, boxes, accounts, rows, previousTask
       ? `${account.cuentas?.titulares?.nombre || 'Sin titular'} · ${account.cuentas?.billeteras?.nombre || 'Sin billetera'}`
       : 'Cuenta no disponible'
   }
+  const previousShiftTasks = rows.filter(task => task.origen_tarea_x_turno_id != null)
+  const currentTasks = rows.filter(task => task.origen_tarea_x_turno_id == null)
   const economicTasks = rows.filter(task => task.monto_a_transferir != null && !task.ignorada && !task.eliminada)
   const economicTotal = economicTasks.reduce((sum, task) => sum + Number(task.monto_a_transferir), 0)
   const economicCompleted = economicTasks.reduce((sum, task) => (
@@ -1683,7 +1685,7 @@ function TasksPanel({ shiftId, currentBoxId, boxes, accounts, rows, previousTask
       </div>
     </form>}
     <div className="task-list">
-      {rows.map(task => <article className={`task-row ${task.completada ? 'task-completed' : ''} ${task.ignorada ? 'task-ignored' : ''} ${expandedTasks[task.id] ? 'task-expanded' : ''}`} key={task.id}>
+      {currentTasks.map(task => <article className={`task-row ${task.completada ? 'task-completed' : ''} ${task.ignorada ? 'task-ignored' : ''} ${expandedTasks[task.id] ? 'task-expanded' : ''}`} key={task.id}>
         <div className="task-row-heading">
           <button type="button" className="task-collapse-toggle" aria-label={`${expandedTasks[task.id] ? 'Contraer' : 'Expandir'} tarea ${task.titulo}`} aria-expanded={Boolean(expandedTasks[task.id])} disabled={editingTaskId === task.id} onClick={() => setExpandedTasks(current => ({ ...current, [task.id]: !current[task.id] }))}><ChevronDown size={14} /><strong>{task.titulo}</strong></button>
           {canEdit && <div className="task-row-actions">
@@ -1758,12 +1760,35 @@ function TasksPanel({ shiftId, currentBoxId, boxes, accounts, rows, previousTask
           </div>}
         </>}
       </article>)}
-      {!rows.length && <p className="salary-panel-empty">{canEdit ? 'Todavía no hay tareas para este turno.' : 'Este turno no tiene tareas registradas.'}</p>}
+      {!currentTasks.length && <p className="salary-panel-empty">{canEdit ? 'Todavía no hay tareas para este turno.' : 'Este turno no tiene tareas registradas.'}</p>}
     </div>
     <section className="previous-task-list">
       <strong>Tareas sin realizar en el turno anterior</strong>
-      {previousTasks.length
-        ? <ul>{previousTasks.map(task => <li key={task.id}>{task.titulo}</li>)}</ul>
+      {previousShiftTasks.length
+        ? <div className="previous-task-cards">{previousShiftTasks.map(task => <article className={`task-row previous-task-card ${task.completada ? 'task-completed' : ''} ${task.ignorada ? 'task-ignored' : ''}`} key={task.id}>
+          <div className="task-row-heading">
+            <strong className="previous-task-title">{task.titulo}</strong>
+            {canEdit && <div className="task-row-actions">
+              <button type="button" className={`task-state-button task-complete-button ${task.completada ? 'selected' : ''}`} title={task.completada ? 'Marcar como pendiente' : 'Marcar como completada'} aria-label={task.completada ? `Marcar ${task.titulo} como pendiente` : `Marcar ${task.titulo} como completada`} disabled={savingTaskId === task.id} onClick={() => toggleTaskCompleted(task)}><Check size={14} /></button>
+              <button type="button" className={`task-state-button ${task.ignorada ? 'selected' : ''}`} title={task.ignorada ? 'Dejar de ignorar' : 'Ignorar tarea'} aria-label={task.ignorada ? `Dejar de ignorar ${task.titulo}` : `Ignorar ${task.titulo}`} disabled={savingTaskId === task.id} onClick={() => saveChanges(task, { ignored: !task.ignorada })}><Eye size={14} /></button>
+            </div>}
+          </div>
+          {(task.alias || task.titular || task.es_ahorro || task.monto_a_transferir != null) && <div className="task-definition-details">
+            {task.alias && <span><b>Alias:</b> {task.alias}</span>}
+            {task.es_ahorro
+              ? <span><b>Ahorro:</b> {savingsAccountLabel(task.cuenta_ahorro_id)}</span>
+              : task.titular && <span><b>Titular:</b> {task.titular}</span>}
+            {task.monto_a_transferir != null && <span><b>Monto fijo:</b> {moneyWithCents.format(Number(task.monto_a_transferir))}</span>}
+          </div>}
+          <label className="task-amount-field"><span>Monto realizado (vacío usa el monto fijo)</span><input type="number" min="0" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto realizado de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => { if (!event.relatedTarget?.classList.contains('task-complete-button')) saveAmount(task, event) }} /></label>
+          <div className="task-note-controls">
+            <button type="button" className="task-note-toggle" aria-expanded={Boolean(openNotes[task.id])} onClick={() => toggleNote(task)}>{openNotes[task.id] ? 'Ocultar nota' : task.notas ? 'Ver nota' : 'Agregar nota'}</button>
+          </div>
+          {openNotes[task.id] && <div className="task-note-editor">
+            <textarea aria-label={`Nota de ${task.titulo}`} value={noteDrafts[task.id] ?? ''} placeholder="Aclaración opcional" disabled={!canEdit || savingTaskId === task.id} onChange={event => setNoteDrafts(current => ({ ...current, [task.id]: event.target.value }))} />
+            {canEdit && <button type="button" className="task-note-save" disabled={savingTaskId === task.id} onClick={() => saveNote(task)}><Check size={13} /> Guardar nota</button>}
+          </div>}
+        </article>)}</div>
         : <small>Ninguna</small>}
     </section>
   </aside>

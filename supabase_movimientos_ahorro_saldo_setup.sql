@@ -27,7 +27,8 @@ BEGIN
         END IF;
 
         UPDATE public.cuentas_x_turno
-        SET valor = valor - balance_delta
+        SET valor = valor - balance_delta,
+            valor_actualizado_en = NOW()
         WHERE id = OLD.cuenta_x_turno_id
           AND turno_id = OLD.turno_id;
       END IF;
@@ -57,7 +58,8 @@ BEGIN
     END IF;
 
     UPDATE public.cuentas_x_turno
-    SET valor = valor + balance_delta
+    SET valor = valor + balance_delta,
+        valor_actualizado_en = NOW()
     WHERE id = NEW.cuenta_x_turno_id
       AND turno_id = NEW.turno_id;
 

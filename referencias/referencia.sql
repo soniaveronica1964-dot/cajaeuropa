@@ -264,7 +264,9 @@ CREATE TABLE tareas_x_turno (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     turno_id BIGINT NOT NULL REFERENCES turnos(id)
         ON DELETE CASCADE,
-    tarea_id BIGINT NOT NULL REFERENCES tareas(id)
+    tarea_id BIGINT REFERENCES tareas(id)
+        ON DELETE CASCADE,
+    origen_tarea_x_turno_id BIGINT REFERENCES tareas_x_turno(id)
         ON DELETE CASCADE,
     titulo TEXT NOT NULL
         CHECK (length(btrim(titulo)) > 0),
@@ -278,6 +280,11 @@ CREATE TABLE tareas_x_turno (
     notas TEXT,
 
     UNIQUE (turno_id, tarea_id),
+    UNIQUE (turno_id, origen_tarea_x_turno_id),
+    CONSTRAINT chk_tareas_x_turno_tarea_origen CHECK (
+        (tarea_id IS NOT NULL AND origen_tarea_x_turno_id IS NULL)
+        OR (tarea_id IS NULL AND origen_tarea_x_turno_id IS NOT NULL)
+    ),
     CHECK (NOT (completada AND ignorada))
 );
 
