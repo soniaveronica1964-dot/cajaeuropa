@@ -98,7 +98,6 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
 
   if (shift.abierto) {
     await ensureActiveDepositAccountsAcrossBoxes()
-    await ensureShiftAccounts(shift.id, shift.caja_id)
     await ensureShiftSalaryAccounts(shift.id)
     await ensureShiftTasks(shift.id, shift.caja_id)
     await ensureAdvertisingLines(shift.id)
@@ -229,8 +228,10 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
 
   const accountsForShift = linkedAccounts.filter(link => {
     const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
-    return !(accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro)
-      || sharedAccountLinkIds.has(String(link.id))
+    if (accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro) {
+      return sharedAccountLinkIds.has(String(link.id))
+    }
+    return !shift.abierto || String(link.caja_id) === String(shift.caja_id)
   }).map(link => {
     const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
     if (!(accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro)) return link
