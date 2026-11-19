@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
+  ArrowUp,
   BarChart3,
   Banknote,
   Bell,
@@ -433,6 +434,7 @@ function App() {
   const [saveStatus, setSaveStatus] = useState('saved')
   const [lastSavedAt, setLastSavedAt] = useState(readLastSavedAt)
   const [faviconRevision, setFaviconRevision] = useState(0)
+  const [showBackToTop, setShowBackToTop] = useState(false)
   const snapshotRef = useRef(null)
   const editStatusTimer = useRef(null)
   const editStatusFrame = useRef(null)
@@ -476,6 +478,13 @@ function App() {
     const timer = setTimeout(() => setToast(''), 3200)
     return () => clearTimeout(timer)
   }, [toast])
+
+  useEffect(() => {
+    const updateScrollPosition = () => setShowBackToTop(window.scrollY > 0)
+    window.addEventListener('scroll', updateScrollPosition, { passive: true })
+    updateScrollPosition()
+    return () => window.removeEventListener('scroll', updateScrollPosition)
+  }, [])
 
   useEffect(() => {
     const handleSaveStatus = (event) => {
@@ -901,6 +910,7 @@ function App() {
           </fieldset>
         </main>
       </div>
+      {view === 'dashboard' && appData?.shift && showBackToTop && <button type="button" className="back-to-top-button" title="Volver arriba" aria-label="Volver arriba" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={18} /></button>}
       {closeBoxDialogOpen && appData && <ShiftCloseModal
         data={appData}
         boxId={selectedBoxId}
