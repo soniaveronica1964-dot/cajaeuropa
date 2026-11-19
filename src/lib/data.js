@@ -947,6 +947,35 @@ export async function createTransferMovement(shiftId, { fromBoxId, toBoxId, dest
   return data
 }
 
+export async function updateSavingsMovement(id, { fromBoxId, toBoxId, accountShiftId, value, notes }) {
+  requireSupabase()
+  if (String(fromBoxId) === String(toBoxId)) throw new Error('Elegí dos cajas distintas')
+  if (accountShiftId == null) throw new Error('Seleccioná una billetera de ahorro')
+  const amount = requireNonNegativeAmount(value)
+  if (amount <= 0) throw new Error('Ingresá un monto mayor a cero')
+  const { data, error } = await supabase.from('movimientos').update({
+    caja_desde_id: fromBoxId,
+    caja_hasta_id: toBoxId,
+    cuenta_x_turno_id: accountShiftId,
+    monto: amount,
+    notas: notes?.trim() || null,
+  }).eq('id', id).eq('es_ahorro', true).select().maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('No se encontró el movimiento de ahorro')
+  return data
+}
+
+export async function deleteSavingsMovement(id) {
+  requireSupabase()
+  const { data, error } = await supabase.from('movimientos').delete()
+    .eq('id', id)
+    .eq('es_ahorro', true)
+    .select('id')
+    .maybeSingle()
+  if (error) throw error
+  if (!data) throw new Error('No se encontró el movimiento de ahorro')
+}
+
 export async function createChipLoad(chipId, value) {
   requireSupabase()
   const amount = Number(value)

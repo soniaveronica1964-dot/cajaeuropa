@@ -84,6 +84,8 @@ import {
   createTaCharge,
   createFoundMoney,
   createTransferMovement,
+  updateSavingsMovement,
+  deleteSavingsMovement,
   createChipLoad,
   createLogisticsLine,
   saveShiftNotes,
@@ -307,9 +309,10 @@ function calculateTransferImpact({ shiftId, shiftBoxId, movements = [] }) {
   }, 0)
 }
 
-function calculateCashDiscrepancy({ shiftId, cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney, savingsMovements, transferMovements }) {
+function calculateCashDiscrepancy({ shiftId, shiftBoxId, cashDifference, countedChipDifference, rounding, bonuses, expenses, tips, taCharges, foundMoney, savingsMovements, transferMovements }) {
   const bonusImpact = bonusNetTotal(bonuses)
   const transferImpact = calculateTransferImpact({ shiftId, movements: transferMovements })
+  const savingsImpact = calculateTransferImpact({ shiftId, shiftBoxId, movements: savingsMovements })
   return cashDifference
     - countedChipDifference
     + rounding
@@ -317,7 +320,7 @@ function calculateCashDiscrepancy({ shiftId, cashDifference, countedChipDifferen
     + transferImpact
     + sumMovementAmounts(expenses)
     + sumMovementAmounts(taCharges)
-    + sumMovementAmounts(savingsMovements)
+    + savingsImpact
     - sumMovementAmounts(tips)
     - sumMovementAmounts(foundMoney)
 }
@@ -516,6 +519,7 @@ function App() {
   const countedChipDifference = calculateChipDifference(appData?.chips || [])
   const savedCashDiscrepancy = calculateCashDiscrepancy({
     shiftId: shift?.id,
+    shiftBoxId: shift?.caja_id,
     cashDifference: cashTotal - Number(shift?.caja_inicial || 0),
     countedChipDifference,
     rounding: Number(shift?.redondeo || 0),
@@ -1118,6 +1122,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   const realDifference = cashDifference + signedExpenseImpact(data.expenses) + taChargesTotal + transferImpact
   const cashDiscrepancy = calculateCashDiscrepancy({
     shiftId: data.shift.id,
+    shiftBoxId: data.shift.caja_id,
     cashDifference,
     countedChipDifference,
     rounding: roundingAmount,
@@ -3487,6 +3492,10 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
   const [savings, setSavings] = useState(false)
   const [saving, setSaving] = useState(false)
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [editingSavingsId, setEditingSavingsId] = useState(null)
+  const [savingsDraft, setSavingsDraft] = useState(null)
+  const [savingMovementId, setSavingMovementId] = useState(null)
+  const [deletingMovementId, setDeletingMovementId] = useState(null)
   useEffect(() => {
     setFromBoxId(shift.caja_id?.toString() || boxes[0]?.id?.toString() || '')
     setDestinationShiftId('')
@@ -3577,6 +3586,103 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
       <b>{money.format(row.monto)}</b>
     </div>)
     : <p className="transfer-history-empty">Sin movimientos registrados.</p>
+  const editSavingsMovement = row => {
+    const account = savingsAccounts.find(item => String(item.id) === String(row.cuenta_x_turno_id))
+    setEditingSavingsId(row.id)
+    setSavingsDraft({
+      direction: String(row.caja_desde_id) === String(shift.caja_id) ? 'deposit' : 'withdrawal',
+      holderId: account?.cuentas?.titular_id ?? account?.cuentas?.titulares?.id ?? '',
+      walletId: account?.cuentas?.billetera_id ?? account?.cuentas?.billeteras?.id ?? '',
+      amount: numberWithCents.format(row.monto),
+      notes: row.notas || '',
+    })
+  }
+  const saveSavingsMovement = async (event, row) => {
+    event.preventDefault()
+    const amount = parseLocalizedAmount(savingsDraft?.amount)
+    if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
+    const account = savingsAccounts.find(item => (
+      String(item.cuentas?.titular_id ?? item.cuentas?.titulares?.id ?? '') === String(savingsDraft?.holderId)
+      && String(item.cuentas?.billetera_id ?? item.cuentas?.billeteras?.id ?? '') === String(savingsDraft?.walletId)
+    ))
+    if (!account) { setToast('Seleccioná una billetera de ahorro disponible'); return }
+    const otherBoxId = [row.caja_desde_id, row.caja_hasta_id].find(id => String(id) !== String(shift.caja_id))
+    if (otherBoxId == null) { setToast('No se pudo identificar la otra caja del movimiento'); return }
+    const depositing = savingsDraft.direction === 'deposit'
+    setSavingMovementId(row.id)
+    try {
+      await updateSavingsMovement(row.id, {
+        fromBoxId: depositing ? shift.caja_id : otherBoxId,
+        toBoxId: depositing ? otherBoxId : shift.caja_id,
+        accountShiftId: account.id,
+        value: amount,
+        notes: savingsDraft.notes,
+      })
+      setEditingSavingsId(null)
+      setSavingsDraft(null)
+      setToast('Movimiento de ahorro actualizado')
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo actualizar el movimiento de ahorro')
+    } finally {
+      setSavingMovementId(null)
+    }
+  }
+  const removeSavingsMovement = async row => {
+    if (!window.confirm('¿Querés borrar este movimiento de ahorro? Esta acción no se puede deshacer.')) return
+    setDeletingMovementId(row.id)
+    try {
+      await deleteSavingsMovement(row.id)
+      if (String(editingSavingsId) === String(row.id)) {
+        setEditingSavingsId(null)
+        setSavingsDraft(null)
+      }
+      setToast('Movimiento de ahorro eliminado')
+      await onSaved()
+    } catch (error) {
+      setToast(error.message || 'No se pudo eliminar el movimiento de ahorro')
+    } finally {
+      setDeletingMovementId(null)
+    }
+  }
+  const renderSavingsHistoryRows = () => savingsRows.length
+    ? savingsRows.map(row => {
+      const editing = String(editingSavingsId) === String(row.id)
+      const editWallets = savingsAccounts.filter(account => (
+        String(account.cuentas?.titular_id ?? account.cuentas?.titulares?.id ?? '') === String(savingsDraft?.holderId ?? '')
+      ))
+      const busy = savingMovementId != null || deletingMovementId != null
+      return <div className="savings-history-item" key={row.id}>
+        <div className="operation-history-row savings-history-row">
+          <time>{new Date(row.fecha_hora_creacion).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}</time>
+          <span>{movementLabel(row)}</span>
+          <b>{money.format(row.monto)}</b>
+          <button className="icon-button" type="button" title="Editar movimiento de ahorro" aria-label="Editar movimiento de ahorro" onClick={() => editSavingsMovement(row)} disabled={busy}><Pencil size={13} /></button>
+          <button className="delete-button" type="button" title="Eliminar movimiento de ahorro" aria-label="Eliminar movimiento de ahorro" onClick={() => removeSavingsMovement(row)} disabled={busy}><Trash2 size={13} /></button>
+        </div>
+        {editing && <form className="savings-history-editor" onSubmit={event => saveSavingsMovement(event, row)}>
+          <label><span>Tipo</span><select aria-label="Tipo de movimiento de ahorro" value={savingsDraft.direction} onChange={event => setSavingsDraft(current => ({ ...current, direction: event.target.value }))} disabled={busy}>
+            <option value="deposit">Depósito</option>
+            <option value="withdrawal">Retiro</option>
+          </select></label>
+          <label><span>Titular</span><select aria-label="Titular del ahorro a editar" value={savingsDraft.holderId} onChange={event => setSavingsDraft(current => ({ ...current, holderId: event.target.value, walletId: '' }))} disabled={busy}>
+            <option value="">Titular</option>
+            {savingsHolders.map(([holderId, holderName]) => <option value={holderId} key={holderId}>{holderName}</option>)}
+          </select></label>
+          <label><span>Billetera</span><select aria-label="Billetera de ahorro a editar" value={savingsDraft.walletId} onChange={event => setSavingsDraft(current => ({ ...current, walletId: event.target.value }))} disabled={busy || !editWallets.length}>
+            <option value="">Billetera</option>
+            {editWallets.map(account => <option value={account.cuentas?.billetera_id ?? account.cuentas?.billeteras?.id} key={account.id}>{account.cuentas?.billeteras?.nombre || 'Sin billetera'}</option>)}
+          </select></label>
+          <label><span>Monto</span><input aria-label="Monto del movimiento de ahorro a editar" inputMode="decimal" value={savingsDraft.amount} onChange={event => setSavingsDraft(current => ({ ...current, amount: event.target.value }))} disabled={busy} /></label>
+          <label className="savings-history-editor-notes"><span>Notas</span><input aria-label="Notas del movimiento de ahorro a editar" value={savingsDraft.notes} onChange={event => setSavingsDraft(current => ({ ...current, notes: event.target.value }))} disabled={busy} /></label>
+          <div className="savings-history-editor-actions">
+            <button className="ghost-button" type="button" onClick={() => { setEditingSavingsId(null); setSavingsDraft(null) }} disabled={busy}>Cancelar</button>
+            <button className="close-button" type="submit" disabled={busy}>{savingMovementId === row.id ? 'Guardando...' : 'Guardar'} <Check size={14} /></button>
+          </div>
+        </form>}
+      </div>
+    })
+    : <p className="transfer-history-empty">Sin movimientos registrados.</p>
   const toggleSavings = checked => {
     setSavings(checked)
     if (checked && savingsAccounts.length) {
@@ -3645,7 +3751,7 @@ function TransferMovementsCard({ shift, boxes, activeTurns, activeTurnAccountLin
         </header>
         <div className="operation-history-scroll transfer-history-groups">
           <section><h3>Entre cajas <span>{transferRows.length}</span></h3>{renderHistoryRows(transferRows)}</section>
-          <section><h3>Movimientos de ahorro <span>{savingsRows.length}</span></h3>{renderHistoryRows(savingsRows)}</section>
+          <section className={`savings-history-section${editingSavingsId == null ? '' : ' is-editing'}`}><h3>Movimientos de ahorro <span>{savingsRows.length}</span></h3>{renderSavingsHistoryRows()}</section>
         </div>
         <footer><button className="close-button" type="button" onClick={() => setHistoryOpen(false)}>Listo <Check size={15} /></button></footer>
       </section>
