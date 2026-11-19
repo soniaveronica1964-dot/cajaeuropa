@@ -1894,6 +1894,23 @@ input[type="time"] { color-scheme: dark; }
   align-items: center;
   gap: 6px;
 }
+.matrix-sections-toggle {
+  display: grid;
+  flex: 0 0 auto;
+  width: 23px;
+  height: 23px;
+  margin-left: auto;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+}
+.matrix-sections-toggle:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
 
 .matrix-row > span,
 .matrix-head > span {

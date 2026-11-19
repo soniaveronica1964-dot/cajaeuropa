@@ -15,6 +15,8 @@ import {
   CalendarDays,
   ChevronDown,
   ChevronRight,
+  ChevronsDownUp,
+  ChevronsUpDown,
   CircleDollarSign,
   Clock3,
   Copy,
@@ -2392,6 +2394,9 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
     { key: 'shared', label: 'Billeteras compartidas', matches: account => account.accountType?.es_compartido },
     { key: 'saving', label: 'Billeteras ahorro', matches: account => account.accountType?.ahorro },
   ].map(section => ({ ...section, accounts: accounts.filter(section.matches) }))
+  const collapsibleAccountSections = accountTypeSections.filter(section => section.accounts.length)
+  const allAccountSectionsExpanded = collapsibleAccountSections.length > 0
+    && collapsibleAccountSections.every(section => expandedAccountTypes[section.key])
   const specialAccountIds = new Set(accountTypeSections.flatMap(section => section.accounts.map(account => account.cuenta_id)))
   const regularAccounts = accounts.filter(account => !specialAccountIds.has(account.cuenta_id))
   const columns = { '--wallet-count': wallets.length }
@@ -2402,6 +2407,10 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
       .map(box => [String(box.id), box]),
   ).values()]
   const cashAccounts = accounts.filter(account => !account.accountType?.ahorro)
+  const toggleAllAccountSections = () => setExpandedAccountTypes(current => {
+    const expand = collapsibleAccountSections.some(section => !current[section.key])
+    return collapsibleAccountSections.reduce((next, section) => ({ ...next, [section.key]: expand }), current)
+  })
 
   useEffect(() => {
     try {
@@ -2619,7 +2628,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
     <div className="matrix-content" style={columns}>
     {accounts.length ? <>
         <div className="matrix-row matrix-head">
-          <strong className="matrix-box-heading"><WalletCards size={13} />Caja</strong>
+          <strong className="matrix-box-heading"><WalletCards size={13} />Caja{collapsibleAccountSections.length > 0 && <button type="button" className="matrix-sections-toggle" title={allAccountSectionsExpanded ? 'Contraer billeteras' : 'Expandir billeteras'} aria-label={allAccountSectionsExpanded ? 'Contraer todas las billeteras' : 'Expandir todas las billeteras'} aria-expanded={allAccountSectionsExpanded} onClick={toggleAllAccountSections}>{allAccountSectionsExpanded ? <ChevronsDownUp size={13} /> : <ChevronsUpDown size={13} />}</button>}</strong>
           {wallets.map(wallet => <span key={wallet}>{wallet}</span>)}
           <span>Total</span>
         </div>
