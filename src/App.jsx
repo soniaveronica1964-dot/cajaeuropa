@@ -448,6 +448,7 @@ function App() {
   const [shiftHistory, setShiftHistory] = useState([])
   const [shiftNavigationLoading, setShiftNavigationLoading] = useState(false)
   const [boxLoading, setBoxLoading] = useState(false)
+  const [syncingShift, setSyncingShift] = useState(false)
   const [selectedBoxId, setSelectedBoxId] = useState(null)
   const [selectedBoxAccent, setSelectedBoxAccent] = useState('#72d7ca')
   const [loadError, setLoadError] = useState('')
@@ -634,7 +635,25 @@ function App() {
       setLoadError(error.message || 'No se pudieron cargar los datos de Supabase.')
     }
   }
+  const syncActiveShift = async () => {
+    if (!shift?.abierto || syncingShift || saveStatus === 'saving') return
+    const boxId = selectedBoxId ?? shift.caja_id
+    setSyncingShift(true)
+    try {
+      const freshData = await loadCurrentShiftData(boxId, shift.id)
+      setAppData(freshData)
+      setSelectedBoxAccent(freshData.boxes?.find(box => String(box.id) === String(boxId))?.colores?.hex || '#72d7ca')
+      setCashDiscrepancyPreview(null)
+      setLoadError('')
+      setToast('Turno sincronizado')
+    } catch (error) {
+      setToast(error.message || 'No se pudo sincronizar el turno')
+    } finally {
+      setSyncingShift(false)
+    }
+  }
   const switchBox = async (boxId) => {
+    if (syncingShift) return
     setBoxLoading(true)
     try {
       await reloadData(boxId)
@@ -645,7 +664,7 @@ function App() {
   const navigateShift = async (offset) => {
     const currentIndex = shiftHistory.findIndex((item) => String(item.id) === String(shift?.id))
     const targetShift = shiftHistory[currentIndex + offset]
-    if (!targetShift || shiftNavigationLoading) return
+    if (!targetShift || shiftNavigationLoading || syncingShift) return
     setShiftNavigationLoading(true)
     setLoadError('')
     try {
@@ -876,20 +895,28 @@ function App() {
             <div><strong>Caja<span>{appName}</span></strong><small>Control operativo</small></div>
           </div>
           <div className="shift-nav">
-            <button className="icon-button" title="Caja anterior" aria-label="Caja anterior" onClick={() => navigateShift(1)} disabled={!canNavigateToPreviousShift || shiftNavigationLoading}><ChevronRight size={17} className="flip-x" /></button>
+            <button className="icon-button" title="Caja anterior" aria-label="Caja anterior" onClick={() => navigateShift(1)} disabled={!canNavigateToPreviousShift || shiftNavigationLoading || syncingShift}><ChevronRight size={17} className="flip-x" /></button>
             <div className="shift-title">
               <span><Clock3 size={14} /> {shiftName}</span>
               <b>{shift ? new Date(shift.fecha_hora_inicio).toLocaleDateString('es-AR') : '--/--'} <em>/</em> {shiftTime}</b>
               {isReadOnlyShift && <small className="shift-read-only">Solo lectura</small>}
             </div>
-            <button className="icon-button" title="Caja siguiente" aria-label="Caja siguiente" onClick={() => navigateShift(-1)} disabled={!canNavigateToNextShift || shiftNavigationLoading}><ChevronRight size={17} /></button>
+            <button className="icon-button" title="Caja siguiente" aria-label="Caja siguiente" onClick={() => navigateShift(-1)} disabled={!canNavigateToNextShift || shiftNavigationLoading || syncingShift}><ChevronRight size={17} /></button>
           </div>
         </div>
         <div className="top-actions">
-          <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={switchBox} />
+          <BoxSelector boxes={appData?.boxes || []} selectedId={selectedBoxId} onChange={switchBox} disabled={boxLoading || syncingShift || shiftNavigationLoading} />
+          <button
+            type="button"
+            className={`icon-button sync-button${syncingShift ? ' is-syncing' : ''}`}
+            title={syncingShift ? 'Sincronizando turno...' : !shift?.abierto ? 'Disponible cuando hay un turno activo' : 'Sincronizar turno activo'}
+            aria-label="Sincronizar turno activo"
+            onClick={syncActiveShift}
+            disabled={!shift?.abierto || syncingShift || saveStatus === 'saving' || boxLoading || shiftNavigationLoading}
+          ><RefreshCw size={16} /></button>
           <span className={`saved saved-${saveStatus}`} title={lastSavedLabel} aria-live="polite"><i /> {saveStatusLabel}</span>
           <button className="camera-button" title={capturingSnapshot ? 'Generando captura…' : 'Descargar captura del cierre'} aria-label="Descargar captura del cierre" onClick={downloadSnapshot} disabled={capturingSnapshot}><Camera size={16} /></button>
-          <button className="lock-button" title="Cerrar caja y abrir el siguiente turno" aria-label="Cerrar caja y abrir el siguiente turno" onClick={openCloseShiftDialog} disabled={selectedBoxId == null || !shift?.abierto}><LockKeyhole size={16} /></button>
+          <button className="lock-button" title="Cerrar caja y abrir el siguiente turno" aria-label="Cerrar caja y abrir el siguiente turno" onClick={openCloseShiftDialog} disabled={selectedBoxId == null || !shift?.abierto || syncingShift}><LockKeyhole size={16} /></button>
         </div>
       </header>
 
@@ -982,7 +1009,7 @@ function GoalStrip({ open, onToggle, goals = [] }) {
   return <section className={`goal-strip ${open ? 'expanded' : ''}`}><div className="goal-strip-head"><strong>Objetivos</strong><div className="goal-summary">{summary.length ? summary.map(goal => <span key={goal.label}>{goal.label} <b>{goal.percent}%</b><i><em style={{ width: `${goal.percent}%` }} /></i><small>{money.format(goal.current)} / {money.format(goal.target)}</small></span>) : <small className="muted-copy">Sin objetivos configurados</small>}</div><button className="icon-button" onClick={onToggle} aria-label="Mostrar objetivos">{open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}</button></div>{open && <div className="goal-details">{goals.length ? goals.map(goal => <Goal key={goal.label} {...goal} />) : <EmptyInline text="No hay objetivos asociados a este turno." />}</div>}</section>
 }
 
-function BoxSelector({ boxes, selectedId, onChange }) {
+function BoxSelector({ boxes, selectedId, onChange, disabled = false }) {
   const [open, setOpen] = useState(false)
   const selected = boxes.find(box => box.id === selectedId) || boxes[0]
   useEffect(() => {
@@ -991,7 +1018,7 @@ function BoxSelector({ boxes, selectedId, onChange }) {
     document.addEventListener('mousedown', close)
     return () => document.removeEventListener('mousedown', close)
   }, [open])
-  return <div className={`box-select ${open ? 'open' : ''}`}><small>CAJA</small><button type="button" className="box-select-trigger" aria-expanded={open} onClick={() => setOpen(value => !value)}><strong>{selected?.nombre || 'Sin cajas'}</strong><span className="box-dot" style={{ backgroundColor: selected?.colores?.hex || '#879598' }} /></button>{open && <div className="box-options">{boxes.length ? boxes.map(box => <button type="button" className={box.id === selected?.id ? 'selected' : ''} key={box.id} onClick={() => { setOpen(false); onChange(box.id) }}><i style={{ backgroundColor: box.colores?.hex || '#879598' }} />{box.nombre}</button>) : <span className="box-option-empty">No hay cajas configuradas</span>}</div>}</div>
+  return <div className={`box-select ${open ? 'open' : ''}`}><small>CAJA</small><button type="button" className="box-select-trigger" aria-expanded={open} onClick={() => setOpen(value => !value)} disabled={disabled}><strong>{selected?.nombre || 'Sin cajas'}</strong><span className="box-dot" style={{ backgroundColor: selected?.colores?.hex || '#879598' }} /></button>{open && <div className="box-options">{boxes.length ? boxes.map(box => <button type="button" className={box.id === selected?.id ? 'selected' : ''} key={box.id} onClick={() => { setOpen(false); onChange(box.id) }} disabled={disabled}><i style={{ backgroundColor: box.colores?.hex || '#879598' }} />{box.nombre}</button>) : <span className="box-option-empty">No hay cajas configuradas</span>}</div>}</div>
 }
 
 function SetupWizard({ onCreated, setToast }) {

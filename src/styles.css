@@ -292,6 +292,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   color: var(--lavender);
   background: color-mix(in srgb, var(--accent) 14%, #101719);
 }
+.sync-button.is-syncing svg { animation: loading-screen-spin 1.2s linear infinite; }
+.sync-button:disabled { cursor: default; opacity: .42; }
 .back-to-top-button,
 .back-to-bottom-button {
   position: fixed;
@@ -4535,7 +4537,7 @@ html:has(.app-shell[data-theme='light']) {
     grid-template-areas:
       "brand camera lock"
       "shift shift shift"
-      "box box box";
+      "box box sync";
     gap: 8px;
     height: auto;
     min-height: 0;
@@ -4557,6 +4559,7 @@ html:has(.app-shell[data-theme='light']) {
   .shift-title { max-width: calc(100vw - 120px); }
   .box-select { grid-area: box; width: 100%; min-width: 0; }
   .top-actions .saved { display: none; }
+  .top-actions .sync-button { grid-area: sync; width: 40px; height: 40px; }
   .top-actions .camera-button { grid-area: camera; }
   .top-actions .lock-button { grid-area: lock; }
   .top-actions .camera-button,
@@ -4588,7 +4591,7 @@ html:has(.app-shell[data-theme='light']) {
 }
 
 @media (max-width: 500px) {
-  .top-actions .saved, .top-actions .icon-button:nth-child(2) { display: none; }
+  .top-actions .saved { display: none; }
   .brand small { display: none; }
   .shift-title b { font-size: 9px; }
   .box-select > small { display: none; }
