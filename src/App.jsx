@@ -1258,6 +1258,20 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
 }
 
 function SalaryAccountsPanel({ rows, onSaved, setToast }) {
+  const [pin, setPin] = useState('')
+  const [unlocked, setUnlocked] = useState(false)
+  const [pinError, setPinError] = useState('')
+
+  const unlockPanel = event => {
+    event.preventDefault()
+    if (pin !== '231423') {
+      setPinError('PIN incorrecto')
+      return
+    }
+    setPinError('')
+    setUnlocked(true)
+  }
+
   const saveValue = (row, event) => {
     const input = event.currentTarget
     const savedValue = Number(row.valor || 0)
@@ -1280,7 +1294,28 @@ function SalaryAccountsPanel({ rows, onSaved, setToast }) {
     <header className="dashboard-side-panel-header">
       <div><WalletCards size={16} /><strong>Cuentas sueldo</strong></div>
     </header>
-    {rows.length
+    {!unlocked
+      ? <form className="salary-pin-form" onSubmit={unlockPanel}>
+        <label htmlFor="salary-panel-pin">Ingresá el PIN para ver esta información</label>
+        <input
+          id="salary-panel-pin"
+          type="password"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={6}
+          autoComplete="off"
+          value={pin}
+          onChange={event => {
+            setPin(event.target.value.replace(/\D/g, '').slice(0, 6))
+            setPinError('')
+          }}
+          aria-invalid={Boolean(pinError)}
+          aria-describedby={pinError ? 'salary-pin-error' : undefined}
+        />
+        {pinError && <p id="salary-pin-error" className="salary-pin-error" role="alert">{pinError}</p>}
+        <button type="submit" className="primary-button">Ver sueldos</button>
+      </form>
+      : rows.length
       ? <div className="salary-account-columns">
         {rows.map(row => {
           const account = row.cuentas_sueldo
