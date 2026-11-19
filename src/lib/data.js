@@ -161,8 +161,18 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
   const accounts = accountIds.length
     ? await query('cuentas', 'id, alias, cuil, patron, notas, tipo_cuenta_id, activa, titular_id, billetera_id, titulares(id, nombre), billeteras(id, nombre)', request => request.in('id', accountIds))
     : []
+  const accountBoxLinks = accountIds.length
+    ? await query('cuentas_x_caja', 'cuenta_id, activa', request => request
+      .eq('caja_id', shift.caja_id)
+      .in('cuenta_id', accountIds))
+    : []
+  const accountBoxActiveById = new Map(accountBoxLinks.map(link => [String(link.cuenta_id), Boolean(link.activa)]))
   const accountById = new Map(accounts.map(account => [account.id, account]))
-  const linkedAccounts = accountLinks.map(link => ({ ...link, cuentas: accountById.get(link.cuenta_id) || null }))
+  const linkedAccounts = accountLinks.map(link => ({
+    ...link,
+    caja_activa: accountBoxActiveById.get(String(link.cuenta_id)) ?? false,
+    cuentas: accountById.get(link.cuenta_id) || null,
+  }))
   const sharedAccountIds = accounts
     .filter(account => accountTypes.some(type => (
       String(type.id) === String(account.tipo_cuenta_id)
@@ -231,7 +241,9 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     if (accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro) {
       return sharedAccountLinkIds.has(String(link.id))
     }
-    return !shift.abierto || String(link.caja_id) === String(shift.caja_id)
+    return !shift.abierto || (
+      link.caja_activa && String(link.caja_id) === String(shift.caja_id)
+    )
   }).map(link => {
     const accountType = accountTypes.find(type => String(type.id) === String(link.cuentas?.tipo_cuenta_id))
     if (!(accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro)) return link
@@ -2058,14 +2070,28 @@ async function getEligibleShiftAccountIds(boxId) {
 
   const { data: boxAccounts, error: boxAccountsError } = await supabase
     .from('cuentas_x_caja')
-    .select('cuenta_id, cuentas!inner(id, activa, billetera_id)')
+    .select('cuenta_id, activa')
     .eq('caja_id', boxId)
   if (boxAccountsError) throw boxAccountsError
 
-  const accountIds = [...new Set((boxAccounts || [])
-    .filter((link) => link.cuentas?.activa && activeWalletIds.has(String(link.cuentas.billetera_id)))
-    .map((link) => String(link.cuenta_id)))]
-  return new Set(accountIds)
+  const accountIds = [...new Set((boxAccounts || []).map(link => String(link.cuenta_id)))]
+  if (!accountIds.length) return new Set()
+
+  const [accounts, accountTypes] = await Promise.all([
+    query('cuentas', 'id, activa, billetera_id, tipo_cuenta_id', request => request.in('id', accountIds)),
+    query('tipos_cuenta', 'id, es_compartido, es_deposito, ahorro', request => request.order('id', { ascending: true })),
+  ])
+  const accountById = new Map(accounts.map(account => [String(account.id), account]))
+  const typeById = new Map(accountTypes.map(type => [String(type.id), type]))
+  const boxActiveByAccountId = new Map((boxAccounts || []).map(link => [String(link.cuenta_id), Boolean(link.activa)]))
+
+  return new Set(accountIds.filter(accountId => {
+    const account = accountById.get(accountId)
+    const accountType = typeById.get(String(account?.tipo_cuenta_id))
+    if (!account || !activeWalletIds.has(String(account.billetera_id))) return false
+    const isSharedAcrossBoxes = accountType?.es_compartido || accountType?.es_deposito || accountType?.ahorro
+    return isSharedAcrossBoxes ? Boolean(account.activa) : boxActiveByAccountId.get(accountId) === true
+  }))
 }
 
 async function ensureShiftAccounts(shiftId, boxId) {
@@ -2541,6 +2567,18 @@ export async function createAccount({ holderId, walletId, alias = null, cuil = n
   return data
 }
 
+export async function getAccountByHolderWallet(holderId, walletId) {
+  requireSupabase()
+  const { data, error } = await supabase
+    .from('cuentas')
+    .select('id, alias, cuil, patron, notas, tipo_cuenta_id, activa, titular_id, billetera_id')
+    .eq('titular_id', holderId)
+    .eq('billetera_id', walletId)
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
 export async function updateAccount(id, { alias = null, cuil = null, password = null, notes = null, typeId = null, active = null }) {
   requireSupabase()
   const payload = {
@@ -2733,6 +2771,42 @@ export async function setAccountAvailability({ shiftId, boxId, accountId, enable
     .eq('turno_id', shiftId)
     .eq('cuenta_id', accountId)
     .eq('caja_id', boxId)
+  if (error) throw error
+  return null
+}
+
+export async function setAccountBoxAvailability({ shiftId = null, boxId, accountId, enabled }) {
+  requireSupabase()
+  if (!accountId || !boxId) return null
+
+  await ensureAccountBoxLink({ accountId, boxId })
+  const { error: availabilityError } = await supabase
+    .from('cuentas_x_caja')
+    .update({ activa: Boolean(enabled) })
+    .eq('cuenta_id', accountId)
+    .eq('caja_id', boxId)
+  if (availabilityError) throw availabilityError
+
+  if (!shiftId) return null
+  if (!enabled) {
+    const { error } = await supabase
+      .from('cuentas_x_turno')
+      .update({ cobros: false, retiros: false })
+      .eq('turno_id', shiftId)
+      .eq('cuenta_id', accountId)
+      .eq('caja_id', boxId)
+    if (error) throw error
+    return null
+  }
+
+  const { error } = await supabase.from('cuentas_x_turno').upsert({
+    turno_id: shiftId,
+    cuenta_id: accountId,
+    caja_id: boxId,
+    valor: 0,
+    cobros: false,
+    retiros: false,
+  }, { onConflict: 'turno_id,cuenta_id,caja_id', ignoreDuplicates: true })
   if (error) throw error
   return null
 }

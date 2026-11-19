@@ -121,6 +121,7 @@ import {
   loadCurrentShiftData,
   loadPendingShiftTasks,
   loadShiftHistory,
+  getAccountByHolderWallet,
   deleteAppImage,
   getStoragePublicUrl,
   replaceAppImage,
@@ -128,6 +129,7 @@ import {
   saveAppConfig,
   setUserBlocked,
   setAccountAvailability,
+  setAccountBoxAvailability,
   updateAccount,
   updateAccountFlags,
   updateAccountType,
@@ -1167,7 +1169,13 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   }
   if (!data.shift) return <section className="panel empty-state"><strong>No hay un turno abierto</strong><p>Creá o abrí un turno en Supabase para cargar la operación real de la caja.</p></section>
   const goals = mapGoals(data.goals)
-  const accounts = data.accounts.filter(account => account.cuentas?.activa !== false).map(account => {
+  const accounts = data.accounts.filter(account => {
+    const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account.cuentas?.tipo_cuenta_id))
+    const isBoxScoped = !accountType?.es_compartido && !accountType?.es_deposito && !accountType?.ahorro
+    return isBoxScoped && data.shift.abierto
+      ? account.caja_activa
+      : account.cuentas?.activa !== false
+  }).map(account => {
     const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account.cuentas?.tipo_cuenta_id)) || null
     const isCrossBoxAccount = Boolean(accountType?.es_compartido || accountType?.es_deposito)
     const usesSharedBalance = isCrossBoxAccount || Boolean(accountType?.ahorro)
@@ -4380,7 +4388,12 @@ function LiveLogistics({ data, setToast, onSaved }) {
   const hiddenRows = allRows.filter(row => row.is_off)
   const linkedShiftIds = new Set(allRows.map(row => String(row.cuenta_x_turno_id)))
   const accountOptions = [...(data.accounts || [])]
-    .filter(link => !linkedShiftIds.has(String(link.id)) && link.cuentas?.activa !== false)
+    .filter(link => {
+      const type = (data.accountTypes || []).find(item => String(item.id) === String(link.cuentas?.tipo_cuenta_id))
+      const isBoxScoped = !type?.es_deposito && !type?.es_compartido && !type?.ahorro
+      return !linkedShiftIds.has(String(link.id))
+        && (isBoxScoped ? link.caja_activa : link.cuentas?.activa !== false)
+    })
     .sort((left, right) => Number(left.cuentas?.billeteras?.id || 0) - Number(right.cuentas?.billeteras?.id || 0) || Number(left.cuentas?.id || left.cuenta_id) - Number(right.cuentas?.id || right.cuenta_id))
   const filteredRows = activeRows.filter(row => {
     const account = row.cuentas_x_turno?.cuentas
@@ -5169,7 +5182,11 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
             const accountWallet = account?.cuentas?.billeteras?.nombre || localData.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
             return accountHolder === holderName && accountWallet === walletName
           })
-          availability[holderName][walletName] = Boolean(existingAccount?.cuentas?.activa)
+          const accountType = localData.accountTypes?.find(type => String(type.id) === String(existingAccount?.cuentas?.tipo_cuenta_id))
+          const isBoxScoped = !accountType?.es_compartido && !accountType?.es_deposito && !accountType?.ahorro
+          availability[holderName][walletName] = isBoxScoped
+            ? Boolean(existingAccount?.caja_activa)
+            : Boolean(existingAccount?.cuentas?.activa)
       })
     })
 
@@ -5218,7 +5235,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
       bonusConditions: (localData.bonusConditions || []).map((condition) => ({ id: condition.id, label: condition.nombre || 'Condición', allow: Boolean(condition.plataforma) })),
       bonusTypes: (localData.bonusTypes || []).map((type) => ({ id: type.id, name: type.nombre || 'Tipo', percentageCount: Number(type.cantidad_porcentaje ?? 1) })),
     }
-  }, [localData.accounts, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.subplatforms, localData.panels, localData.userCategories, localData.expenseTypes, localData.bonusConditions, localData.bonusTypes, currentBoxId])
+  }, [localData.accounts, localData.accountTypes, localData.boxes, localData.colors, localData.holders, localData.wallets, localData.walletTypes, localData.platforms, localData.subplatforms, localData.panels, localData.userCategories, localData.expenseTypes, localData.bonusConditions, localData.bonusTypes, currentBoxId])
 
   const [tab, setTab] = useState('boxes')
   const [draft, setDraft] = useState(buildDefaultConfig)
@@ -5257,7 +5274,7 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
   }
 
   const getLatestAccountData = async () => {
-    const latest = await loadCurrentShiftData(data?.shift?.caja_id ?? null)
+    const latest = await loadCurrentShiftData(currentBoxId ?? data?.shift?.caja_id ?? null)
     return latest
   }
 
@@ -5276,8 +5293,23 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
       return accountHolder === holderName && accountWallet === walletName
     })
 
-    const currentChecked = Boolean(existingAccount?.cuentas?.activa ?? existingAccount?.cuentas?.check ?? existingAccount?.cuentas?.activo ?? draft.accounts.availability?.[holderName]?.[walletName] ?? false)
+    let account = existingAccount?.cuentas
+    if (!account) {
+      try {
+        account = await getAccountByHolderWallet(holder.id, wallet.id)
+      } catch (error) {
+        setToast(error.message || 'No se pudo consultar la cuenta')
+        return
+      }
+    }
+    const typeId = account?.tipo_cuenta_id ?? latest.accountTypes?.[0]?.id ?? data.accountTypes?.[0]?.id ?? null
+    const accountType = latest.accountTypes?.find(type => String(type.id) === String(typeId))
+    const isBoxScoped = !accountType?.es_compartido && !accountType?.es_deposito && !accountType?.ahorro
+    const currentChecked = isBoxScoped
+      ? Boolean(existingAccount?.caja_activa)
+      : Boolean(account?.activa ?? draft.accounts.availability?.[holderName]?.[walletName] ?? false)
     const nextValue = !currentChecked
+    const boxId = latest.shift?.caja_id ?? currentBoxId
 
     setDraft((current) => ({
       ...current,
@@ -5294,7 +5326,8 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
     }))
 
     try {
-      if (!existingAccount?.cuentas) {
+      let accountId = account?.id
+      if (!account) {
         const created = await createAccount({
           holderId: holder.id,
           walletId: wallet.id,
@@ -5302,38 +5335,37 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
           cuil: '',
           password: '',
           notes: '',
-          typeId: latest.accountTypes?.[0]?.id ?? data.accountTypes?.[0]?.id ?? undefined,
+          typeId: typeId ?? undefined,
           active: nextValue,
         })
-
-        if (latest.shift?.id && latest.shift?.caja_id) {
-          await setAccountAvailability({
-            shiftId: latest.shift.id,
-            boxId: latest.shift.caja_id,
-            accountId: created.id,
-            enabled: nextValue,
-            value: 0,
-            canCollect: false,
-            canWithdraw: false,
-          })
-        }
+        accountId = created.id
       } else {
-        await updateAccount(existingAccount.cuentas.id, {
-          active: nextValue,
-          alias: existingAccount.cuentas.alias ?? '',
-          cuil: existingAccount.cuentas.cuil ?? '',
-          password: existingAccount.cuentas.patron ?? '',
-          notes: existingAccount.cuentas.notas ?? '',
-          typeId: existingAccount.cuentas.tipo_cuenta_id ?? null,
-        })
+        const payload = {
+          alias: account.alias ?? '',
+          cuil: account.cuil ?? '',
+          password: account.patron ?? '',
+          notes: account.notas ?? '',
+          typeId: account.tipo_cuenta_id ?? null,
+        }
+        if (!isBoxScoped) payload.active = nextValue
+        await updateAccount(account.id, payload)
+      }
 
-        if (latest.shift?.id && latest.shift?.caja_id && !nextValue) {
+      if (boxId) {
+        if (isBoxScoped) {
+          await setAccountBoxAvailability({
+            shiftId: latest.shift?.id ?? null,
+            boxId,
+            accountId,
+            enabled: nextValue,
+          })
+        } else {
           await setAccountAvailability({
-            shiftId: latest.shift.id,
-            boxId: latest.shift.caja_id,
-            accountId: existingAccount.cuentas.id,
-            enabled: false,
-            value: existingAccount.valor ?? 0,
+            shiftId: latest.shift?.id ?? null,
+            boxId,
+            accountId,
+            enabled: nextValue,
+            value: existingAccount?.valor ?? 0,
             canCollect: false,
             canWithdraw: false,
           })
@@ -5344,6 +5376,11 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
       const refreshed = await refreshLocalData()
       onSaved(refreshed)
       if (refreshed?.accounts) {
+        const refreshedAccount = (refreshed.accounts || []).find((item) => {
+          const accountHolder = item?.cuentas?.titulares?.nombre || refreshed.holders?.find((holderRow) => String(holderRow.id) === String(item?.titular_id))?.nombre
+          const accountWallet = item?.cuentas?.billeteras?.nombre || refreshed.wallets?.find((walletRow) => String(walletRow.id) === String(item?.billetera_id))?.nombre
+          return accountHolder === holderName && accountWallet === walletName
+        })
         setDraft((current) => ({
           ...current,
           accounts: {
@@ -5352,13 +5389,9 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
               ...(current.accounts?.availability || {}),
               [holderName]: {
                 ...((current.accounts?.availability || {})[holderName] || {}),
-                [walletName]: Boolean(
-                  (refreshed.accounts || []).find((account) => {
-                    const accountHolder = account?.cuentas?.titulares?.nombre || refreshed.holders?.find((item) => item.id === account?.titular_id)?.nombre
-                    const accountWallet = account?.cuentas?.billeteras?.nombre || refreshed.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
-                    return accountHolder === holderName && accountWallet === walletName
-                  })?.cuentas?.activa ?? nextValue
-                ),
+                [walletName]: isBoxScoped
+                  ? Boolean(refreshedAccount?.caja_activa)
+                  : Boolean(refreshedAccount?.cuentas?.activa ?? nextValue),
               },
             },
           },
@@ -5448,6 +5481,13 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
       setToast('Cuenta guardada')
       const refreshed = await refreshLocalData()
       onSaved(refreshed)
+      const refreshedAccount = (refreshed.accounts || []).find((account) => {
+        const accountHolder = account?.cuentas?.titulares?.nombre || refreshed.holders?.find((item) => item.id === account?.titular_id)?.nombre
+        const accountWallet = account?.cuentas?.billeteras?.nombre || refreshed.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
+        return accountHolder === selected.holder && accountWallet === selected.wallet
+      })
+      const refreshedType = refreshed.accountTypes?.find(type => String(type.id) === String(refreshedAccount?.cuentas?.tipo_cuenta_id))
+      const isBoxScoped = !refreshedType?.es_compartido && !refreshedType?.es_deposito && !refreshedType?.ahorro
       setDraft((current) => ({
         ...current,
         accounts: {
@@ -5456,11 +5496,9 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
             ...(current.accounts?.availability || {}),
             [selected.holder]: {
               ...((current.accounts?.availability || {})[selected.holder] || {}),
-              [selected.wallet]: Boolean((refreshed.accounts || []).find((account) => {
-                const accountHolder = account?.cuentas?.titulares?.nombre || refreshed.holders?.find((item) => item.id === account?.titular_id)?.nombre
-                const accountWallet = account?.cuentas?.billeteras?.nombre || refreshed.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
-                return accountHolder === selected.holder && accountWallet === selected.wallet
-              })?.cuentas?.activa ?? false),
+              [selected.wallet]: isBoxScoped
+                ? Boolean(refreshedAccount?.caja_activa)
+                : Boolean(refreshedAccount?.cuentas?.activa),
             },
           },
         },
@@ -5490,7 +5528,12 @@ function LiveSettings({ data, selectedBoxId, setToast, onSaved, onCloseBox }) {
           const accountWallet = account?.cuentas?.billeteras?.nombre || data.wallets?.find((item) => item.id === account?.billetera_id)?.nombre
           return accountHolder === holderName && accountWallet === walletName
         })
-        const enabled = Boolean(draft.accounts.availability?.[holderName]?.[walletName] ?? match?.cuentas?.activa ?? match?.cuentas?.check ?? match?.cuentas?.activo ?? false)
+        const type = data.accountTypes?.find(item => String(item.id) === String(match?.cuentas?.tipo_cuenta_id))
+        const isBoxScoped = !type?.es_deposito && !type?.es_compartido && !type?.ahorro
+        const matchAvailability = isBoxScoped
+          ? match?.caja_activa
+          : match?.cuentas?.activa ?? match?.cuentas?.check ?? match?.cuentas?.activo
+        const enabled = Boolean(draft.accounts.availability?.[holderName]?.[walletName] ?? matchAvailability ?? false)
         return <div className="account-config-cell" key={`holder-${holderIndex}-wallet-${walletIndex}`}>
           <label className="toggle-cell" aria-label={`Activar ${holderName} · ${walletName}`}>
             <input type="checkbox" checked={enabled} onChange={() => toggleWallet(holderName, walletName)} />
