@@ -194,7 +194,68 @@ CREATE POLICY dev_insert_movimientos ON public.movimientos
     )
   );
 
-GRANT SELECT, INSERT ON public.movimientos TO anon;
+DROP POLICY IF EXISTS dev_update_movimientos_ahorro ON public.movimientos;
+CREATE POLICY dev_update_movimientos_ahorro ON public.movimientos
+  FOR UPDATE TO anon
+  USING (
+    es_ahorro IS TRUE
+    AND turno_destino_id IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM public.turnos AS origin_shift
+      JOIN public.cuentas_x_turno AS account_links
+        ON account_links.turno_id = origin_shift.id
+      WHERE origin_shift.id = movimientos.turno_id
+        AND origin_shift.abierto IS TRUE
+        AND account_links.id = movimientos.cuenta_x_turno_id
+        AND (
+          movimientos.caja_desde_id = origin_shift.caja_id
+          OR movimientos.caja_hasta_id = origin_shift.caja_id
+        )
+    )
+  )
+  WITH CHECK (
+    es_ahorro IS TRUE
+    AND turno_destino_id IS NULL
+    AND monto > 0
+    AND caja_desde_id <> caja_hasta_id
+    AND EXISTS (
+      SELECT 1
+      FROM public.turnos AS origin_shift
+      JOIN public.cuentas_x_turno AS account_links
+        ON account_links.turno_id = origin_shift.id
+      WHERE origin_shift.id = movimientos.turno_id
+        AND origin_shift.abierto IS TRUE
+        AND account_links.id = movimientos.cuenta_x_turno_id
+        AND (
+          movimientos.caja_desde_id = origin_shift.caja_id
+          OR movimientos.caja_hasta_id = origin_shift.caja_id
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS dev_delete_movimientos_ahorro ON public.movimientos;
+CREATE POLICY dev_delete_movimientos_ahorro ON public.movimientos
+  FOR DELETE TO anon
+  USING (
+    es_ahorro IS TRUE
+    AND turno_destino_id IS NULL
+    AND EXISTS (
+      SELECT 1
+      FROM public.turnos AS origin_shift
+      JOIN public.cuentas_x_turno AS account_links
+        ON account_links.turno_id = origin_shift.id
+      WHERE origin_shift.id = movimientos.turno_id
+        AND origin_shift.abierto IS TRUE
+        AND account_links.id = movimientos.cuenta_x_turno_id
+        AND (
+          movimientos.caja_desde_id = origin_shift.caja_id
+          OR movimientos.caja_hasta_id = origin_shift.caja_id
+        )
+    )
+  );
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.movimientos TO anon;
 GRANT SELECT ON public.turnos, public.cuentas_x_turno TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE ON public.tareas, public.tareas_x_turno TO anon;
 GRANT USAGE, SELECT ON SEQUENCE public.tareas_id_seq, public.tareas_x_turno_id_seq TO anon;

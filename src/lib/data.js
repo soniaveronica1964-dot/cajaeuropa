@@ -895,7 +895,7 @@ export async function deleteTaChargeLine(id) {
 
 export async function createFoundMoney({ accountShiftId, value, notes }) {
   requireSupabase()
-  const amount = requireNonNegativeAmount(value)
+  const amount = requireFiniteAmount(value)
   const { data, error } = await supabase.from('dinero_encontrado').insert({
     cuenta_x_turno_id: accountShiftId,
     monto: amount,
@@ -908,7 +908,7 @@ export async function createFoundMoney({ accountShiftId, value, notes }) {
 export async function updateFoundMoneyLine(id, { accountShiftId, value, notes }) {
   const values = {}
   if (accountShiftId !== undefined) values.cuenta_x_turno_id = accountShiftId
-  if (value !== undefined) values.monto = requireNonNegativeAmount(value)
+  if (value !== undefined) values.monto = requireFiniteAmount(value)
   if (notes !== undefined) values.notas = notes?.trim() || null
   return updateRow('dinero_encontrado', id, values)
 }

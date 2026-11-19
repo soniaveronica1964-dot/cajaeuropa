@@ -352,6 +352,40 @@ async function createAppImagePayload(file) {
   return { original: file, imageMini }
 }
 
+async function downloadImageAsPng(imageUrl, fileName) {
+  const response = await fetch(imageUrl)
+  if (!response.ok) throw new Error(`No se pudo descargar la imagen (${response.status})`)
+  const sourceUrl = URL.createObjectURL(await response.blob())
+  let pngUrl
+  try {
+    const image = new Image()
+    image.src = sourceUrl
+    await image.decode()
+    const canvas = document.createElement('canvas')
+    canvas.width = image.naturalWidth
+    canvas.height = image.naturalHeight
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('No se pudo preparar la imagen PNG')
+    context.drawImage(image, 0, 0)
+    const png = await new Promise((resolve, reject) => {
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob)
+        else reject(new Error('No se pudo convertir la imagen a PNG'))
+      }, 'image/png')
+    })
+    pngUrl = URL.createObjectURL(png)
+    const link = document.createElement('a')
+    link.href = pngUrl
+    link.download = `${fileName}.png`
+    document.body.append(link)
+    link.click()
+    link.remove()
+  } finally {
+    URL.revokeObjectURL(sourceUrl)
+    if (pngUrl) setTimeout(() => URL.revokeObjectURL(pngUrl), 1000)
+  }
+}
+
 const navItems = [
   ['dashboard', 'Caja', LayoutGrid],
   ['stats', 'Estadísticas', BarChart3],
@@ -1629,9 +1663,10 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
   const [historyOpen, setHistoryOpen] = useState(false)
   const displayRows = [...rows, ...optimisticRows.filter(optimistic => !rows.some(row => String(row.id) === String(optimistic.id)))]
     .sort((left, right) => new Date(right.fecha_hora_creacion) - new Date(left.fecha_hora_creacion))
-  const recentRows = displayRows.filter(bonus => !hiddenRecentIds.has(bonus.id)).slice(0, 5)
+  const activeRows = displayRows.filter(bonus => !hiddenRecentIds.has(bonus.id))
+  const recentRows = activeRows.slice(0, 5)
   const modeOrder = ['granted', 'recovered', 'publicity']
-  const net = bonusNetTotal(displayRows)
+  const net = bonusNetTotal(activeRows)
 
   const cycleMode = () => setMode(current => modeOrder[(modeOrder.indexOf(current) + 1) % modeOrder.length])
   const create = async (event) => {
@@ -1738,7 +1773,7 @@ function BonusList({ shiftId, shift, rows, onSaved, onCreated, setToast }) {
       </div>)}
       {!recentRows.length && <span className="bonus-recent-empty">Sin bonos registrados</span>}
     </div>
-    {historyOpen && <BonusHistoryModal bonuses={displayRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} editableAmounts />}
+    {historyOpen && <BonusHistoryModal bonuses={activeRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} onDeleted={id => setHiddenRecentIds(current => new Set(current).add(id))} setToast={setToast} editableAmounts />}
   </section>
 }
 
@@ -1844,18 +1879,8 @@ function LiveStates({ boxId, setToast }) {
 
   const download = async (state, imageUrl) => {
     try {
-      const response = await fetch(imageUrl)
-      if (!response.ok) throw new Error(`No se pudo descargar la imagen (${response.status})`)
-      const blob = await response.blob()
-      const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' })[blob.type] || 'img'
-      const objectUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = `${state.nombre.replace(/[\\/:*?"<>|]/g, '-') || 'estado'}.${extension}`
-      document.body.append(link)
-      link.click()
-      link.remove()
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+      const fileName = state.nombre.replace(/[\\/:*?"<>|]/g, '-') || 'estado'
+      await downloadImageAsPng(imageUrl, fileName)
     } catch (error) {
       setToast(error.message || 'No se pudo descargar la imagen')
     }
@@ -1890,6 +1915,7 @@ function LiveStates({ boxId, setToast }) {
           <header><h3>{group.title}</h3><span>{group.items.length} estados</span></header>
           <div className="state-card-grid">{group.items.map(state => {
             const image = getStoragePublicUrl(state.imagen_mini || state.imagen)
+            const downloadImage = getStoragePublicUrl(state.imagen) || image
             const lines = [...(state.lineas_estado || [])].sort((left, right) => Number(left.porcentaje) - Number(right.porcentaje))
             return <article className="state-card" key={state.id}>
               {image ? <img className="state-card-image" src={image} alt={`Imagen de ${state.nombre}`} /> : <div className="state-card-image state-card-placeholder"><Gift size={30} /></div>}
@@ -1903,7 +1929,7 @@ function LiveStates({ boxId, setToast }) {
                 </p>) : <small>Sin porcentajes configurados</small>}</div>
                 <div className="state-card-actions">
                   <button type="button" className="icon-button" title="Editar estado" aria-label={`Editar ${state.nombre}`} onClick={() => setEditingState(state)}><Pencil size={14} /></button>
-                  <button type="button" className="icon-button" title="Descargar imagen" aria-label={`Descargar imagen de ${state.nombre}`} disabled={!image} onClick={() => image && download(state, image)}><Download size={14} /></button>
+                  <button type="button" className="icon-button" title="Descargar imagen PNG" aria-label={`Descargar imagen PNG de ${state.nombre}`} disabled={!downloadImage} onClick={() => downloadImage && download(state, downloadImage)}><Download size={14} /></button>
                   <button type="button" className="delete-button" title="Eliminar estado" aria-label={`Eliminar ${state.nombre}`} onClick={() => remove(state)}><Trash2 size={14} /></button>
                 </div>
               </div>
@@ -2065,7 +2091,7 @@ function bonusHistoryGroups(bonuses, shift) {
   return groups
 }
 
-function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmounts = false }) {
+function BonusHistoryContent({ bonuses, shift, onSaved, onDeleted, setToast, editableAmounts = false }) {
   const [editingNoteId, setEditingNoteId] = useState(null)
   const [noteDraft, setNoteDraft] = useState('')
   const [savingId, setSavingId] = useState(null)
@@ -2140,6 +2166,8 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
     setSavingId(bonus.id)
     try {
       await deleteBonusLine(bonus.id)
+      onDeleted?.(bonus.id)
+      setToast('Bono eliminado')
       onSaved()
     } catch (error) {
       setToast(error.message || 'No se pudo borrar el bono')
@@ -2190,7 +2218,7 @@ function BonusHistoryContent({ bonuses, shift, onSaved, setToast, editableAmount
   </div>
 }
 
-function BonusHistoryModal({ bonuses, shift, onClose, onSaved, setToast, editableAmounts = false, showTotals = false }) {
+function BonusHistoryModal({ bonuses, shift, onClose, onSaved, onDeleted, setToast, editableAmounts = false, showTotals = false }) {
   const counts = bonuses.reduce((result, bonus) => {
     result[bonusTypeOf(bonus)] += 1
     return result
@@ -2204,7 +2232,7 @@ function BonusHistoryModal({ bonuses, shift, onClose, onSaved, setToast, editabl
   return <div className="modal-backdrop bonus-history-backdrop" onClick={onClose}>
     <section className={`bonus-history-modal ${editableAmounts ? 'bonus-history-modal-detailed' : ''}`} role="dialog" aria-modal="true" aria-label="Bonos del turno" onClick={(event) => event.stopPropagation()}>
       <header><div><h2>{editableAmounts ? 'Bonos' : 'Bonos del turno'}</h2><span>{editableAmounts ? `Bonos: ${counts.granted} Otorgados | ${counts.recovered} Recuperados | ${counts.publicity} Publicidad` : 'Revisá y editá los registros del turno'}</span></div><button type="button" className="modal-close" title="Cerrar" aria-label="Cerrar" onClick={onClose}><X size={17} /></button></header>
-      <div className="bonus-history-scroll"><BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} setToast={setToast} editableAmounts={editableAmounts} /></div>
+      <div className="bonus-history-scroll"><BonusHistoryContent bonuses={bonuses} shift={shift} onSaved={onSaved} onDeleted={onDeleted} setToast={setToast} editableAmounts={editableAmounts} /></div>
       <footer className={showTotals ? 'bonus-history-modal-footer' : ''}>
         {showTotals && <>
           <div><span>Otorgados</span><strong>{moneyWithCents.format(totals.granted)}</strong></div>
@@ -2837,18 +2865,8 @@ function StatusCard({ boxId, setToast }) {
       return
     }
     try {
-      const response = await fetch(imageUrl)
-      if (!response.ok) throw new Error(`No se pudo descargar la imagen (${response.status})`)
-      const blob = await response.blob()
-      const extension = ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'image/avif': 'avif' })[blob.type] || 'img'
-      const objectUrl = URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = objectUrl
-      link.download = `${state.nombre.replace(/[\\/:*?"<>|]/g, '-') || 'estado'}.${extension}`
-      document.body.append(link)
-      link.click()
-      link.remove()
-      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+      const fileName = state.nombre.replace(/[\\/:*?"<>|]/g, '-') || 'estado'
+      await downloadImageAsPng(imageUrl, fileName)
     } catch (error) {
       setToast(error.message || 'No se pudo descargar la imagen')
     }
@@ -2885,7 +2903,7 @@ function StatusCard({ boxId, setToast }) {
                 <span>{state.tipos_estado?.nombre || 'Sin tipo'}</span>
                 <small>{percentages.join(' · ') || 'Sin porcentaje'}</small>
               </div>
-              <button type="button" className="icon-button" title="Descargar imagen original" aria-label={`Descargar imagen original de ${state.nombre}`} disabled={!state.imagen} onClick={() => downloadOriginal(state)}><Download size={14} /></button>
+              <button type="button" className="icon-button" title="Descargar imagen PNG" aria-label={`Descargar imagen PNG de ${state.nombre}`} disabled={!state.imagen} onClick={() => downloadOriginal(state)}><Download size={14} /></button>
             </article>
           })}
         </section>)}</div>
@@ -3186,7 +3204,7 @@ function OperationHistoryModal({ title, items, onClose, onSaveItem, onDeleteItem
                 {detailOptions.map(option => <option value={option.value} key={option.value}>{option.label}</option>)}
               </select>
               : <input aria-label={detailLabel} placeholder={detailLabel} value={draft.detail} onChange={event => changeDraft(item.id, 'detail', event.target.value)} disabled={saving || savingId === item.id} />}
-            <input aria-label="Monto" inputMode="decimal" value={draft.amount} onChange={event => { if (allowNegativeAmounts || !event.target.value.includes('-')) changeDraft(item.id, 'amount', event.target.value) }} onKeyDown={event => { if (!allowNegativeAmounts && event.key === '-') event.preventDefault() }} disabled={saving || savingId === item.id} />
+            <input aria-label="Monto" inputMode={allowNegativeAmounts ? 'text' : 'decimal'} value={draft.amount} onChange={event => { if (allowNegativeAmounts || !event.target.value.includes('-')) changeDraft(item.id, 'amount', event.target.value) }} onKeyDown={event => { if (!allowNegativeAmounts && event.key === '-') event.preventDefault() }} disabled={saving || savingId === item.id} />
             <input aria-label="Notas" placeholder="Notas" value={draft.notes} onChange={event => changeDraft(item.id, 'notes', event.target.value)} disabled={saving || savingId === item.id} />
             <button className="delete-button" type="button" title="Eliminar registro" aria-label="Eliminar registro" onClick={() => removeItem(item)} disabled={saving || savingId === item.id}><Trash2 size={14} /></button>
           </> : <>
@@ -3211,10 +3229,11 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, onCreated, setToast
   const [historyOpen, setHistoryOpen] = useState(false)
   const displayRows = [...rows, ...optimisticRows.filter(optimistic => !rows.some(row => String(row.id) === String(optimistic.id)))]
     .sort((left, right) => new Date(right.fecha_hora_creacion) - new Date(left.fecha_hora_creacion))
-  const grantedCount = displayRows.filter(row => bonusTypeOf(row) === 'granted').length
-  const recoveredCount = displayRows.filter(row => bonusTypeOf(row) === 'recovered').length
-  const publicityCount = displayRows.filter(row => bonusTypeOf(row) === 'publicity').length
-  const bonusTotals = displayRows.reduce((totals, row) => {
+  const activeRows = displayRows.filter(row => !hiddenRecentIds.has(row.id))
+  const grantedCount = activeRows.filter(row => bonusTypeOf(row) === 'granted').length
+  const recoveredCount = activeRows.filter(row => bonusTypeOf(row) === 'recovered').length
+  const publicityCount = activeRows.filter(row => bonusTypeOf(row) === 'publicity').length
+  const bonusTotals = activeRows.reduce((totals, row) => {
     totals[bonusTypeOf(row)] += Number(row.valor || 0)
     return totals
   }, { granted: 0, recovered: 0, publicity: 0 })
@@ -3313,15 +3332,15 @@ function BonusOperationCard({ shiftId, shift, rows, onSaved, onCreated, setToast
           onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur() } }}
         /></b>
       </div>)}
-      {!displayRows.length && <EmptyInline text="Sin bonos registrados." />}
+      {!activeRows.length && <EmptyInline text="Sin bonos registrados." />}
     </div>
     <footer className="operation-total operation-bonus-totals">
       <div><span>Otorgados</span><strong>{moneyWithCents.format(bonusTotals.granted)}</strong></div>
       <div><span>Recuperados</span><strong>{moneyWithCents.format(bonusTotals.recovered)}</strong></div>
       <div><span>Publicidad</span><strong>{moneyWithCents.format(bonusTotals.publicity)}</strong></div>
-      <div><span>Neto</span><strong>{moneyWithCents.format(bonusNetTotal(displayRows))}</strong></div>
+      <div><span>Neto</span><strong>{moneyWithCents.format(bonusNetTotal(activeRows))}</strong></div>
     </footer>
-    {historyOpen && <BonusHistoryModal bonuses={displayRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} setToast={setToast} editableAmounts />}
+    {historyOpen && <BonusHistoryModal bonuses={activeRows} shift={shift} onClose={() => setHistoryOpen(false)} onSaved={onSaved} onDeleted={id => setHiddenRecentIds(current => new Set(current).add(id))} setToast={setToast} editableAmounts />}
   </section>
 }
 
@@ -3361,7 +3380,7 @@ function TaChargesCard({ shiftId, rows, onSaved, setToast }) {
     <div className="operation-recent-list">
       <small>Últimas cargas</small>
       {rows.slice(0, 9).map(row => <div className="operation-recent-row" key={row.id}>
-        <span>{row.usuario_texto || row.notas || 'Carga T.A.'}</span>
+        <span>{[row.usuario_texto, row.notas].filter(Boolean).join(' · ') || 'Carga T.A.'}</span>
         <b>{money.format(row.monto)}</b>
       </div>)}
       {!rows.length && <EmptyInline text="Sin movimientos todavía." />}
@@ -3404,7 +3423,7 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
     event.preventDefault()
     const amount = parseLocalizedAmount(value)
     if (!selectedAccount) { setToast('Seleccioná un titular y una billetera disponibles'); return }
-    if (!(amount > 0)) { setToast('Ingresá un monto válido'); return }
+    if (amount == null || amount === 0) { setToast('Ingresá un monto válido'); return }
     setSaving(true)
     try {
       await createFoundMoney({ accountShiftId: selectedAccount.id, value: amount, notes })
@@ -3430,7 +3449,7 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
         <option value="">Billetera</option>
         {wallets.map(([id, name]) => <option value={id} key={id}>{name}</option>)}
       </select>
-      <input aria-label="Monto encontrado" inputMode="decimal" placeholder="$ Monto" value={value} onChange={event => { if (!event.target.value.includes('-')) setValue(event.target.value) }} onKeyDown={event => { if (event.key === '-') event.preventDefault() }} disabled={saving} />
+      <input aria-label="Monto encontrado" inputMode="text" placeholder="$ Monto" value={value} onChange={event => setValue(event.target.value)} disabled={saving} />
       <input aria-label="Notas del dinero encontrado" placeholder="Nota" value={notes} onChange={event => setNotes(event.target.value)} disabled={saving} />
       <button className="operation-submit" type="submit" title="Agregar dinero encontrado" aria-label="Agregar dinero encontrado" disabled={saving || !selectedAccount}><Send size={14} /></button>
     </form>
@@ -3452,6 +3471,7 @@ function FoundMoneyCard({ accounts, rows, onSaved, setToast }) {
       onDeleteItem={item => deleteFoundMoneyLine(item.id)}
       onSaved={onSaved}
       setToast={setToast}
+      allowNegativeAmounts
       onClose={() => setHistoryOpen(false)}
     />}
   </section>
