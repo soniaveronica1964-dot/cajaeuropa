@@ -254,7 +254,12 @@ CREATE TABLE tareas (
     titular TEXT,
     monto_a_transferir NUMERIC(14,2),
     activa BOOLEAN NOT NULL DEFAULT TRUE,
-    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    es_ahorro BOOLEAN NOT NULL DEFAULT FALSE,
+    cuenta_ahorro_id BIGINT,
+
+    CONSTRAINT chk_tareas_ahorro_cuenta
+        CHECK (NOT es_ahorro OR cuenta_ahorro_id IS NOT NULL)
 );
 
 CREATE UNIQUE INDEX idx_tareas_titulo_activo_por_caja
@@ -278,6 +283,8 @@ CREATE TABLE tareas_x_turno (
     eliminada BOOLEAN NOT NULL DEFAULT FALSE,
     monto NUMERIC(14,2),
     notas TEXT,
+    es_ahorro BOOLEAN NOT NULL DEFAULT FALSE,
+    cuenta_ahorro_id BIGINT,
 
     UNIQUE (turno_id, tarea_id),
     UNIQUE (turno_id, origen_tarea_x_turno_id),
@@ -285,6 +292,8 @@ CREATE TABLE tareas_x_turno (
         (tarea_id IS NOT NULL AND origen_tarea_x_turno_id IS NULL)
         OR (tarea_id IS NULL AND origen_tarea_x_turno_id IS NOT NULL)
     ),
+    CONSTRAINT chk_tareas_x_turno_ahorro_cuenta
+        CHECK (NOT es_ahorro OR cuenta_ahorro_id IS NOT NULL),
     CHECK (NOT (completada AND ignorada))
 );
 
@@ -309,6 +318,55 @@ CREATE TABLE cuentas (
 
     UNIQUE (titular_id, billetera_id)
 );
+
+CREATE TABLE titulares_sueldo (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    nombre VARCHAR(150) NOT NULL,
+    orden_num INTEGER,
+    is_off BOOLEAN NOT NULL DEFAULT FALSE,
+
+    CHECK (orden_num IS NULL OR orden_num > 0)
+);
+
+CREATE UNIQUE INDEX idx_titulares_sueldo_nombre_activo
+    ON titulares_sueldo (LOWER(TRIM(nombre)))
+    WHERE is_off = FALSE;
+
+CREATE TABLE cuentas_sueldo (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    titular_sueldo_id BIGINT NOT NULL UNIQUE
+        REFERENCES titulares_sueldo(id)
+        ON DELETE CASCADE,
+    alias TEXT NOT NULL DEFAULT '',
+    cuil TEXT NOT NULL DEFAULT '',
+    patron TEXT NOT NULL DEFAULT '',
+    notas TEXT NOT NULL DEFAULT '',
+    activa BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+CREATE TABLE cuentas_sueldo_x_turno (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    turno_id BIGINT NOT NULL REFERENCES turnos(id)
+        ON DELETE CASCADE,
+    cuenta_sueldo_id BIGINT NOT NULL REFERENCES cuentas_sueldo(id)
+        ON DELETE CASCADE,
+    valor NUMERIC(14,2) NOT NULL DEFAULT 0
+        CHECK (valor >= 0),
+
+    UNIQUE (turno_id, cuenta_sueldo_id)
+);
+
+ALTER TABLE tareas
+    ADD CONSTRAINT fk_tareas_cuenta_ahorro
+    FOREIGN KEY (cuenta_ahorro_id)
+    REFERENCES cuentas(id)
+    ON DELETE RESTRICT;
+
+ALTER TABLE tareas_x_turno
+    ADD CONSTRAINT fk_tareas_x_turno_cuenta_ahorro
+    FOREIGN KEY (cuenta_ahorro_id)
+    REFERENCES cuentas(id)
+    ON DELETE RESTRICT;
 
 CREATE TABLE cuentas_x_caja (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -382,8 +440,14 @@ CREATE TABLE gastos (
     notas TEXT,
     fecha_hora_creacion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     turno_id BIGINT NOT NULL REFERENCES turnos(id)
+        ON DELETE CASCADE,
+    tarea_x_turno_id BIGINT REFERENCES tareas_x_turno(id)
         ON DELETE CASCADE
 );
+
+CREATE UNIQUE INDEX idx_gastos_tarea_x_turno
+    ON gastos(tarea_x_turno_id)
+    WHERE tarea_x_turno_id IS NOT NULL;
 
 CREATE TABLE notas_turno (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -411,9 +475,15 @@ CREATE TABLE movimientos (
     cuenta_x_turno_id BIGINT NOT NULL REFERENCES cuentas_x_turno(id)
         ON DELETE RESTRICT,
     notas TEXT,
+    tarea_x_turno_id BIGINT REFERENCES tareas_x_turno(id)
+        ON DELETE CASCADE,
 
     CHECK (caja_desde_id <> caja_hasta_id)
 );
+
+CREATE UNIQUE INDEX idx_movimientos_tarea_x_turno
+    ON movimientos(tarea_x_turno_id)
+    WHERE tarea_x_turno_id IS NOT NULL;
 
 -- =========================================================
 -- 4. PUBLICIDAD Y BONOS
@@ -797,6 +867,9 @@ CREATE INDEX idx_cuentas_billetera ON cuentas(billetera_id);
 CREATE INDEX idx_cuentas_tipo_cuenta ON cuentas(tipo_cuenta_id);
 CREATE INDEX idx_cuentas_x_caja_caja ON cuentas_x_caja(caja_id);
 CREATE INDEX idx_cuentas_x_turno_cuenta_caja ON cuentas_x_turno(cuenta_id, caja_id);
+CREATE INDEX idx_cuentas_sueldo_titular ON cuentas_sueldo(titular_sueldo_id);
+CREATE INDEX idx_cuentas_sueldo_x_turno_turno ON cuentas_sueldo_x_turno(turno_id);
+CREATE INDEX idx_cuentas_sueldo_x_turno_cuenta ON cuentas_sueldo_x_turno(cuenta_sueldo_id);
 
 CREATE INDEX idx_propinas_turno ON propinas(turno_id);
 CREATE INDEX idx_propinas_usuario ON propinas(usuario_id);

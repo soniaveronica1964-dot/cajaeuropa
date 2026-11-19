@@ -1167,7 +1167,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
   }
   if (!data.shift) return <section className="panel empty-state"><strong>No hay un turno abierto</strong><p>Creá o abrí un turno en Supabase para cargar la operación real de la caja.</p></section>
   const goals = mapGoals(data.goals)
-  const accounts = data.accounts.map(account => {
+  const accounts = data.accounts.filter(account => account.cuentas?.activa !== false).map(account => {
     const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account.cuentas?.tipo_cuenta_id)) || null
     const isCrossBoxAccount = Boolean(accountType?.es_compartido || accountType?.es_deposito)
     const usesSharedBalance = isCrossBoxAccount || Boolean(accountType?.ahorro)

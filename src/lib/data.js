@@ -2726,7 +2726,12 @@ export async function setAccountAvailability({ shiftId, boxId, accountId, enable
     return data
   }
 
-  const { error } = await supabase.from('cuentas_x_turno').delete().eq('turno_id', shiftId).eq('cuenta_id', accountId).eq('caja_id', boxId)
+  const { error } = await supabase
+    .from('cuentas_x_turno')
+    .update({ cobros: false, retiros: false })
+    .eq('turno_id', shiftId)
+    .eq('cuenta_id', accountId)
+    .eq('caja_id', boxId)
   if (error) throw error
   return null
 }
