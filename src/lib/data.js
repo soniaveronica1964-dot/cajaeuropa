@@ -134,7 +134,7 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     query('lineas_publicidad', 'id, publicidad_id, total_llegados, nuevos, repetidos, sin_respuesta, total_derivados, lineas_publicidad_x_caja(caja_id, num_derivado), publicidad!inner(turno_id)', request => request.eq('publicidad.turno_id', shift.id).order('id', { ascending: true })),
     query('lineas_bonos', 'id, bono_id, valor, recuperado, es_publicidad, notas, fecha_hora_creacion, bonos!inner(turno_id)', request => request.eq('bonos.turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('propinas', 'id, monto, notas, usuario_texto, fecha_hora_creacion', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
-    query('gastos', 'id, tipo_gasto_id, monto, notas, fecha_hora_creacion, tipos_gasto(nombre, invertir_signo)', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
+    query('gastos', 'id, tipo_gasto_id, monto, notas, fecha_hora_creacion, tarea_x_turno_id, tipos_gasto(nombre, invertir_signo)', request => request.eq('turno_id', shift.id).order('fecha_hora_creacion', { ascending: false })),
     query('tipos_gasto', 'id, nombre, invertir_signo', request => request.order('id', { ascending: true })),
     query('lineas_logistica', 'id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, is_off, cuenta_x_turno_id, logistica!inner(turno_id)', request => request.eq('logistica.turno_id', shift.id).order('num_orden', { ascending: true }).order('id', { ascending: true })),
     query('subobjetivos_x_turno', 'objetivo_alcanzado_turno, objetivo_final_turno, subobjetivos(fecha, objetivos(nombre, objetivo_alcanzado, objetivo_final))', request => request.eq('turno_id', shift.id)),
@@ -1505,11 +1505,7 @@ export async function updateShiftTask(id, changes) {
   }
   if (Object.prototype.hasOwnProperty.call(changes, 'amount')) {
     if (changes.amount == null || changes.amount === '') values.monto = null
-    else {
-      const amount = Number(changes.amount)
-      if (!Number.isFinite(amount)) throw new Error('Ingresá un monto válido para la tarea')
-      values.monto = amount
-    }
+    else values.monto = requireNonNegativeAmount(changes.amount)
   }
   if (Object.prototype.hasOwnProperty.call(changes, 'notes')) {
     values.notas = String(changes.notes ?? '').trim() || null

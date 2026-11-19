@@ -7,6 +7,7 @@ import {
   Coins,
   FileText,
   Gift,
+  ListTodo,
   Megaphone,
   ReceiptText,
   RotateCcw,
@@ -79,21 +80,32 @@ function makeOperations(data, accounts) {
   const visible = value => value != null && String(value).trim() !== ''
   const details = (...values) => values.filter(visible)
   const total = rows => rows.reduce((sum, row) => sum + amountOf(row.monto), 0)
+  const expenses = data.expenses || []
+  const standardExpenses = expenses.filter(row => !row.tarea_x_turno_id)
+  const taskExpenses = expenses.filter(row => row.tarea_x_turno_id)
+  const signedExpenseTotal = rows => rows.reduce((sum, row) => {
+    const sign = row.tipos_gasto?.invertir_signo ? -1 : 1
+    return sum + amountOf(row.monto) * sign
+  }, 0)
+  const expenseRows = (rows, includeType) => rows.map(row => ({
+    ...row,
+    createdAt: row.fecha_hora_creacion,
+    amount: row.monto,
+    detail: includeType ? details(row.tipos_gasto?.nombre, row.notas) : details(row.notas),
+  }))
 
   return [
     {
       title: 'Gastos',
       Icon: ReceiptText,
-      rows: (data.expenses || []).map(row => ({
-        ...row,
-        createdAt: row.fecha_hora_creacion,
-        amount: row.monto,
-        detail: details(row.tipos_gasto?.nombre, row.notas),
-      })),
-      total: (data.expenses || []).reduce((sum, row) => {
-        const sign = row.tipos_gasto?.invertir_signo ? -1 : 1
-        return sum + amountOf(row.monto) * sign
-      }, 0),
+      rows: expenseRows(standardExpenses, true),
+      total: signedExpenseTotal(standardExpenses),
+    },
+    {
+      title: 'Tareas',
+      Icon: ListTodo,
+      rows: expenseRows(taskExpenses, false),
+      total: signedExpenseTotal(taskExpenses),
     },
     {
       title: 'Propinas',

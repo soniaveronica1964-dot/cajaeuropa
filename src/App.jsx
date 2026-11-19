@@ -1156,7 +1156,8 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
     fichas_final: Object.prototype.hasOwnProperty.call(chipFinalDrafts, String(chip.id)) ? chipFinalDrafts[String(chip.id)] : chip.fichas_final,
   }))
   const tipsTotal = data.tips.reduce((sum, tip) => sum + Number(tip.monto || 0), 0)
-  const expensesTotal = data.expenses.reduce((sum, expense) => sum + Number(expense.monto || 0), 0)
+  const standardExpenses = data.expenses.filter(expense => !expense.tarea_x_turno_id)
+  const expensesTotal = standardExpenses.reduce((sum, expense) => sum + Number(expense.monto || 0), 0)
   const orderNamesByConfig = (configured, names) => {
     const remaining = new Set(names)
     const ordered = configured.map(item => item.nombre).filter(name => remaining.delete(name))
@@ -1215,7 +1216,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} boxes={data.boxes || []} activeTurns={data.activeTurns || []} currentBoxId={data.shift.caja_id} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
         <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard boxId={data.shift.caja_id} setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} /></div>
         <div className="operations-grid">
-          <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={data.expenses} onSaved={onSaved} setToast={setToast} />
+          <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={standardExpenses} onSaved={onSaved} setToast={setToast} />
           <MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} />
           <BonusOperationCard key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} />
           <TaChargesCard shiftId={data.shift.id} rows={data.taCharges || []} onSaved={onSaved} setToast={setToast} />
@@ -1380,6 +1381,32 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
     }
   }
 
+  const toggleTaskCompleted = task => {
+    const changes = { completed: !task.completada }
+    const hasAmountDraft = Object.prototype.hasOwnProperty.call(amountDrafts, task.id)
+    if (hasAmountDraft) {
+      const rawAmount = amountDrafts[task.id]
+      if (rawAmount === '') changes.amount = null
+      else {
+        const amount = Number(rawAmount)
+        if (!Number.isFinite(amount) || amount < 0) {
+          setToast('Ingresá un monto válido para la tarea')
+          return
+        }
+        changes.amount = amount
+      }
+    }
+
+    saveChanges(task, changes).then(saved => {
+      if (!saved || !hasAmountDraft) return
+      setAmountDrafts(current => {
+        const next = { ...current }
+        delete next[task.id]
+        return next
+      })
+    })
+  }
+
   const createTask = async (event) => {
     event.preventDefault()
     if (!title.trim() || creating) return
@@ -1511,7 +1538,7 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
       <div className="task-add-details">
         <input aria-label="Alias de la tarea" placeholder="Alias (opcional)" value={alias} onChange={event => setAlias(event.target.value)} disabled={creating} />
         <input aria-label="Titular de la tarea" placeholder="Titular (opcional)" value={holder} onChange={event => setHolder(event.target.value)} disabled={creating} />
-        <label><span>Monto a pasar</span><input aria-label="Monto a pasar de la tarea" type="number" min="0" step="0.01" placeholder="Opcional" value={transferAmount} onChange={event => setTransferAmount(event.target.value)} disabled={creating} /></label>
+        <label><span>Monto fijo (opcional)</span><input aria-label="Monto fijo de la tarea" type="number" min="0" step="0.01" placeholder="Opcional" value={transferAmount} onChange={event => setTransferAmount(event.target.value)} disabled={creating} /></label>
       </div>
       <div className="task-add-actions">
         <button type="button" className="secondary-button" onClick={cancelCreateTask} disabled={creating}>Cancelar</button>
@@ -1523,7 +1550,7 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
         <div className="task-row-heading">
           <button type="button" className="task-collapse-toggle" aria-label={`${expandedTasks[task.id] ? 'Contraer' : 'Expandir'} tarea ${task.titulo}`} aria-expanded={Boolean(expandedTasks[task.id])} disabled={editingTaskId === task.id} onClick={() => setExpandedTasks(current => ({ ...current, [task.id]: !current[task.id] }))}><ChevronDown size={14} /><strong>{task.titulo}</strong></button>
           {canEdit && <div className="task-row-actions">
-            <button type="button" className={`task-state-button ${task.completada ? 'selected' : ''}`} title={task.completada ? 'Marcar como pendiente' : 'Marcar como completada'} aria-label={task.completada ? `Marcar ${task.titulo} como pendiente` : `Marcar ${task.titulo} como completada`} disabled={savingTaskId === task.id || editingTaskId === task.id} onClick={() => saveChanges(task, { completed: !task.completada })}><Check size={14} /></button>
+            <button type="button" className={`task-state-button task-complete-button ${task.completada ? 'selected' : ''}`} title={task.completada ? 'Marcar como pendiente' : 'Marcar como completada'} aria-label={task.completada ? `Marcar ${task.titulo} como pendiente` : `Marcar ${task.titulo} como completada`} disabled={savingTaskId === task.id || editingTaskId === task.id} onClick={() => toggleTaskCompleted(task)}><Check size={14} /></button>
             <button type="button" className={`task-state-button ${task.ignorada ? 'selected' : ''}`} title={task.ignorada ? 'Dejar de ignorar' : 'Ignorar tarea'} aria-label={task.ignorada ? `Dejar de ignorar ${task.titulo}` : `Ignorar ${task.titulo}`} disabled={savingTaskId === task.id || editingTaskId === task.id} onClick={() => saveChanges(task, { ignored: !task.ignorada })}><Eye size={14} /></button>
             {expandedTasks[task.id] && <>
               <button type="button" className="task-edit-button" title="Editar tarea" aria-label={`Editar ${task.titulo}`} disabled={savingTaskId === task.id || editingTaskId === task.id} onClick={() => startEditingTask(task)}><Pencil size={13} /></button>
@@ -1538,7 +1565,7 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
               <div className="task-add-details">
                 <input aria-label="Alias de tarea" placeholder="Alias (opcional)" value={editDraft.alias} onChange={event => setEditDraft(current => ({ ...current, alias: event.target.value }))} disabled={savingTaskId === task.id} />
                 <input aria-label="Titular de tarea" placeholder="Titular (opcional)" value={editDraft.holder} onChange={event => setEditDraft(current => ({ ...current, holder: event.target.value }))} disabled={savingTaskId === task.id} />
-                <label><span>Monto a pasar</span><input aria-label="Monto a pasar" type="number" min="0" step="0.01" placeholder="Opcional" value={editDraft.transferAmount} onChange={event => setEditDraft(current => ({ ...current, transferAmount: event.target.value }))} disabled={savingTaskId === task.id} /></label>
+                <label><span>Monto fijo (opcional)</span><input aria-label="Monto fijo de la tarea" type="number" min="0" step="0.01" placeholder="Opcional" value={editDraft.transferAmount} onChange={event => setEditDraft(current => ({ ...current, transferAmount: event.target.value }))} disabled={savingTaskId === task.id} /></label>
               </div>
               <div className="task-add-actions">
                 <button type="button" className="secondary-button" onClick={cancelEditingTask} disabled={savingTaskId === task.id}>Cancelar</button>
@@ -1548,9 +1575,9 @@ function TasksPanel({ shiftId, rows, previousTasks, canEdit, onSaved, setToast }
             : (task.alias || task.titular || task.monto_a_transferir != null) && <div className="task-definition-details">
               {task.alias && <span><b>Alias:</b> {task.alias}</span>}
               {task.titular && <span><b>Titular:</b> {task.titular}</span>}
-              {task.monto_a_transferir != null && <span><b>Monto a pasar:</b> {moneyWithCents.format(Number(task.monto_a_transferir))}</span>}
+              {task.monto_a_transferir != null && <span><b>Monto fijo:</b> {moneyWithCents.format(Number(task.monto_a_transferir))}</span>}
             </div>}
-          <label className="task-amount-field"><span>Monto / saldo del turno</span><input type="number" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto o saldo de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => saveAmount(task, event)} /></label>
+          <label className="task-amount-field"><span>Monto realizado (vacío usa el monto fijo)</span><input type="number" min="0" step="0.01" value={Object.prototype.hasOwnProperty.call(amountDrafts, task.id) ? amountDrafts[task.id] : task.monto ?? ''} placeholder="Opcional" aria-label={`Monto realizado de ${task.titulo}`} disabled={!canEdit || savingTaskId === task.id} onChange={event => setAmountDrafts(current => ({ ...current, [task.id]: event.target.value }))} onBlur={event => { if (!event.relatedTarget?.classList.contains('task-complete-button')) saveAmount(task, event) }} /></label>
           <div className="task-note-controls">
             <button type="button" className="task-note-toggle" aria-expanded={Boolean(openNotes[task.id])} onClick={() => toggleNote(task)}>{openNotes[task.id] ? 'Ocultar nota' : task.notas ? 'Ver nota' : 'Agregar nota'}</button>
           </div>
