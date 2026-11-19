@@ -292,9 +292,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   color: var(--lavender);
   background: color-mix(in srgb, var(--accent) 14%, #101719);
 }
-.back-to-top-button {
+.back-to-top-button,
+.back-to-bottom-button {
   position: fixed;
-  top: calc(var(--topbar-height) + 12px);
   right: 20px;
   z-index: 25;
   display: grid;
@@ -308,7 +308,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   color: var(--accent);
   transition: 120ms ease;
 }
-.back-to-top-button:hover {
+.back-to-top-button { top: calc(var(--topbar-height) + 12px); }
+.back-to-bottom-button { bottom: 20px; }
+.back-to-top-button:hover,
+.back-to-bottom-button:hover {
   transform: translateY(-2px);
   border-color: var(--accent);
   background: color-mix(in srgb, var(--accent) 25%, var(--panel-elevated));
@@ -2787,6 +2790,7 @@ input[type="time"] { color-scheme: dark; }
 
 @media (max-width: 700px) {
   .back-to-top-button { top: calc(var(--topbar-height) + 10px); right: 12px; width: 38px; height: 38px; }
+  .back-to-bottom-button { right: 12px; bottom: 12px; width: 38px; height: 38px; }
   .expense-history-backdrop { padding: 8px; }
   .expense-history-modal { max-height: 94dvh; }
   .expense-history-modal > header,

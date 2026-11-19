@@ -5,6 +5,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   ArrowUp,
+  ArrowDown,
   BarChart3,
   Banknote,
   Bell,
@@ -435,6 +436,7 @@ function App() {
   const [lastSavedAt, setLastSavedAt] = useState(readLastSavedAt)
   const [faviconRevision, setFaviconRevision] = useState(0)
   const [showBackToTop, setShowBackToTop] = useState(false)
+  const [showBackToBottom, setShowBackToBottom] = useState(false)
   const snapshotRef = useRef(null)
   const editStatusTimer = useRef(null)
   const editStatusFrame = useRef(null)
@@ -480,11 +482,19 @@ function App() {
   }, [toast])
 
   useEffect(() => {
-    const updateScrollPosition = () => setShowBackToTop(window.scrollY > 0)
+    const updateScrollPosition = () => {
+      setShowBackToTop(window.scrollY > 0)
+      setShowBackToBottom(window.scrollY + window.innerHeight < document.documentElement.scrollHeight - 1)
+    }
     window.addEventListener('scroll', updateScrollPosition, { passive: true })
     updateScrollPosition()
     return () => window.removeEventListener('scroll', updateScrollPosition)
   }, [])
+
+  useLayoutEffect(() => {
+    setShowBackToTop(window.scrollY > 0)
+    setShowBackToBottom(window.scrollY + window.innerHeight < document.documentElement.scrollHeight - 1)
+  }, [appData, openGoal, view])
 
   useEffect(() => {
     const handleSaveStatus = (event) => {
@@ -911,6 +921,7 @@ function App() {
         </main>
       </div>
       {view === 'dashboard' && appData?.shift && showBackToTop && <button type="button" className="back-to-top-button" title="Volver arriba" aria-label="Volver arriba" onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}><ArrowUp size={18} /></button>}
+      {view === 'dashboard' && appData?.shift && showBackToBottom && <button type="button" className="back-to-bottom-button" title="Ir abajo" aria-label="Ir abajo" onClick={() => window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' })}><ArrowDown size={18} /></button>}
       {closeBoxDialogOpen && appData && <ShiftCloseModal
         data={appData}
         boxId={selectedBoxId}
