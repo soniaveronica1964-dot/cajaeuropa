@@ -4658,7 +4658,7 @@ function LiveUsersView({ users, boxes, selectedBoxId, onCreate, onEdit, onSaved,
       <span />
     </div>}
     {matchingUsers.map(user => {
-      const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`
+      const name = (user.nombres_usuario || []).map(item => item.nombre).filter(Boolean).join(' / ') || `Usuario #${user.id}`
       const isExpanded = expanded === user.id
       const panelNames = [...new Set((user.paneles_x_usuario || []).map(link => {
         const panelName = link.paneles?.nombre

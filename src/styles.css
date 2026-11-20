@@ -4743,7 +4743,7 @@ html:has(.app-shell[data-theme='light']) {
   color: var(--accent);
 }
 .directory-user-heading > span:last-child { display: grid; gap: 3px; min-width: 0; }
-.directory-user-heading b { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.directory-user-heading b { overflow-wrap: anywhere; font-size: 11px; white-space: normal; }
 .directory-user-heading b.blocked { color: #ff3b45; }
 .directory-user-heading small { overflow: hidden; color: var(--muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
 .directory-row > .tags { display: flex; flex-wrap: wrap; gap: 4px; }
