@@ -3218,8 +3218,8 @@ function UsersCard({ users, onCreate }) {
     <PanelTitle icon={Users} title="Usuarios" action={<button type="button" className="icon-button" title="Nuevo usuario" aria-label="Nuevo usuario" onClick={onCreate}><Plus size={15} /></button>} />
     <div className="search-line users-card-search"><Search size={14} /><input aria-label="Buscar usuario" placeholder="Buscar usuario" value={search} onChange={event => setSearch(event.target.value)} /></div>
     <div className="users-card-list">
-      {matchingUsers.slice(0, 5).map(user => {
-        const name = user.nombres_usuario?.[0]?.nombre || `Usuario #${user.id}`
+      {matchingUsers.map(user => {
+        const name = (user.nombres_usuario || []).map(item => item.nombre).filter(Boolean).join(' / ') || `Usuario #${user.id}`
         const holderNames = (user.titulares_usuario || []).map(holder => holder.nombre).filter(Boolean)
         const phoneNumbers = (user.telefonos_usuario || []).map(phone => phone.numero).filter(Boolean)
         const details = [holderNames.slice(0, 2).join(', '), phoneNumbers.slice(0, 2).join(', ')].filter(Boolean)

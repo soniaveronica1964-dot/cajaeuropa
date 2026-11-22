@@ -1438,9 +1438,12 @@ input[type="time"] { color-scheme: dark; }
 .users-card-search input { font-size: 10px; }
 .users-card-list {
   display: grid;
+  flex: 1 1 auto;
+  align-content: start;
   min-height: 0;
-  max-height: 204px;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
 .users-card-row {
