@@ -961,7 +961,7 @@ function App() {
           {!loadError && !appData && <div className="empty-state"><strong>Cargando datos</strong><p>Consultando el turno y la información operativa.</p></div>}
           {!loadError && appData && view === 'dashboard' && !appData.shift && !appData.boxes?.length && <SetupWizard onCreated={reloadData} setToast={setToast} />}
           {!loadError && appData && view === 'dashboard' && !appData.shift && appData.boxes?.length > 0 && <div className="empty-state"><strong>No hay un turno abierto</strong><p>Configurá o abrí un turno desde Supabase para comenzar a operar.</p></div>}
-          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} accentColor={accentColor} isLightTheme={isLightTheme} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} snapshotRef={snapshotRef} />}
+          {!loadError && appData && view === 'dashboard' && appData.shift && <Dashboard data={appData} accentColor={accentColor} isLightTheme={isLightTheme} openGoal={openGoal} setOpenGoal={setOpenGoal} setToast={setToast} onSaved={reloadData} onBonusCreated={updateBonusData} onCreateUser={() => setUserCreateOpen(true)} onEditUser={setUserEditing} onChipFinalSaved={updateChipFinalData} onRoundingChange={updateRoundingData} onDiscrepancyChange={setCashDiscrepancyPreview} snapshotRef={snapshotRef} />}
           {!loadError && appData && view === 'stats' && <Statistics data={appData} />}
           {!loadError && appData && view === 'logistics' && <LiveLogistics data={appData} setToast={setToast} onSaved={reloadData} />}
           {!loadError && appData && view === 'users' && <LiveUsersView users={appData.users} boxes={appData.boxes || []} selectedBoxId={selectedBoxId} onCreate={() => setUserCreateOpen(true)} onEdit={setUserEditing} onSaved={reloadData} setToast={setToast} />}
@@ -1084,7 +1084,7 @@ function readDashboardPanelPreference() {
   }
 }
 
-function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, setToast, onSaved, onBonusCreated, onCreateUser, onChipFinalSaved, onRoundingChange, onDiscrepancyChange, snapshotRef }) {
+function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, setToast, onSaved, onBonusCreated, onCreateUser, onEditUser, onChipFinalSaved, onRoundingChange, onDiscrepancyChange, snapshotRef }) {
   const [rounding, setRounding] = useState(null)
   const [accountValueDrafts, setAccountValueDrafts] = useState({})
   const [chipFinalDrafts, setChipFinalDrafts] = useState({})
@@ -1269,7 +1269,7 @@ function Dashboard({ data, accentColor, isLightTheme, openGoal, setOpenGoal, set
       <div className="dashboard-main">
         <div className="top-panels"><Publicity rows={data.advertising} boxes={data.boxes} setToast={setToast} onSaved={onSaved} /><BonusList key={data.shift.id} shiftId={data.shift.id} shift={data.shift} rows={data.bonuses} onSaved={onSaved} onCreated={onBonusCreated} setToast={setToast} /><ChipSummary chips={data.chips} setToast={setToast} onChipFinalSaved={onChipFinalSaved} onChipFinalPreview={updateChipFinalDraft} /></div>
         <AccountMatrix accounts={accounts} holders={accountHolders} wallets={accountWallets} boxes={data.boxes || []} activeTurns={data.activeTurns || []} currentBoxId={data.shift.caja_id} accentColor={accentColor} isLightTheme={isLightTheme} setToast={setToast} onSaved={onSaved} onAccountValueDraft={updateAccountValueDraft} />
-        <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard boxId={data.shift.caja_id} setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} /></div>
+        <div className="three-panels"><LogisticsCard rows={data.logistics} accountTypes={data.accountTypes} setToast={setToast} onSaved={onSaved} /><StatusCard boxId={data.shift.caja_id} setToast={setToast} /><UsersCard users={data.users} onCreate={onCreateUser} onEdit={onEditUser} /></div>
         <div className="operations-grid">
           <MovementCard title="Gastos" kind="expenses" shiftId={data.shift.id} options={data.expenseTypes} icon={FileText} amount={expensesTotal} rows={standardExpenses} onSaved={onSaved} setToast={setToast} />
           <MovementCard title="Propinas" kind="tips" shiftId={data.shift.id} icon={CircleDollarSign} amount={tipsTotal} rows={data.tips} onSaved={onSaved} setToast={setToast} />
@@ -3206,7 +3206,7 @@ function StatusCard({ boxId, setToast }) {
           : <div className="turn-state-message">{catalog.states.length ? 'No hay resultados' : 'Todavía no hay estados configurados.'}</div>}
   </section>
 }
-function UsersCard({ users, onCreate }) {
+function UsersCard({ users, onCreate, onEdit }) {
   const [search, setSearch] = useState('')
   const matchingUsers = users.filter(user => [
     ...(user.nombres_usuario || []).map(item => item.nombre),
@@ -3230,7 +3230,7 @@ function UsersCard({ users, onCreate }) {
             <small title={details.join(' · ') || (user.bloqueado ? 'Usuario bloqueado' : '')}>{details.join(' · ') || (user.bloqueado ? 'Usuario bloqueado' : 'Sin datos adicionales')}</small>
           </span>
           {user.bloqueado && <span className="users-card-blocked">Bloqueado</span>}
-          <ChevronRight className="users-card-chevron" size={14} aria-hidden="true" />
+          <button type="button" className="users-card-chevron" title={`Editar ${name}`} aria-label={`Editar ${name}`} onClick={() => onEdit(user)}><ChevronRight size={14} aria-hidden="true" /></button>
         </article>
       })}
       {!matchingUsers.length && <p className="users-card-empty">{users.length ? 'No se encontraron usuarios.' : 'No hay usuarios registrados.'}</p>}

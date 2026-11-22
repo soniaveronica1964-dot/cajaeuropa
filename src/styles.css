@@ -1448,7 +1448,7 @@ input[type="time"] { color-scheme: dark; }
 }
 .users-card-row {
   display: grid;
-  grid-template-columns: 28px minmax(0, 1fr) auto 14px;
+  grid-template-columns: 28px minmax(0, 1fr) auto 28px;
   align-items: center;
   gap: 8px;
   min-height: 43px;
@@ -1494,7 +1494,27 @@ input[type="time"] { color-scheme: dark; }
   font-size: 8px;
   white-space: nowrap;
 }
-.users-card-chevron { color: var(--muted-2); }
+.users-card-chevron {
+  display: grid;
+  grid-column: 4;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted-2);
+  cursor: pointer;
+}
+.users-card-chevron:hover,
+.users-card-chevron:focus-visible {
+  color: var(--accent);
+}
+.users-card-chevron:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
 .users-card-empty {
   margin: 0;
   padding: 12px 4px;
