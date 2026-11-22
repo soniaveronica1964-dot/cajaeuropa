@@ -159,6 +159,7 @@ BEGIN
         notas_turno,
         propinas,
         cargas_ta,
+        valores_sueldo_compartidos,
         cuentas_sueldo_x_turno,
         cuentas_sueldo,
         titulares_sueldo,

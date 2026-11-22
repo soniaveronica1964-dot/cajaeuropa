@@ -124,6 +124,18 @@ export async function loadCurrentShiftData(boxId = null, shiftId = null) {
     'id, turno_id, cuenta_sueldo_id, valor, cuentas_sueldo!inner(id, titular_sueldo_id, alias, cuil, patron, notas, activa, titulares_sueldo(id, nombre, is_off))',
     request => request.eq('turno_id', shift.id).order('id', { ascending: true }),
   )
+  const sharedSalaryValues = await query(
+    'valores_sueldo_compartidos',
+    'cuenta_sueldo_id, valor',
+  )
+  const sharedSalaryValueByAccountId = new Map(
+    sharedSalaryValues.map(row => [String(row.cuenta_sueldo_id), Number(row.valor || 0)]),
+  )
+  for (const row of salaryAccountValues) {
+    row.valor = sharedSalaryValueByAccountId.has(String(row.cuenta_sueldo_id))
+      ? sharedSalaryValueByAccountId.get(String(row.cuenta_sueldo_id))
+      : Number(row.valor || 0)
+  }
 
   const [accountLinks, advertising, bonuses, tips, expenses, expenseTypes, logistics, goals, chips, holders, wallets, platforms, subplatforms, bonusConditions, bonusTypes, accountTypes, walletTypes, shiftTypes, shiftDays, colors, appConfig, activeTurns, taCharges, foundMoney, shiftNotes, movements] = await Promise.all([
     query('cuentas_x_turno', 'id, cuenta_id, caja_id, valor, cobros, retiros', request => request.eq('turno_id', shift.id)),
@@ -1356,14 +1368,41 @@ export async function updateSalaryAccountValue(valueLinkId, value) {
   const amount = requireNonNegativeAmount(value)
   const { data: valueLink, error } = await supabase
     .from('cuentas_sueldo_x_turno')
-    .select('id, turnos!inner(abierto)')
+    .select('id, cuenta_sueldo_id, turnos!inner(abierto)')
     .eq('id', valueLinkId)
     .single()
   if (error) throw error
   if (!valueLink.turnos?.abierto) throw new Error('No se puede modificar una cuenta de un turno cerrado')
-  const updatedValue = await updateRow('cuentas_sueldo_x_turno', valueLinkId, { valor: amount })
-  if (!updatedValue) throw new Error('No se pudo actualizar el valor de sueldo')
-  return updatedValue
+
+  const updatedAt = new Date().toISOString()
+  const { data: sharedValue, error: sharedValueError } = await supabase
+    .from('valores_sueldo_compartidos')
+    .upsert({
+      cuenta_sueldo_id: valueLink.cuenta_sueldo_id,
+      valor: amount,
+      actualizado_en: updatedAt,
+    }, { onConflict: 'cuenta_sueldo_id' })
+    .select()
+    .single()
+  if (sharedValueError) throw sharedValueError
+
+  const { data: openLinks, error: openLinksError } = await supabase
+    .from('cuentas_sueldo_x_turno')
+    .select('id, turnos!inner(abierto)')
+    .eq('cuenta_sueldo_id', valueLink.cuenta_sueldo_id)
+    .eq('turnos.abierto', true)
+  if (openLinksError) throw openLinksError
+
+  const updates = await Promise.all((openLinks || []).map(link =>
+    supabase
+      .from('cuentas_sueldo_x_turno')
+      .update({ valor: amount })
+      .eq('id', link.id)
+  ))
+  const failedUpdate = updates.find(result => result.error)
+  if (failedUpdate) throw failedUpdate.error
+
+  return sharedValue
 }
 
 async function ensureShiftTasks(shiftId, boxId) {
@@ -2130,6 +2169,14 @@ async function ensureShiftSalaryAccounts(shiftId) {
   )
   if (!activeAccounts.length) return
 
+  const sharedValues = await query(
+    'valores_sueldo_compartidos',
+    'cuenta_sueldo_id, valor',
+  )
+  const sharedValueByAccountId = new Map(
+    sharedValues.map(row => [String(row.cuenta_sueldo_id), Number(row.valor || 0)]),
+  )
+
   const { data: existingLinks, error: existingLinksError } = await supabase
     .from('cuentas_sueldo_x_turno')
     .select('cuenta_sueldo_id')
@@ -2143,7 +2190,11 @@ async function ensureShiftSalaryAccounts(shiftId) {
   if (!missingAccountIds.length) return
 
   const { error } = await supabase.from('cuentas_sueldo_x_turno').upsert(
-    missingAccountIds.map(accountId => ({ turno_id: shiftId, cuenta_sueldo_id: accountId, valor: 0 })),
+    missingAccountIds.map(accountId => ({
+      turno_id: shiftId,
+      cuenta_sueldo_id: accountId,
+      valor: sharedValueByAccountId.get(String(accountId)) ?? 0,
+    })),
     { onConflict: 'turno_id,cuenta_sueldo_id', ignoreDuplicates: true },
   )
   if (error) throw error
@@ -2208,7 +2259,7 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
     throw new Error('El siguiente turno configurado no pertenece a esta caja')
   }
 
-  const [accountsResult, chipsResult, notesResult, logisticsResult, salaryAccountsResult] = await Promise.all([
+  const [accountsResult, chipsResult, notesResult, logisticsResult] = await Promise.all([
     supabase.from('cuentas_x_turno')
       .select('id, cuenta_id, caja_id, valor, cobros, retiros, valor_actualizado_en, caja_id_actualizado_en')
       .eq('turno_id', shiftId),
@@ -2223,17 +2274,13 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
       .select('id')
       .eq('turno_id', shiftId)
       .maybeSingle(),
-    supabase.from('cuentas_sueldo_x_turno')
-      .select('cuenta_sueldo_id, valor')
-      .eq('turno_id', shiftId),
   ])
-  for (const result of [accountsResult, chipsResult, notesResult, logisticsResult, salaryAccountsResult]) {
+  for (const result of [accountsResult, chipsResult, notesResult, logisticsResult]) {
     if (result.error) throw result.error
   }
 
   const previousAccounts = accountsResult.data || []
   const previousChips = chipsResult.data || []
-  const previousSalaryAccounts = salaryAccountsResult.data || []
   const { data: previousLines, error: linesError } = logisticsResult.data
     ? await supabase.from('lineas_logistica')
       .select('id, cuenta_x_turno_id, aclaracion, ultimo_reinicio_cobros, ultimo_reinicio_retiros, ultimo_reinicio_caja, ultimo_reinicio_general, num_orden, is_off')
@@ -2267,22 +2314,6 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
     await ensureShiftTasks(newShift.id, newShift.caja_id)
     await ensureAdvertisingLines(newShift.id)
     await ensureShiftChips(newShift.id, newShift.caja_id)
-
-    const { data: nextSalaryAccounts, error: nextSalaryAccountsError } = await supabase
-      .from('cuentas_sueldo_x_turno')
-      .select('id, cuenta_sueldo_id')
-      .eq('turno_id', newShift.id)
-    if (nextSalaryAccountsError) throw nextSalaryAccountsError
-
-    const previousSalaryAccountById = new Map(previousSalaryAccounts.map(account => [String(account.cuenta_sueldo_id), account]))
-    const salaryAccountUpdates = await Promise.all((nextSalaryAccounts || []).map(account => {
-      const previous = previousSalaryAccountById.get(String(account.cuenta_sueldo_id))
-      return supabase.from('cuentas_sueldo_x_turno')
-        .update({ valor: Number(previous?.valor || 0) })
-        .eq('id', account.id)
-    }))
-    const failedSalaryAccountUpdate = salaryAccountUpdates.find(result => result.error)
-    if (failedSalaryAccountUpdate) throw failedSalaryAccountUpdate.error
 
     const { data: nextAccounts, error: nextAccountsError } = await supabase
       .from('cuentas_x_turno')
