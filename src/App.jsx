@@ -2764,7 +2764,9 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
     const previousFlags = flagOverrides[account.id] || { cobros: Boolean(account.cobros), retiros: Boolean(account.retiros) }
     const nextFlags = { ...previousFlags, [field]: checked }
     setFlagOverrides(current => ({ ...current, [account.id]: nextFlags }))
-    updateAccountFlags(account.id, field, checked).catch(() => {
+    updateAccountFlags(account.id, field, checked).then(() => {
+      void onSaved()
+    }).catch(() => {
       setFlagOverrides(current => ({ ...current, [account.id]: previousFlags }))
       setToast(`No se pudo guardar ${field === 'cobros' ? 'cobros' : 'retiros'}`)
     })
@@ -4478,6 +4480,7 @@ function LiveLogistics({ data, setToast, onSaved }) {
     }
     try {
       await updateAccountFlags(accountLink.id, field, checked)
+      void onSaved()
     } catch (error) {
       setFlagOverrides(current => ({
         ...current,

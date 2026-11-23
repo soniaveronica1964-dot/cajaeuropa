@@ -667,43 +667,70 @@ async function updateAccountFlagsAndLogisticsReset(accountShiftId, field, enable
     throw new Error('Campo de disponibilidad no permitido')
   }
   const checked = Boolean(enabled)
-  const { error: accountError } = await supabase
+  const { data: updatedAccount, error: accountError } = await supabase
     .from('cuentas_x_turno')
     .update({ [field]: checked })
     .eq('id', accountShiftId)
+    .select('id, turno_id')
+    .maybeSingle()
   if (accountError) throw accountError
-
+  if (!updatedAccount) throw new Error('No se encontró la billetera del turno seleccionado')
   if (!checked) return
 
-  const { data: accountLink, error: accountLinkError } = await supabase
-    .from('cuentas_x_turno')
-    .select('turno_id')
-    .eq('id', accountShiftId)
-    .maybeSingle()
-  if (accountLinkError) throw accountLinkError
-  if (!accountLink?.turno_id) return
-
-  const { data: logistics, error: logisticsError } = await supabase
+  let logistics = null
+  const { data: logisticsResult, error: logisticsError } = await supabase
     .from('logistica')
     .select('id')
-    .eq('turno_id', accountLink.turno_id)
+    .eq('turno_id', updatedAccount.turno_id)
     .maybeSingle()
   if (logisticsError) throw logisticsError
-  if (!logistics?.id) return
+  if (logisticsResult) {
+    logistics = logisticsResult
+  } else {
+    const { data: createdLogistics, error: createLogisticsError } = await supabase
+      .from('logistica')
+      .insert({ turno_id: updatedAccount.turno_id })
+      .select('id')
+      .single()
+    if (createLogisticsError) throw createLogisticsError
+    logistics = createdLogistics
+  }
+  if (!logistics?.id) throw new Error('No se pudo vincular la logística del turno')
 
   const timestampField = field === 'cobros'
     ? 'ultimo_reinicio_cobros'
     : 'ultimo_reinicio_retiros'
   const now = new Date().toISOString()
-  const { error: lineError } = await supabase
+  const { data: existingLine, error: existingLineError } = await supabase
     .from('lineas_logistica')
-    .update({
-      [timestampField]: now,
-      ultimo_reinicio_general: now,
-    })
+    .select('id')
     .eq('logistica_id', logistics.id)
     .eq('cuenta_x_turno_id', accountShiftId)
-  if (lineError) throw lineError
+    .maybeSingle()
+  if (existingLineError) throw existingLineError
+
+  if (existingLine) {
+    const { error: lineError } = await supabase
+      .from('lineas_logistica')
+      .update({
+        [timestampField]: now,
+        ultimo_reinicio_general: now,
+      })
+      .eq('id', existingLine.id)
+    if (lineError) throw lineError
+  } else {
+    const { error: lineError } = await supabase
+    .from('lineas_logistica')
+      .insert({
+        logistica_id: logistics.id,
+        cuenta_x_turno_id: accountShiftId,
+      [timestampField]: now,
+      ultimo_reinicio_general: now,
+        num_orden: 1,
+        is_off: false,
+      })
+    if (lineError) throw lineError
+  }
 }
 
 export function updateAccountFlags(accountShiftId, field, enabled) {
