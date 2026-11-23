@@ -662,11 +662,52 @@ export async function updateAccountValueOwner(accountShiftId, ownerBoxId) {
   }
 }
 
-export function updateAccountFlags(accountShiftId, field, enabled) {
+async function updateAccountFlagsAndLogisticsReset(accountShiftId, field, enabled) {
   if (!['cobros', 'retiros'].includes(field)) {
     throw new Error('Campo de disponibilidad no permitido')
   }
-  return updateRow('cuentas_x_turno', accountShiftId, { [field]: Boolean(enabled) })
+  const checked = Boolean(enabled)
+  const { error: accountError } = await supabase
+    .from('cuentas_x_turno')
+    .update({ [field]: checked })
+    .eq('id', accountShiftId)
+  if (accountError) throw accountError
+
+  if (!checked) return
+
+  const { data: accountLink, error: accountLinkError } = await supabase
+    .from('cuentas_x_turno')
+    .select('turno_id')
+    .eq('id', accountShiftId)
+    .maybeSingle()
+  if (accountLinkError) throw accountLinkError
+  if (!accountLink?.turno_id) return
+
+  const { data: logistics, error: logisticsError } = await supabase
+    .from('logistica')
+    .select('id')
+    .eq('turno_id', accountLink.turno_id)
+    .maybeSingle()
+  if (logisticsError) throw logisticsError
+  if (!logistics?.id) return
+
+  const timestampField = field === 'cobros'
+    ? 'ultimo_reinicio_cobros'
+    : 'ultimo_reinicio_retiros'
+  const now = new Date().toISOString()
+  const { error: lineError } = await supabase
+    .from('lineas_logistica')
+    .update({
+      [timestampField]: now,
+      ultimo_reinicio_general: now,
+    })
+    .eq('logistica_id', logistics.id)
+    .eq('cuenta_x_turno_id', accountShiftId)
+  if (lineError) throw lineError
+}
+
+export function updateAccountFlags(accountShiftId, field, enabled) {
+  return updateAccountFlagsAndLogisticsReset(accountShiftId, field, enabled)
 }
 
 export async function createLogisticsLine(shiftId, accountShiftId, orderNum) {
@@ -2139,12 +2180,12 @@ async function ensureShiftAccounts(shiftId, boxId) {
 
   const { data: existingLinks, error: existingLinksError } = await supabase
     .from('cuentas_x_turno')
-    .select('cuenta_id')
+    .select('cuenta_id, caja_id')
     .eq('turno_id', shiftId)
   if (existingLinksError) throw existingLinksError
 
-  const existingAccountIds = new Set((existingLinks || []).map((link) => String(link.cuenta_id)))
-  const missingAccountIds = [...accountIds].filter((accountId) => !existingAccountIds.has(accountId))
+  const existingAccountKeys = new Set((existingLinks || []).map((link) => `${String(link.cuenta_id)}:${String(link.caja_id)}`))
+  const missingAccountIds = [...accountIds].filter((accountId) => !existingAccountKeys.has(`${accountId}:${String(boxId)}`))
   if (!missingAccountIds.length) return
 
   const { error: insertError } = await supabase.from('cuentas_x_turno').upsert(
@@ -2368,12 +2409,17 @@ export async function closeAndStartNextShift({ shiftId, dayId, finalAmount, star
 
     if (logisticsResult.data) {
       const nextAccountById = new Map((nextAccounts || []).map((account) => [
-        String(account.cuenta_id),
+        `${String(account.cuenta_id)}:${String(newShift.caja_id)}`,
         account.id,
       ]))
       const inheritableLines = (previousLines || []).flatMap((line) => {
+        const previousAccount = previousAccounts.find(account => String(account.id) === String(line.cuenta_x_turno_id))
         const accountId = accountIdsByLinkId.get(String(line.cuenta_x_turno_id))
-        const nextAccountLinkId = accountId && nextAccountById.get(accountId)
+        const nextAccountLinkId = accountId
+          ? nextAccountById.get(`${accountId}:${String(newShift.caja_id)}`)
+            || nextAccountById.get(`${accountId}:${String(previousAccount?.caja_id)}`)
+            || null
+          : null
         if (!nextAccountLinkId) return []
         const { id, ...lineData } = line
         return [{ ...lineData, cuenta_x_turno_id: nextAccountLinkId }]

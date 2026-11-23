@@ -2764,7 +2764,7 @@ function AccountMatrix({ accounts, holders, wallets, boxes, activeTurns, current
     const previousFlags = flagOverrides[account.id] || { cobros: Boolean(account.cobros), retiros: Boolean(account.retiros) }
     const nextFlags = { ...previousFlags, [field]: checked }
     setFlagOverrides(current => ({ ...current, [account.id]: nextFlags }))
-    updateAccountFlags(account.id, field, checked).then(() => onSaved()).catch(() => {
+    updateAccountFlags(account.id, field, checked).catch(() => {
       setFlagOverrides(current => ({ ...current, [account.id]: previousFlags }))
       setToast(`No se pudo guardar ${field === 'cobros' ? 'cobros' : 'retiros'}`)
     })
@@ -4381,6 +4381,8 @@ function LiveLogistics({ data, setToast, onSaved }) {
   const [addingAccount, setAddingAccount] = useState('')
   const [draggedId, setDraggedId] = useState(null)
   const [notes, setNotes] = useState({})
+  const [flagOverrides, setFlagOverrides] = useState({})
+  const [resetOverrides, setResetOverrides] = useState({})
   const [saving, setSaving] = useState(false)
   const dateInputRefs = useRef({})
   const allRows = [...(data.logistics || [])].sort((left, right) => (Number(left.num_orden) || Number.MAX_SAFE_INTEGER) - (Number(right.num_orden) || Number.MAX_SAFE_INTEGER) || Number(left.id) - Number(right.id))
@@ -4416,6 +4418,8 @@ function LiveLogistics({ data, setToast, onSaved }) {
 
   useEffect(() => {
     setNotes(Object.fromEntries((data.logistics || []).map(row => [row.id, row.aclaracion || ''])))
+    setFlagOverrides({})
+    setResetOverrides({})
   }, [data.logistics])
 
   const addAccount = async event => {
@@ -4458,14 +4462,33 @@ function LiveLogistics({ data, setToast, onSaved }) {
   const toggleActivity = async (row, accountLink, field, checked) => {
     const timestampField = field === 'cobros' ? 'ultimo_reinicio_cobros' : 'ultimo_reinicio_retiros'
     const now = new Date().toISOString()
-    const nextValues = checked ? { [timestampField]: now, ultimo_reinicio_general: now } : {}
+    const previousChecked = Boolean(accountLink?.[field])
+    setFlagOverrides(current => ({
+      ...current,
+      [row.id]: { ...current[row.id], [field]: checked },
+    }))
+    if (checked) {
+      setResetOverrides(current => ({
+        ...current,
+        [row.id]: {
+          [timestampField]: now,
+          ultimo_reinicio_general: now,
+        },
+      }))
+    }
     try {
       await updateAccountFlags(accountLink.id, field, checked)
-      if (checked) await updateLogisticsLine(row.id, nextValues)
     } catch (error) {
+      setFlagOverrides(current => ({
+        ...current,
+        [row.id]: { ...current[row.id], [field]: previousChecked },
+      }))
+      setResetOverrides(current => {
+        const next = { ...current }
+        delete next[row.id]
+        return next
+      })
       setToast(error.message || 'No se pudo actualizar el estado de la billetera')
-    } finally {
-      await onSaved()
     }
   }
 
@@ -4514,8 +4537,11 @@ function LiveLogistics({ data, setToast, onSaved }) {
   const renderRow = (row, groupKey) => {
     const accountLink = row.cuentas_x_turno
     const account = accountLink?.cuentas
+    const effectiveRow = { ...row, ...resetOverrides[row.id] }
+    const latestReset = latestLogisticsReset(effectiveRow)
+    const effectiveCobros = flagOverrides[row.id]?.cobros ?? Boolean(accountLink?.cobros)
+    const effectiveRetiros = flagOverrides[row.id]?.retiros ?? Boolean(accountLink?.retiros)
     const accountType = (data.accountTypes || []).find(type => String(type.id) === String(account?.tipo_cuenta_id))
-    const latestReset = latestLogisticsReset(row)
     const useVisible = Boolean(accountType?.cobros)
     const paymentsVisible = Boolean(accountType?.retiros)
     const displayDate = value => <time className="logistics-date">{logisticsDateLabel(value)}</time>
@@ -4531,16 +4557,16 @@ function LiveLogistics({ data, setToast, onSaved }) {
         event.dataTransfer.setData('text/plain', String(row.id))
       }} onDragEnd={() => setDraggedId(null)}><GripVertical size={14} /></span>
       <div className="logistics-activity-cell">
-        {useVisible && <label title="En uso"><input type="checkbox" aria-label={`En uso ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked={Boolean(accountLink?.cobros)} onChange={event => toggleActivity(row, accountLink, 'cobros', event.target.checked)} /></label>}
+        {useVisible && <label title="En uso"><input type="checkbox" aria-label={`En uso ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked={effectiveCobros} onChange={event => toggleActivity(row, accountLink, 'cobros', event.target.checked)} /></label>}
       </div>
       <div className="logistics-activity-cell logistics-payments-cell">
-        {paymentsVisible && <label title="Pagos"><input type="checkbox" aria-label={`Pagos ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked={Boolean(accountLink?.retiros)} onChange={event => toggleActivity(row, accountLink, 'retiros', event.target.checked)} /></label>}
+        {paymentsVisible && <label title="Pagos"><input type="checkbox" aria-label={`Pagos ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} checked={effectiveRetiros} onChange={event => toggleActivity(row, accountLink, 'retiros', event.target.checked)} /></label>}
       </div>
       <strong className="logistics-holder">{account?.titulares?.nombre || 'Sin titular'}</strong>
       <strong className="logistics-wallet">{account?.billeteras?.nombre || 'Sin billetera'}</strong>
       <input className="logistics-note" aria-label={`Aclaración ${account?.titulares?.nombre} · ${account?.billeteras?.nombre}`} value={notes[row.id] ?? row.aclaracion ?? ''} onChange={event => setNotes(current => ({ ...current, [row.id]: event.target.value }))} onBlur={() => saveNote(row)} />
-      <div className="logistics-reset-cell">{displayDate(row.ultimo_reinicio_cobros)}</div>
-      <div className="logistics-reset-cell">{displayDate(row.ultimo_reinicio_retiros)}</div>
+      <div className="logistics-reset-cell">{displayDate(effectiveRow.ultimo_reinicio_cobros)}</div>
+      <div className="logistics-reset-cell">{displayDate(effectiveRow.ultimo_reinicio_retiros)}</div>
       <span className="logistics-date stale">-</span>
       <div className={`logistics-last-reset ${dateTone(latestReset)}`}>
         {displayDate(latestReset)}
