@@ -48,7 +48,7 @@ function makeStatisticsRows(data, boxes) {
       sum(items, item => number(item.monto) * (item.tipos_gasto?.invertir_signo ? -1 : 1)),
     ]))
     const expensesWithoutChips = sum(
-      shiftExpenses.filter(item => item.tipos_gasto?.nombre?.trim().toLocaleLowerCase('es') !== 'fichas'),
+      shiftExpenses.filter(item => item.tarea_x_turno_id == null && item.tipos_gasto?.nombre?.trim().toLocaleLowerCase('es') !== 'fichas'),
       item => number(item.monto) * (item.tipos_gasto?.invertir_signo ? -1 : 1),
     )
     const taskExpensesByNote = Object.fromEntries(Object.entries(groupBy(
