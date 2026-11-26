@@ -253,7 +253,7 @@ function Statistics({ data }) {
         platforms: sharedNames('platforms'),
         routes: sharedNames('routeTotals'),
         expenses: sharedNames('expensesByCategory', value => value !== 0),
-        tasks: sharedNames('taskExpensesByNote'),
+        tasks: sharedNames('taskExpensesByNote').sort((left, right) => left.localeCompare(right, 'es', { sensitivity: 'base' })),
       },
     }
   })
@@ -288,7 +288,7 @@ function Statistics({ data }) {
             : <MetricPlaceholder key={name} label={name} />)}</MetricSection>
           <MetricSection title="Gastos">{set.rowNames.expenses.map(name => Object.prototype.hasOwnProperty.call(group.values.expensesByCategory, name) && group.values.expensesByCategory[name] !== 0
             ? <Metric key={name} label={name} value={group.values.expensesByCategory[name]} />
-            : <MetricPlaceholder key={name} label={name} />)}<div className="statistics-expense-total"><span>Total de gastos (sin Fichas)</span><b>{currency.format(number(group.values.expensesWithoutChips))}</b></div></MetricSection>
+            : <MetricPlaceholder key={name} label={name} />)}<div className="statistics-expense-total"><span>Total de gastos (sin Fichas ni Tareas)</span><b>{currency.format(number(group.values.expensesWithoutChips))}</b></div></MetricSection>
           <MetricSection title="Tareas">{set.rowNames.tasks.length
             ? set.rowNames.tasks.map(note => Object.prototype.hasOwnProperty.call(group.values.taskExpensesByNote, note)
               ? <Metric key={note} label={note} value={group.values.taskExpensesByNote[note]} />
