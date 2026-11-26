@@ -241,6 +241,22 @@ function Statistics({ data }) {
       shifts.forEach(name => { byShift[name] = boxRows.filter(row => row.label.toLocaleLowerCase().includes(name.toLocaleLowerCase())) })
       return { label: box.nombre, color: accentForBox(box), rows: boxRows, summaries: ['Total', ...shifts].map(name => ({ label: name, rows: byShift[name], values: summarize(byShift[name]) })) }
     })
+  const alignedSets = displayedSets.map(set => {
+    const sharedNames = (property, includeValue = () => true) => [...new Set(set.summaries.flatMap(group => (
+      Object.entries(group.values[property])
+        .filter(([, value]) => includeValue(value))
+        .map(([name]) => name)
+    )))]
+    return {
+      ...set,
+      rowNames: {
+        platforms: sharedNames('platforms'),
+        routes: sharedNames('routeTotals'),
+        expenses: sharedNames('expensesByCategory', value => value !== 0),
+        tasks: sharedNames('taskExpensesByNote'),
+      },
+    }
+  })
   const grandTotal = summarize(rows)
 
   return <main className="statistics-page">
@@ -253,7 +269,7 @@ function Statistics({ data }) {
     </section>
     {error && <section className="panel statistics-error"><strong>No se pudieron cargar las estadísticas</strong><span>{error}</span></section>}
     {!error && !records && <section className="panel statistics-loading">Cargando estadísticas…</section>}
-    {records && displayedSets.map(set => <section className="statistics-box-section" key={set.label} style={{ '--stats-accent': set.color }}>
+    {records && alignedSets.map(set => <section className="statistics-box-section" key={set.label} style={{ '--stats-accent': set.color }}>
       <h2 className="statistics-box-title">{set.label}</h2>
       <section className="statistics-grid">{set.summaries.map(group => <article className={`panel statistics-shift ${group.label === 'Total' ? 'statistics-total' : ''}`} key={`${set.label}-${group.label}`}>
         <header className="statistics-shift-head"><h2>{group.label}</h2><span>{group.rows.length} turnos</span></header>
@@ -264,11 +280,19 @@ function Statistics({ data }) {
             <MetricGroup title="Total" rows={group.rows} values={group.values} metrics={['cashDifference', 'realDifference', 'realProfit', 'balance', 'rounding']} />
           </MetricSection>
           <MetricSection title="Bonos"><Metric label="Bonos otorgados" value={group.values.granted} /><Metric label="Bonos recuperados" value={group.values.recovered} /><Metric label="Bonos netos" value={group.values.bonusesNet} /></MetricSection>
-          <MetricSection title="Cargas de fichas">{Object.entries(group.values.platforms).map(([name, value]) => <Metric key={name} label={name} value={value} />)}</MetricSection>
-          <MetricSection title="Traspasos">{Object.entries(group.values.routeTotals).map(([name, value]) => <Metric key={name} label={name} value={value} />)}</MetricSection>
-          <MetricSection title="Gastos">{Object.entries(group.values.expensesByCategory).filter(([, value]) => value !== 0).map(([name, value]) => <Metric key={name} label={name} value={value} />)}<div className="statistics-expense-total"><span>Total de gastos (sin Fichas)</span><b>{currency.format(number(group.values.expensesWithoutChips))}</b></div></MetricSection>
-          <MetricSection title="Tareas">{Object.entries(group.values.taskExpensesByNote).length
-            ? Object.entries(group.values.taskExpensesByNote).map(([note, value]) => <Metric key={note} label={note} value={value} />)
+          <MetricSection title="Cargas de fichas">{set.rowNames.platforms.map(name => Object.prototype.hasOwnProperty.call(group.values.platforms, name)
+            ? <Metric key={name} label={name} value={group.values.platforms[name]} />
+            : <MetricPlaceholder key={name} label={name} />)}</MetricSection>
+          <MetricSection title="Traspasos">{set.rowNames.routes.map(name => Object.prototype.hasOwnProperty.call(group.values.routeTotals, name)
+            ? <Metric key={name} label={name} value={group.values.routeTotals[name]} />
+            : <MetricPlaceholder key={name} label={name} />)}</MetricSection>
+          <MetricSection title="Gastos">{set.rowNames.expenses.map(name => Object.prototype.hasOwnProperty.call(group.values.expensesByCategory, name) && group.values.expensesByCategory[name] !== 0
+            ? <Metric key={name} label={name} value={group.values.expensesByCategory[name]} />
+            : <MetricPlaceholder key={name} label={name} />)}<div className="statistics-expense-total"><span>Total de gastos (sin Fichas)</span><b>{currency.format(number(group.values.expensesWithoutChips))}</b></div></MetricSection>
+          <MetricSection title="Tareas">{set.rowNames.tasks.length
+            ? set.rowNames.tasks.map(note => Object.prototype.hasOwnProperty.call(group.values.taskExpensesByNote, note)
+              ? <Metric key={note} label={note} value={group.values.taskExpensesByNote[note]} />
+              : <MetricPlaceholder key={note} label={note} />)
             : <p className="statistics-task-empty">Sin gastos de tareas</p>}<div className="statistics-expense-total"><span>Total tareas</span><b>{currency.format(sum(Object.values(group.values.taskExpensesByNote), value => value))}</b></div></MetricSection>
         </div>
       </article>)}</section>
@@ -310,6 +334,10 @@ function MetricSection({ title, children }) {
 
 function Metric({ label, value }) {
   return <div><span>{label}</span><b>{currency.format(number(value))}</b></div>
+}
+
+function MetricPlaceholder({ label }) {
+  return <div className="statistics-metric-placeholder" aria-hidden="true"><span>{label}</span><b>{currency.format(0)}</b></div>
 }
 
 function MetricGroup({ title, rows, values, metrics, average = false }) {

@@ -192,6 +192,7 @@
   text-align: right;
   white-space: nowrap;
 }
+.statistics-metric-placeholder { visibility: hidden; }
 .statistics-section .statistics-expense-total {
   display: flex;
   justify-content: space-between;
