@@ -47,8 +47,12 @@ function makeStatisticsRows(data, boxes) {
       category,
       sum(items, item => number(item.monto) * (item.tipos_gasto?.invertir_signo ? -1 : 1)),
     ]))
-    const expensesWithoutChips = sum(
+    const expensesWithoutChipsOrTasks = sum(
       shiftExpenses.filter(item => item.tarea_x_turno_id == null && item.tipos_gasto?.nombre?.trim().toLocaleLowerCase('es') !== 'fichas'),
+      item => number(item.monto) * (item.tipos_gasto?.invertir_signo ? -1 : 1),
+    )
+    const expensesWithoutChips = sum(
+      shiftExpenses.filter(item => item.tipos_gasto?.nombre?.trim().toLocaleLowerCase('es') !== 'fichas'),
       item => number(item.monto) * (item.tipos_gasto?.invertir_signo ? -1 : 1),
     )
     const taskExpensesByNote = Object.fromEntries(Object.entries(groupBy(
@@ -97,6 +101,7 @@ function makeStatisticsRows(data, boxes) {
       bonusesNet: granted - recovered,
       expenses: expenseTotal,
       expensesByCategory,
+      expensesWithoutChipsOrTasks,
       expensesWithoutChips,
       taskExpensesByNote,
       ta: taTotal,
@@ -121,7 +126,7 @@ function makeStatisticsRows(data, boxes) {
 function summarize(rows) {
   const totals = { expensesByCategory: {}, taskExpensesByNote: {}, platforms: {}, routeTotals: {} }
   rows.forEach(row => {
-    ;['tips', 'found', 'granted', 'recovered', 'bonusesNet', 'expenses', 'expensesWithoutChips', 'ta', 'cashInitial', 'cashFinal', 'cashDifference', 'realDifference', 'realProfit', 'balance', 'rounding'].forEach(key => {
+    ;['tips', 'found', 'granted', 'recovered', 'bonusesNet', 'expenses', 'expensesWithoutChipsOrTasks', 'expensesWithoutChips', 'ta', 'cashInitial', 'cashFinal', 'cashDifference', 'realDifference', 'realProfit', 'balance', 'rounding'].forEach(key => {
       totals[key] = (totals[key] || 0) + row[key]
     })
     Object.entries(row.expensesByCategory).forEach(([key, value]) => { totals.expensesByCategory[key] = (totals.expensesByCategory[key] || 0) + value })
@@ -288,7 +293,7 @@ function Statistics({ data }) {
             : <MetricPlaceholder key={name} label={name} />)}</MetricSection>
           <MetricSection title="Gastos">{set.rowNames.expenses.map(name => Object.prototype.hasOwnProperty.call(group.values.expensesByCategory, name) && group.values.expensesByCategory[name] !== 0
             ? <Metric key={name} label={name} value={group.values.expensesByCategory[name]} />
-            : <MetricPlaceholder key={name} label={name} />)}<div className="statistics-expense-total"><span>Total de gastos (sin Fichas ni Tareas)</span><b>{currency.format(number(group.values.expensesWithoutChips))}</b></div></MetricSection>
+            : <MetricPlaceholder key={name} label={name} />)}<div className="statistics-expense-total"><span>Total de gastos (sin Fichas ni Tareas)</span><b>{currency.format(number(group.values.expensesWithoutChipsOrTasks))}</b></div><div className="statistics-expense-total"><span>Total de gastos (sin Fichas)</span><b>{currency.format(number(group.values.expensesWithoutChips))}</b></div><div className="statistics-expense-total"><span>Total de gastos</span><b>{currency.format(number(group.values.expenses))}</b></div></MetricSection>
           <MetricSection title="Tareas">{set.rowNames.tasks.length
             ? set.rowNames.tasks.map(note => Object.prototype.hasOwnProperty.call(group.values.taskExpensesByNote, note)
               ? <Metric key={note} label={note} value={group.values.taskExpensesByNote[note]} />
