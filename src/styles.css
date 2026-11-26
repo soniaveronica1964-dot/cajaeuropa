@@ -1440,9 +1440,11 @@ input[type="time"] { color-scheme: dark; }
   display: grid;
   flex: 1 1 auto;
   align-content: start;
+  max-height: 276px;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   scrollbar-gutter: stable;
   scrollbar-width: thin;
 }
