@@ -47,6 +47,17 @@ function makeStatisticsRows(data, boxes) {
       category,
       sum(items, item => number(item.monto) * (item.tipos_gasto?.invertir_signo ? -1 : 1)),
     ]))
+    const expensesWithoutChips = sum(
+      shiftExpenses.filter(item => item.tipos_gasto?.nombre?.trim().toLocaleLowerCase('es') !== 'fichas'),
+      item => number(item.monto) * (item.tipos_gasto?.invertir_signo ? -1 : 1),
+    )
+    const taskExpensesByNote = Object.fromEntries(Object.entries(groupBy(
+      shiftExpenses.filter(item => item.tarea_x_turno_id != null),
+      item => item.notas?.trim() || 'Sin nota',
+    )).map(([note, items]) => [
+      note,
+      sum(items, item => number(item.monto) * (item.tipos_gasto?.invertir_signo ? -1 : 1)),
+    ]))
     const platforms = {}
     shiftChips.forEach(chip => {
       const name = chip.plataformas?.nombre || 'Sin plataforma'
@@ -86,6 +97,8 @@ function makeStatisticsRows(data, boxes) {
       bonusesNet: granted - recovered,
       expenses: expenseTotal,
       expensesByCategory,
+      expensesWithoutChips,
+      taskExpensesByNote,
       ta: taTotal,
       cashInitial,
       cashFinal,
@@ -106,12 +119,13 @@ function makeStatisticsRows(data, boxes) {
 }
 
 function summarize(rows) {
-  const totals = { expensesByCategory: {}, platforms: {}, routeTotals: {} }
+  const totals = { expensesByCategory: {}, taskExpensesByNote: {}, platforms: {}, routeTotals: {} }
   rows.forEach(row => {
-    ;['tips', 'found', 'granted', 'recovered', 'bonusesNet', 'expenses', 'ta', 'cashInitial', 'cashFinal', 'cashDifference', 'realDifference', 'realProfit', 'balance', 'rounding'].forEach(key => {
+    ;['tips', 'found', 'granted', 'recovered', 'bonusesNet', 'expenses', 'expensesWithoutChips', 'ta', 'cashInitial', 'cashFinal', 'cashDifference', 'realDifference', 'realProfit', 'balance', 'rounding'].forEach(key => {
       totals[key] = (totals[key] || 0) + row[key]
     })
     Object.entries(row.expensesByCategory).forEach(([key, value]) => { totals.expensesByCategory[key] = (totals.expensesByCategory[key] || 0) + value })
+    Object.entries(row.taskExpensesByNote).forEach(([key, value]) => { totals.taskExpensesByNote[key] = (totals.taskExpensesByNote[key] || 0) + value })
     Object.entries(row.platforms).forEach(([key, value]) => { totals.platforms[key] = (totals.platforms[key] || 0) + value })
     Object.entries(row.routeTotals).forEach(([key, value]) => { totals.routeTotals[key] = (totals.routeTotals[key] || 0) + value })
   })
@@ -252,7 +266,10 @@ function Statistics({ data }) {
           <MetricSection title="Bonos"><Metric label="Bonos otorgados" value={group.values.granted} /><Metric label="Bonos recuperados" value={group.values.recovered} /><Metric label="Bonos netos" value={group.values.bonusesNet} /></MetricSection>
           <MetricSection title="Cargas de fichas">{Object.entries(group.values.platforms).map(([name, value]) => <Metric key={name} label={name} value={value} />)}</MetricSection>
           <MetricSection title="Traspasos">{Object.entries(group.values.routeTotals).map(([name, value]) => <Metric key={name} label={name} value={value} />)}</MetricSection>
-          <MetricSection title="Gastos">{Object.entries(group.values.expensesByCategory).filter(([, value]) => value !== 0).map(([name, value]) => <Metric key={name} label={name} value={value} />)}</MetricSection>
+          <MetricSection title="Gastos">{Object.entries(group.values.expensesByCategory).filter(([, value]) => value !== 0).map(([name, value]) => <Metric key={name} label={name} value={value} />)}<div className="statistics-expense-total"><span>Total de gastos (sin Fichas)</span><b>{currency.format(number(group.values.expensesWithoutChips))}</b></div></MetricSection>
+          <MetricSection title="Tareas">{Object.entries(group.values.taskExpensesByNote).length
+            ? Object.entries(group.values.taskExpensesByNote).map(([note, value]) => <Metric key={note} label={note} value={value} />)
+            : <p className="statistics-task-empty">Sin gastos de tareas</p>}<div className="statistics-expense-total"><span>Total tareas</span><b>{currency.format(sum(Object.values(group.values.taskExpensesByNote), value => value))}</b></div></MetricSection>
         </div>
       </article>)}</section>
     </section>)}

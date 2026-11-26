@@ -3252,7 +3252,7 @@ export async function loadStatistics(from, to, cajaIds = null) {
       else if (cajaIds != null) next = next.eq('turnos.caja_id', cajaIds)
       return next
     }),
-    query('gastos', 'id, monto, fecha_hora_creacion, turno_id, tipos_gasto(nombre, invertir_signo), turnos!inner(fecha_hora_inicio, caja_id)', request => {
+    query('gastos', 'id, monto, notas, tarea_x_turno_id, fecha_hora_creacion, turno_id, tipos_gasto(nombre, invertir_signo), turnos!inner(fecha_hora_inicio, caja_id)', request => {
       let next = request.gte('fecha_hora_creacion', from).lte('fecha_hora_creacion', to)
       if (Array.isArray(cajaIds)) next = next.in('turnos.caja_id', cajaIds)
       else if (cajaIds != null) next = next.eq('turnos.caja_id', cajaIds)

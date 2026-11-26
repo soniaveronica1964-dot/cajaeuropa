@@ -192,6 +192,24 @@
   text-align: right;
   white-space: nowrap;
 }
+.statistics-section .statistics-expense-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+  padding: 7px 0;
+  border-top: 1px solid var(--stats-line);
+  color: #e3eeeb;
+  font-size: 9px;
+  font-weight: 700;
+}
+.statistics-section .statistics-expense-total b {
+  color: var(--stats-accent);
+  font: 700 10px "DM Mono", monospace;
+  white-space: nowrap;
+}
+.statistics-task-empty { margin: 0; padding: 5px 0; color: #899a98; font-size: 9px; }
 .statistics-metric-group + .statistics-metric-group { margin-top: 5px; }
 .statistics-metric-group h4 {
   margin: 6px 0 1px;
