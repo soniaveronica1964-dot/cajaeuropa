@@ -30,6 +30,19 @@ async function query(table, columns, configure = () => {}) {
   return data ?? []
 }
 
+async function queryAll(table, columns, configure = () => {}) {
+  const pageSize = 1000
+  const rows = []
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await query(table, columns, request => {
+      const configuredRequest = configure(request) || request
+      return configuredRequest.range(offset, offset + pageSize - 1)
+    })
+    rows.push(...page)
+    if (page.length < pageSize) return rows
+  }
+}
+
 async function queryBoxScopedEntities(table, columns, linkTable, entityColumn, boxId, configure) {
   let linkedIds = null
   if (boxId != null) {
@@ -3258,11 +3271,11 @@ export async function loadStatistics(from, to, cajaIds = null) {
       else if (cajaIds != null) next = next.eq('turnos.caja_id', cajaIds)
       return next
     }),
-    query('lineas_bonos', 'id, valor, recuperado, fecha_hora_creacion, bonos!inner(turno_id, turnos!inner(fecha_hora_inicio, caja_id))', request => {
+    queryAll('lineas_bonos', 'id, valor, recuperado, fecha_hora_creacion, bonos!inner(turno_id, turnos!inner(fecha_hora_inicio, caja_id))', request => {
       let next = request.gte('fecha_hora_creacion', from).lte('fecha_hora_creacion', to)
       if (Array.isArray(cajaIds)) next = next.in('bonos.turnos.caja_id', cajaIds)
       else if (cajaIds != null) next = next.eq('bonos.turnos.caja_id', cajaIds)
-      return next
+      return next.order('id', { ascending: true })
     }),
   ])
   if (!shifts.length) return { shifts, tips, expenses, bonuses }
