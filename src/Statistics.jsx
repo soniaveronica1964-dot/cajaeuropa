@@ -4,7 +4,6 @@ import { loadStatistics } from './lib/data'
 import './statistics.css'
 
 const currency = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })
-const spreadsheetNumber = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 const shifts = ['Mañana', 'Tarde', 'Noche']
 const weekdays = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const number = value => Number(value) || 0
@@ -215,9 +214,9 @@ function Statistics({ data }) {
       ['Fecha', 'Bono otorgado', 'Bono recuperado', 'Bono publicidad'],
       ...dailyRows.map(({ date, items }) => [
         date.toLocaleDateString('es-AR'),
-        spreadsheetNumber.format(sum(items.filter(item => !item.recovered && !item.publicity), item => item.amount)),
-        spreadsheetNumber.format(sum(items.filter(item => item.recovered), item => item.amount)),
-        spreadsheetNumber.format(sum(items.filter(item => !item.recovered && item.publicity), item => item.amount)),
+        String(sum(items.filter(item => !item.recovered && !item.publicity), item => item.amount)),
+        String(sum(items.filter(item => item.recovered), item => item.amount)),
+        String(sum(items.filter(item => !item.recovered && item.publicity), item => item.amount)),
       ]),
     ]
     try {
