@@ -1319,6 +1319,9 @@ function SalaryAccountsPanel({ rows, onSaved, setToast }) {
   const [pin, setPin] = useState('')
   const [unlocked, setUnlocked] = useState(false)
   const [pinError, setPinError] = useState('')
+  const salaryTotal = rows.reduce((total, row) => total + Number(row.valor || 0), 0)
+  const salaryTarget = rows.length * 500000
+  const salaryProgress = salaryTarget ? salaryTotal / salaryTarget * 100 : 0
 
   const unlockPanel = event => {
     event.preventDefault()
@@ -1349,8 +1352,11 @@ function SalaryAccountsPanel({ rows, onSaved, setToast }) {
   }
 
   return <aside className="dashboard-side-panel">
-    <header className="dashboard-side-panel-header">
+    <header className="dashboard-side-panel-header salary-account-header">
       <div><WalletCards size={16} /><strong>Cuentas sueldo</strong></div>
+      {unlocked && <span className="salary-account-summary">
+        Suma {money.format(salaryTotal)} · Meta {money.format(salaryTarget)} · {numberCompact.format(salaryProgress)}%
+      </span>}
     </header>
     {!unlocked
       ? <form className="salary-pin-form" onSubmit={unlockPanel}>

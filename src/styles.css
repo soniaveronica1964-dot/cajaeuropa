@@ -986,6 +986,20 @@ input[type="time"] { color-scheme: dark; }
   border-bottom: 1px solid var(--line);
 }
 
+.salary-account-header {
+  flex-wrap: wrap;
+}
+
+.salary-account-summary {
+  flex: 1 1 100%;
+  min-width: 0;
+  padding-left: 24px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .dashboard-side-panel-header > div {
   display: flex;
   align-items: center;
