@@ -277,7 +277,11 @@
 .bonus-analysis-head h2 svg { color: var(--stats-accent); }
 .bonus-analysis-head span,
 .bonus-analysis-section-head span { color: #899a98; font-size: 9px; }
-.bonus-analysis-head > strong { color: var(--stats-accent); font: 700 20px "DM Mono", monospace; white-space: nowrap; }
+.bonus-analysis-head-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.bonus-analysis-head-actions > strong { color: var(--stats-accent); font: 700 20px "DM Mono", monospace; white-space: nowrap; }
+.bonus-analysis-copy { display: inline-flex; align-items: center; gap: 5px; min-height: 29px; padding: 0 9px; border: 1px solid var(--stats-line); border-radius: 5px; background: #1b292a; color: #d5e5e0; font: inherit; font-size: 9px; font-weight: 600; cursor: pointer; }
+.bonus-analysis-copy:hover { border-color: var(--stats-accent); color: var(--stats-accent); }
+.bonus-analysis-copy-status { flex-basis: 100%; color: #899a98; font-size: 8px; text-align: right; }
 .bonus-analysis-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; padding: 10px; border: 1px solid var(--stats-line); border-radius: 6px; background: rgba(18, 29, 30, .56); }
 .bonus-analysis-filter-group,
 .bonus-analysis-select { display: grid; gap: 5px; color: #8f9e9c; font-size: 9px; }

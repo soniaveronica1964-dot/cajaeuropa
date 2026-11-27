@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { BarChart3, Gift, Coins } from 'lucide-react'
+import { BarChart3, Gift, Coins, Copy } from 'lucide-react'
 import { loadStatistics } from './lib/data'
 import './statistics.css'
 
 const currency = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 2 })
+const spreadsheetNumber = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 2 })
 const shifts = ['Mañana', 'Tarde', 'Noche']
 const weekdays = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
 const number = value => Number(value) || 0
@@ -156,6 +157,7 @@ function Statistics({ data }) {
   const [toHour, setToHour] = useState(23)
   const [bonusMode, setBonusMode] = useState('all')
   const [bonusMetric, setBonusMetric] = useState('value')
+  const [bonusCopyStatus, setBonusCopyStatus] = useState('')
 
   useEffect(() => {
     let active = true
@@ -191,7 +193,10 @@ function Statistics({ data }) {
   const maxChart = Math.max(...chartRows.map(item => Math.abs(item.value)), 1)
   const bonusRows = rows.flatMap(row => row.bonuses.map(bonus => {
     const date = new Date(bonus.fecha_hora_creacion)
-    return { date, shift: row.label, net: number(bonus.valor) * (bonus.recuperado ? -1 : 1) }
+    const amount = number(bonus.valor)
+    const recovered = Boolean(bonus.recuperado)
+    const publicity = Boolean(bonus.es_publicidad)
+    return { date, shift: row.label, amount, recovered, publicity, net: amount * (recovered ? -1 : 1) }
   })).filter(item => Number.isFinite(item.date.getTime())
     && bonusDays.includes(item.date.getDay())
     && bonusShifts.includes(item.shift)
@@ -205,6 +210,24 @@ function Statistics({ data }) {
   const dailyRows = Object.entries(groupBy(bonusRows, item => `${item.date.getFullYear()}-${item.date.getMonth()}-${item.date.getDate()}`))
     .map(([key, items]) => ({ key, date: items[0].date, items }))
     .sort((a, b) => a.date - b.date)
+  const copyBonusTable = async () => {
+    const rowsToCopy = [
+      ['Fecha', 'Bono otorgado', 'Bono recuperado', 'Bono publicidad'],
+      ...dailyRows.map(({ date, items }) => [
+        date.toLocaleDateString('es-AR'),
+        spreadsheetNumber.format(sum(items.filter(item => !item.recovered && !item.publicity), item => item.amount)),
+        spreadsheetNumber.format(sum(items.filter(item => item.recovered), item => item.amount)),
+        spreadsheetNumber.format(sum(items.filter(item => !item.recovered && item.publicity), item => item.amount)),
+      ]),
+    ]
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('El navegador no permite copiar al portapapeles.')
+      await navigator.clipboard.writeText(rowsToCopy.map(row => row.join('\t')).join('\n'))
+      setBonusCopyStatus('Tabla copiada')
+    } catch (reason) {
+      setBonusCopyStatus(reason instanceof Error ? reason.message : 'No se pudo copiar la tabla.')
+    }
+  }
   const hourlyRows = shifts.map(label => {
     const items = bonusRows.filter(item => item.shift === label)
     return { label, items, total: bonusValue(items) }
@@ -307,7 +330,7 @@ function Statistics({ data }) {
       <section className="panel statistics-tips"><div className="statistics-chart-head"><div><h2>Totalizador de propinas</h2><span>Resumen para el período y cajas seleccionados</span></div><Coins size={18} /></div><div className="statistics-tip-total"><span>Total de propinas</span><strong>{currency.format(grandTotal.tips || 0)}</strong></div><div className="statistics-tip-fields"><label>Empleados<input type="number" min="1" value={employees} onChange={event => setEmployees(Math.max(1, number(event.target.value)))} /></label><label>Propinas c/u<strong>{currency.format((grandTotal.tips || 0) / Math.max(1, employees))}</strong></label><label>% proporcional<input type="number" min="0" max="100" value={percent} onChange={event => setPercent(Math.min(100, Math.max(0, number(event.target.value))))} /></label><label>Proporcional c/u<strong>{currency.format((grandTotal.tips || 0) / Math.max(1, employees) * percent / 100)}</strong></label></div></section>
     </section>}
     {records && <section className="panel bonus-analysis-panel">
-      <div className="bonus-analysis-head"><div><h2><Gift size={18} /> Análisis de bonos netos</h2><span>{bonusRows.length} movimientos · {dailyRows.length} días · período y cajas tomados de arriba</span></div><strong>{formattedBonus(bonusTotal)}</strong></div>
+      <div className="bonus-analysis-head"><div><h2><Gift size={18} /> Análisis de bonos netos</h2><span>{bonusRows.length} movimientos · {dailyRows.length} días · período y cajas tomados de arriba</span></div><div className="bonus-analysis-head-actions"><strong>{formattedBonus(bonusTotal)}</strong><button className="bonus-analysis-copy" type="button" onClick={copyBonusTable}><Copy size={14} /> Copiar como tabla</button><span className="bonus-analysis-copy-status" role="status" aria-live="polite">{bonusCopyStatus}</span></div></div>
       <div className="bonus-analysis-filters">
         <div className="bonus-analysis-filter-group"><span>Días de la semana</span><div>{weekdays.map((day, index) => <label key={day}><input type="checkbox" checked={bonusDays.includes(index)} onChange={() => toggle(bonusDays, setBonusDays, index)} />{day.slice(0, 3)}</label>)}</div></div>
         <div className="bonus-analysis-filter-group"><span>Turnos</span><div>{shifts.map(shift => <label key={shift}><input type="checkbox" checked={bonusShifts.includes(shift)} onChange={() => toggle(bonusShifts, setBonusShifts, shift)} />{shift}</label>)}</div></div>
